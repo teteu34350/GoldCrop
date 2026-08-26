@@ -368,6 +368,27 @@ function validateStep(step) {
     }
   }
 
+  if (step === 3) {
+    const area = Number(document.getElementById('area_hectares')?.value);
+    const talhoes = Number(document.getElementById('quantidade_talhoes')?.value);
+    const culturas = document.querySelectorAll('.culture-chip.selected').length;
+    if (!Number.isFinite(area) || area <= 0) {
+      showFieldError('area_hectares', 'Informe uma área maior que zero.');
+      isValid = false;
+    } else {
+      clearFieldError('area_hectares');
+    }
+    if (!Number.isInteger(talhoes) || talhoes < 1) {
+      showFieldError('quantidade_talhoes', 'Informe ao menos um talhão.');
+      isValid = false;
+    } else {
+      clearFieldError('quantidade_talhoes');
+    }
+    if (!culturas) {
+      isValid = false;
+    }
+  }
+
   return isValid;
 }
 
@@ -394,37 +415,32 @@ function prevWizardStep() {
 // ===================================================
 
 const AuthService = {
+  async post(url, payload, csrfToken) {
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) {
+      const error = new Error(data.message || 'Não foi possível concluir a solicitação.');
+      error.fieldErrors = data.field_errors || {};
+      throw error;
+    }
+    return data;
+  },
+
   async login(email, password, rememberMe) {
     console.log('🔗 Sending POST request to /api/auth/login:', { email, rememberMe });
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1200));
-
-    if (email === 'erro@goldcrop.com') {
-      throw new Error('E-mail ou senha incorretos.');
-    }
-
-    return {
-      status: 'success',
-      token: 'jwt_mock_token_goldcrop_' + Math.random().toString(36).substring(7),
-      user: {
-        id: 'usr_102',
-        nome: 'Produtor Rural GoldCrop',
-        email: email,
-        fazenda: 'Fazenda Modelo'
-      }
-    };
+    const form = document.getElementById('login-form');
+    return this.post(form.dataset.apiUrl, { email, password, remember_me: rememberMe }, form.querySelector('[name=csrfmiddlewaretoken]').value);
   },
 
   async register(formData) {
     console.log('🔗 Sending POST request to /api/auth/register with payload:', formData);
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    return {
-      status: 'success',
-      message: 'Cadastro realizado com sucesso!',
-      user_id: 'usr_' + Math.floor(Math.random() * 10000)
-    };
+    const form = document.getElementById('cadastro-form');
+    return this.post(form.dataset.apiUrl, formData, form.querySelector('[name=csrfmiddlewaretoken]').value);
   },
 
   async requestPasswordReset(email) {
@@ -448,14 +464,14 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       hideAlert('login-alert');
 
-      const email = document.getElementById('email').value.trim();
+      const identifier = document.getElementById('email').value.trim();
       const password = document.getElementById('senha').value;
       const remember = document.getElementById('remember_me')?.checked || false;
 
       let valid = true;
 
-      if (!email || !isValidEmail(email)) {
-        showFieldError('email', 'Digite um e-mail válido.');
+      if (!identifier) {
+        showFieldError('email', 'Digite seu e-mail ou usuário.');
         valid = false;
       } else {
         clearFieldError('email');
@@ -475,13 +491,12 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('btn-loading');
 
       try {
-        const response = await AuthService.login(email, password, remember);
+        const response = await AuthService.login(identifier, password, remember);
         showAlert('login-alert', 'Login realizado com sucesso! Redirecionando...', 'success');
 
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1200);
+        window.location.href = response.redirect_url;
       } catch (err) {
+        Object.entries(err.fieldErrors || {}).forEach(([field, message]) => showFieldError(field, message));
         showAlert('login-alert', err.message || 'Erro ao realizar login. Tente novamente.', 'error');
         btn.disabled = false;
         btn.classList.remove('btn-loading');
@@ -685,10 +700,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await AuthService.register(payload);
         showAlert('register-alert', '🎉 Cadastro da fazenda realizado com sucesso! Redirecionando para o sistema...', 'success');
 
-        setTimeout(() => {
-          window.location.href = '/';
-        }, 1500);
+        window.location.href = res.redirect_url;
       } catch (err) {
+        Object.entries(err.fieldErrors || {}).forEach(([field, message]) => showFieldError(field, message));
         showAlert('register-alert', err.message || 'Erro ao realizar cadastro.', 'error');
         btnSubmit.disabled = false;
         btnSubmit.classList.remove('btn-loading');

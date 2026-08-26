@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- ===================== PAGE: TALHÕES ===================== -->
+      <section class="page active" id="page-talhoes">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Mapa dos Talhões</h1>
+              <p class="page-sub">Fazenda Santa Clara · 84 ha · 8 talhões monitorados</p>
+            </div>
+            <div class="talhoes-actions">
+              <div class="filter-pills">
+                <button class="filter-pill active">Todos</button>
+                <button class="filter-pill">Favoráveis</button>
+                <button class="filter-pill">Alerta</button>
+              </div>
+              <button class="btn-primary" type="button" id="btnCadastrarTalhao">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Cadastrar Talhão
+              </button>
+            </div>
+          </div>
+          <div class="talhoes-layout">
+            <div class="card talhoes-map-card">
+              <div class="map-container" id="mapContainer"></div>
+            </div>
+            <div class="talhoes-list" id="talhoesList"></div>
+          </div>
+        </div>
+      </section>
+{% endblock %}

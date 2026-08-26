@@ -199,6 +199,13 @@ body {
   margin-bottom: 2px;
   position: relative;
   text-align: left;
+  text-decoration: none;
+}
+
+.nav-item:hover,
+.nav-item:focus,
+.nav-item:visited {
+  text-decoration: none;
 }
 
 .nav-item:hover {
@@ -1364,6 +1371,12 @@ body {
   line-height: 1;
 }
 
+.cal-day-window {
+  font-size: .58rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .cal-day-markers {
   display: flex;
   gap: 2px;
@@ -1782,7 +1795,7 @@ body {
   inset: 0;
   background: rgba(0,0,0,.45);
   backdrop-filter: blur(4px);
-  z-index: 200;
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;

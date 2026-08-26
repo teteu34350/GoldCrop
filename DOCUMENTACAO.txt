@@ -10,7 +10,9 @@ Eficiência de Aplicação (IEA), janelas recomendadas para aplicação de insum
 talhões, sensores, condição do solo, aplicações planejadas e realizadas e
 histórico.
 
-O projeto combina um backend Django mínimo com uma interface HTML, CSS e
+O projeto combina um backend Django com uma interface HTML, CSS e JavaScript.
+Usuários, fazendas, talhões, aplicações, coletas meteorológicas, recomendações
+do motor e sensores IoT são persistidos no banco pelo backend Django.
 JavaScript. Atualmente, o backend apenas entrega as páginas. Os dados exibidos
 no painel são dados de demonstração mantidos no JavaScript.
 
@@ -62,7 +64,8 @@ static/
     auth.js: validações, máscaras e lógica de login/cadastro.
 
 db.sqlite3
-    Banco SQLite criado/configurado pelo Django. No estado atual não existem
+   - Banco SQLite criado/configurado pelo Django para desenvolvimento. Os modelos
+      do dashboard podem ser usados com PostgreSQL sem alteração estrutural.
     modelos do dashboard usados para salvar usuários, fazendas ou aplicações.
 
 requirements.txt
@@ -226,6 +229,10 @@ Cadastro da fazenda:
 
 
 8. DADOS E COMPORTAMENTO ATUAL
+O frontend carrega os dados do endpoint autenticado `/api/state/` e persiste
+alterações por endpoints do Django. As constantes JavaScript servem apenas
+como estrutura de montagem antes da hidratação; quando o banco está vazio, a
+interface não exibe registros demonstrativos.
 ------------------------------
 
 Os dados do painel estão definidos em constantes JavaScript, principalmente:

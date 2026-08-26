@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- ===================== PAGE: CALENDAR ===================== -->
+      <section class="page active" id="page-calendar">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Calendário Inteligente</h1>
+              <p class="page-sub">Visualize as janelas de aplicação estimadas pela IA para cada dia.</p>
+            </div>
+            <button class="btn-primary" onclick="openRegistrar()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar Aplicação
+            </button>
+          </div>
+
+          <div class="calendar-layout">
+            <!-- Calendar -->
+            <div class="card calendar-card">
+              <div class="cal-header">
+                <button class="cal-nav-btn" id="calPrev">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <h2 class="cal-month" id="calMonthLabel">Agosto 2026</h2>
+                <button class="cal-nav-btn" id="calNext">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+              <div class="cal-legend">
+                <span class="cal-legend-item"><span class="cal-dot green"></span>Alta (≥80%)</span>
+                <span class="cal-legend-item"><span class="cal-dot yellow"></span>Média (60–79%)</span>
+                <span class="cal-legend-item"><span class="cal-dot red"></span>Baixa (&lt;60%)</span>
+                <span class="cal-legend-item"><span class="cal-dot gray"></span>Sem dados</span>
+                <span class="cal-legend-item"><span class="cal-ico">📋</span>Aplicação</span>
+              </div>
+              <div class="cal-weekdays">
+                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+              </div>
+              <div class="cal-grid" id="calGrid"></div>
+            </div>
+
+            <!-- Day Panel -->
+            <div class="card day-panel" id="dayPanel">
+              <div class="day-panel-empty" id="dayPanelEmpty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <p>Selecione um dia para ver os detalhes</p>
+              </div>
+              <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+{% endblock %}

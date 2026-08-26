@@ -132,7 +132,8 @@
         </div>
 
         <!-- REGISTRATION FORM -->
-        <form id="cadastro-form" novalidate>
+        <form id="cadastro-form" data-api-url="{% url 'dashboard:cadastro_api' %}" novalidate>
+          {% csrf_token %}
           
           <!-- ==================== ETAPA 1: SEUS DADOS ==================== -->
           <div class="wizard-step active" id="wizard-step-1">

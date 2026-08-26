@@ -106,20 +106,21 @@
         </div>
 
         <!-- Login Form -->
-        <form id="login-form" novalidate>
+        <form id="login-form" data-api-url="{% url 'dashboard:login_api' %}" novalidate>
+          {% csrf_token %}
           
-          <!-- E-mail Field -->
+          <!-- E-mail or username field -->
           <div class="form-group">
-            <label class="form-label" for="email">E-mail <span class="required-star">*</span></label>
+            <label class="form-label" for="email">E-mail ou usuário <span class="required-star">*</span></label>
             <div class="input-icon-wrapper">
               <span class="input-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
               </span>
-              <input type="email" id="email" class="form-input" placeholder="seu.email@fazenda.com.br" autocomplete="email" required />
+              <input type="text" id="email" class="form-input" placeholder="seu e-mail ou usuário" autocomplete="username" required />
             </div>
             <div class="form-error-msg">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>Por favor, informe um e-mail válido.</span>
+              <span>Por favor, informe seu e-mail ou usuário.</span>
             </div>
           </div>
 
@@ -186,6 +187,7 @@
       </div>
 
       <form id="forgot-form" novalidate>
+        {% csrf_token %}
         <div class="form-group">
           <label class="form-label" for="reset_email">E-mail Cadastrado</label>
           <div class="input-icon-wrapper">
@@ -208,6 +210,6 @@
   </div>
 
   <!-- Scripts -->
-  <script src="{% static 'auth.js' %}"></script>
+  <script src="{% static 'auth.js' %}?v=2"></script>
 </body>
 </html>

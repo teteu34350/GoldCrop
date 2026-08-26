@@ -1,0 +1,49 @@
+/* responsive.css - Mobile responsive enhancements for GoldCrop UI */
+
+/* Sidebar behavior and hamburger toggle */
+@media (max-width: 768px) {
+  /* Hide sidebar by default on small screens */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  /* Show the menu toggle (hamburger) */
+  .menu-toggle {
+    display: block !important;
+  }
+}
+
+/* KPI card priority and collapsing */
+@media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .kpi-card:not(.priority) {
+    display: none;
+  }
+  .kpi-more-toggle {
+    display: block;
+    margin-top: 0.5rem;
+    text-align: center;
+    background: var(--green-100);
+    border: none;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--green-900);
+  }
+}
+
+/* Ensure modal overlays appear above all other elements */
+.modal-overlay, .modal {
+  z-index: 2000;
+}
+
+/* Optional: adjust body overflow when sidebar is open on mobile */
+body.sidebar-open {
+  overflow: hidden;
+}

@@ -6,13 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GoldCrop — Inteligência para a Cafeicultura</title>
   <meta name="description" content="GoldCrop é o sistema de apoio à decisão que utiliza IA e previsão meteorológica para identificar a melhor janela de aplicação de insumos na cafeicultura." />
+  <meta name="csrf-token" content="{{ csrf_token }}" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3XqQ2Xw7E5R0xj5u2N8Q8W9Q5Q5Q=" crossorigin="" />
-  <link rel="stylesheet" href="{% static 'styles.css' %}?v=7" />
+  <link rel="stylesheet" href="{% static 'styles.css' %}?v=8" />
+<link rel="stylesheet" href="{% static 'responsive.css' %}?v=1" />
 </head>
 <body>
+  {{ auth_user_data|json_script:"auth-user-data" }}
   <!-- Mobile overlay -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
@@ -41,54 +44,61 @@
 
       <nav class="sidebar-nav">
         <div class="nav-section">
-          <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+          <a href="{% url 'dashboard:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" id="nav-dashboard">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
             </span>
             <span class="nav-label">Visão Geral</span>
-          </button>
-          <button class="nav-item" data-page="calendar" id="nav-calendar">
+          </a>
+          <a href="{% url 'dashboard:calendar' %}" class="nav-item {% if request.resolver_match.url_name == 'calendar' %}active{% endif %}" id="nav-calendar">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </span>
             <span class="nav-label">Calendário</span>
             <span class="nav-badge">3</span>
-          </button>
-          <button class="nav-item" data-page="talhoes" id="nav-talhoes">
+          </a>
+          <a href="{% url 'dashboard:talhoes' %}" class="nav-item {% if request.resolver_match.url_name == 'talhoes' %}active{% endif %}" id="nav-talhoes">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
             </span>
             <span class="nav-label">Talhões</span>
-          </button>
-          <button class="nav-item" data-page="fazenda" id="nav-fazenda">
+          </a>
+          <a href="{% url 'dashboard:fazenda' %}" class="nav-item {% if request.resolver_match.url_name == 'fazenda' %}active{% endif %}" id="nav-fazenda">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/><path d="M3 12h3M18 12h3"/></svg>
             </span>
             <span class="nav-label">Minha Fazenda</span>
-          </button>
-          <button class="nav-item" data-page="aplicacoes" id="nav-aplicacoes">
+          </a>
+          <a href="{% url 'dashboard:sensores' %}" class="nav-item {% if request.resolver_match.url_name == 'sensores' %}active{% endif %}" id="nav-sensores">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="m16.24 16.24 2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="m16.24 7.76 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
+            </span>
+            <span class="nav-label">Sensores</span>
+            <span class="locked-badge">Bloqueado</span>
+          </a>
+          <a href="{% url 'dashboard:aplicacoes' %}" class="nav-item {% if request.resolver_match.url_name == 'aplicacoes' %}active{% endif %}" id="nav-aplicacoes">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
             </span>
             <span class="nav-label">Aplicações</span>
-          </button>
-          <button class="nav-item" data-page="historico" id="nav-historico">
+          </a>
+          <a href="{% url 'dashboard:historico' %}" class="nav-item {% if request.resolver_match.url_name == 'historico' %}active{% endif %}" id="nav-historico">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
             </span>
             <span class="nav-label">Histórico</span>
-          </button>
+          </a>
         </div>
 
         <div class="nav-divider"></div>
 
         <div class="nav-section">
-          <button class="nav-item" data-page="settings" id="nav-settings">
+          <a href="{% url 'dashboard:settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}" id="nav-settings">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </span>
             <span class="nav-label">Configurações</span>
-          </button>
+          </a>
         </div>
       </nav>
 
@@ -112,10 +122,10 @@
       <!-- TOP BAR -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="menu-toggle" id="menuToggle">
+          <button class="menu-toggle" id="menuToggle" onclick="toggleSidebar()">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
-          <div class="topbar-breadcrumb" id="breadcrumb">Visão Geral</div>
+          <div class="topbar-breadcrumb" id="breadcrumb">{% block breadcrumb %}Visão Geral{% endblock %}</div>
         </div>
         <div class="topbar-right">
           <div class="weather-pill">
@@ -163,350 +173,22 @@
                 </button>
               </div>
               <div class="dropdown-divider"></div>
-              <a href="{% url 'dashboard:login' %}" class="dropdown-item danger">
+              <form action="{% url 'dashboard:logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item danger">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 <span>Sair da Conta</span>
-              </a>
+                </button>
+              </form>
             </div>
           </div>
         </div>
       </header>
 
-      <!-- ===================== PAGE: DASHBOARD ===================== -->
-      <section class="page active" id="page-dashboard">
-        <div class="page-content">
-          <!-- Greeting -->
-          <div class="greeting-section">
-            <div>
-              <h1 class="greeting-title">Bom dia, João <span class="wave">👋</span></h1>
-              <p class="greeting-sub">Veja as melhores janelas de aplicação para sua lavoura hoje.</p>
-            </div>
-            <div class="farm-summary">
-              <div class="farm-pill">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                Fazenda Santa Clara
-              </div>
-              <div class="farm-pill">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/></svg>
-                8 talhões
-              </div>
-              <div class="farm-pill update">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Atualizado 10:42
-              </div>
-            </div>
-          </div>
+      
+      {% block content %}
+      {% endblock %}
 
-          <!-- KPI Cards -->
-          <div class="kpi-grid">
-            <div class="kpi-card gold" id="kpiIEA">
-              <div class="kpi-header">
-                <span class="kpi-label">IEA Atual</span>
-                <div class="kpi-icon gold-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                </div>
-              </div>
-              <div class="kpi-value">87<span class="kpi-unit">%</span></div>
-              <div class="kpi-trend positive">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                +4% em relação a ontem
-              </div>
-              <p class="kpi-desc">Alta probabilidade de condições favoráveis</p>
-            </div>
-
-            <div class="kpi-card" id="kpiChuva">
-              <div class="kpi-header">
-                <span class="kpi-label">Chuva Prevista</span>
-                <div class="kpi-icon rain-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
-                </div>
-              </div>
-              <div class="kpi-value" id="rainForecastValue">15<span class="kpi-unit">mm</span></div>
-              <div class="kpi-trend neutral">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                Próximas 24h
-              </div>
-              <p class="kpi-desc" id="rainForecastDesc">Previsão local carregando...</p>
-            </div>
-
-            <div class="kpi-card highlight-card" id="kpiJanela">
-              <div class="kpi-header">
-                <span class="kpi-label">Próxima Janela de Ouro</span>
-                <div class="kpi-icon window-icon">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                </div>
-              </div>
-              <div class="kpi-date">25 Ago • 08:00 – 11:30</div>
-              <div class="kpi-iea-badge">IEA <strong>91%</strong></div>
-              <p class="kpi-desc">Alta confiança · Talhão 03</p>
-            </div>
-          </div>
-
-          <!-- Main Grid -->
-          <div class="main-grid">
-            <!-- Golden Window Card -->
-            <div class="golden-window-card">
-              <div class="gw-header">
-                <div class="gw-title-wrap">
-                  <span class="gw-badge">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    Janela de Ouro
-                  </span>
-                  <span class="gw-confidence">Alta Confiança</span>
-                </div>
-                <div class="gw-iea-ring">
-                  <div class="ring-container">
-                    <svg class="ring-svg" viewBox="0 0 80 80" width="80" height="80">
-                      <circle cx="40" cy="40" r="34" fill="none" stroke="#e8f0eb" stroke-width="6"/>
-                      <circle cx="40" cy="40" r="34" fill="none" stroke="#c9a227" stroke-width="6"
-                        stroke-dasharray="213.6" stroke-dashoffset="19.2"
-                        stroke-linecap="round" transform="rotate(-90 40 40)"/>
-                    </svg>
-                    <div class="ring-label">
-                      <span class="ring-value">91</span>
-                      <span class="ring-unit">%</span>
-                    </div>
-                  </div>
-                  <span class="ring-caption">IEA</span>
-                </div>
-              </div>
-
-              <div class="gw-date">
-                <div class="gw-day">25 de Agosto de 2026</div>
-                <div class="gw-time">08:00 — 11:30</div>
-              </div>
-
-              <div class="gw-factors">
-                <div class="gw-factor">
-                  <div class="factor-icon rain">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
-                  </div>
-                  <div class="factor-info">
-                    <span class="factor-label">Chuva Prevista</span>
-                    <span class="factor-value">12 mm</span>
-                  </div>
-                </div>
-                <div class="gw-factor">
-                  <div class="factor-icon temp">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
-                  </div>
-                  <div class="factor-info">
-                    <span class="factor-label">Temperatura</span>
-                    <span class="factor-value">23°C</span>
-                  </div>
-                </div>
-                <div class="gw-factor">
-                  <div class="factor-icon wind">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
-                  </div>
-                  <div class="factor-info">
-                    <span class="factor-label">Vento</span>
-                    <span class="factor-value">6 km/h</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="gw-ai-insight">
-                <div class="ai-icon">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10A10 10 0 0 1 2 12 10 10 0 0 1 12 2m0 4a2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2m0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4"/></svg>
-                </div>
-                <div class="ai-text">
-                  <span class="ai-label">Análise da IA</span>
-                  <p>Com a previsão de 12 mm de chuva, o modelo estima condições favoráveis para a aplicação neste período. Temperatura e vento dentro da faixa ideal para absorção foliar.</p>
-                </div>
-              </div>
-
-              <button class="gw-btn" onclick="navigateTo('calendar')">
-                Ver análise completa
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              </button>
-            </div>
-
-            <!-- Right Column -->
-            <div class="right-column">
-
-              <!-- AI Insights -->
-              <div class="card ai-card">
-                <div class="card-header">
-                  <h3 class="card-title">
-                    <span class="ai-dot"></span>
-                    Próximas decisões
-                  </h3>
-                  <span class="ai-model-badge">GPT-4o + Modelo Agro</span>
-                </div>
-                <div class="insight-list">
-                  <div class="insight-item positive">
-                    <div class="insight-icon">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                    </div>
-                    <div class="insight-text">
-                      <strong>Talhão 03 · NPK 20-05-20</strong>
-                      <span>Janela ideal amanhã, 08:00–11:30 · IEA 91%</span>
-                    </div>
-                  </div>
-                  <div class="insight-item info">
-                    <div class="insight-icon">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    </div>
-                    <div class="insight-text">
-                      <strong>Talhão 04 · Ureia</strong>
-                      <span>Aguardar: solo com 63% de umidade · IEA 47%</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="iea-summary">
-                  <div class="iea-sum-item">
-                    <span class="iea-sum-label">Aplicações planejadas</span>
-                    <span class="iea-sum-value gold-text">3</span>
-                  </div>
-                  <div class="iea-divider"></div>
-                  <div class="iea-sum-item">
-                    <span class="iea-sum-label">Janelas ideais hoje</span>
-                    <span class="iea-sum-value green-text">2</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: CALENDAR ===================== -->
-      <section class="page" id="page-calendar">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Calendário Inteligente</h1>
-              <p class="page-sub">Visualize as janelas de aplicação estimadas pela IA para cada dia.</p>
-            </div>
-            <button class="btn-primary" onclick="openRegistrar()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Registrar Aplicação
-            </button>
-          </div>
-
-          <div class="calendar-layout">
-            <!-- Calendar -->
-            <div class="card calendar-card">
-              <div class="cal-header">
-                <button class="cal-nav-btn" id="calPrev">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-                <h2 class="cal-month" id="calMonthLabel">Agosto 2026</h2>
-                <button class="cal-nav-btn" id="calNext">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-              </div>
-              <div class="cal-legend">
-                <span class="cal-legend-item"><span class="cal-dot green"></span>Alta (≥80%)</span>
-                <span class="cal-legend-item"><span class="cal-dot yellow"></span>Média (60–79%)</span>
-                <span class="cal-legend-item"><span class="cal-dot red"></span>Baixa (&lt;60%)</span>
-                <span class="cal-legend-item"><span class="cal-dot gray"></span>Sem dados</span>
-                <span class="cal-legend-item"><span class="cal-ico">📋</span>Aplicação</span>
-              </div>
-              <div class="cal-weekdays">
-                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-              </div>
-              <div class="cal-grid" id="calGrid"></div>
-            </div>
-
-            <!-- Day Panel -->
-            <div class="card day-panel" id="dayPanel">
-              <div class="day-panel-empty" id="dayPanelEmpty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <p>Selecione um dia para ver os detalhes</p>
-              </div>
-              <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: TALHÕES ===================== -->
-      <section class="page" id="page-talhoes">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Mapa dos Talhões</h1>
-              <p class="page-sub">Fazenda Santa Clara · 84 ha · 8 talhões monitorados</p>
-            </div>
-            <div class="talhoes-actions">
-              <div class="filter-pills">
-                <button class="filter-pill active">Todos</button>
-                <button class="filter-pill">Favoráveis</button>
-                <button class="filter-pill">Alerta</button>
-              </div>
-              <button class="btn-primary" type="button" id="btnCadastrarTalhao">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Cadastrar Talhão
-              </button>
-            </div>
-          </div>
-          <div class="talhoes-layout">
-            <div class="card talhoes-map-card">
-              <div class="map-container" id="mapContainer"></div>
-            </div>
-            <div class="talhoes-list" id="talhoesList"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: MINHA FAZENDA ===================== -->
-      <section class="page" id="page-fazenda">
-        <div class="page-content">
-          <div id="fazendaContent"></div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: APLICAÇÕES ===================== -->
-      <section class="page" id="page-aplicacoes">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Aplicações</h1>
-              <p class="page-sub">Gerencie os registros de aplicação de insumos.</p>
-            </div>
-            <button class="btn-primary" onclick="openRegistrar()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Registrar Aplicação
-            </button>
-          </div>
-          <div id="aplicacoesContent"></div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: HISTÓRICO ===================== -->
-      <section class="page" id="page-historico">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Histórico de Aplicações</h1>
-              <p class="page-sub">Registro completo de todas as aplicações realizadas.</p>
-            </div>
-            <div class="filter-pills">
-              <button class="filter-pill active">Todos</button>
-              <button class="filter-pill">Realizados</button>
-              <button class="filter-pill">Não Realizados</button>
-            </div>
-          </div>
-          <div class="card">
-            <div id="historicoTable"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ===================== PAGE: SETTINGS ===================== -->
-      <section class="page" id="page-settings">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Configurações</h1>
-              <p class="page-sub">Preferências da fazenda e do sistema.</p>
-            </div>
-          </div>
-          <div id="settingsContent"></div>
-        </div>
-      </section>
     </main>
   </div>
 
@@ -855,6 +537,7 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="{% static 'app.js' %}?v=11"></script>
+  <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
+  <script src="{% static 'app.js' %}?v=13"></script>
 </body>
 </html>

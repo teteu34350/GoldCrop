@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<section class="page active" id="page-sensores">
+  <div class="page-content">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Sensores</h1>
+        <p class="page-sub">Monitore os sensores instalados na sua fazenda.</p>
+      </div>
+    </div>
+
+    <div class="settings-grid">
+      <div class="settings-card sensor-module-card">
+        <div class="settings-card-title">Módulo de sensor de umidade <span class="locked-badge">Bloqueado</span></div>
+        <div class="sensor-module-icon">[ bloqueado ]</div>
+        <p class="sensor-module-message">Disponibilize um sensor de umidade para habilitar as leituras de umidade do solo e o histórico por talhão.</p>
+        <button class="btn-primary sensor-module-button" type="button" disabled>Sensor não disponível</button>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
