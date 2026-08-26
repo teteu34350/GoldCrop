@@ -1,0 +1,860 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GoldCrop — Inteligência para a Cafeicultura</title>
+  <meta name="description" content="GoldCrop é o sistema de apoio à decisão que utiliza IA e previsão meteorológica para identificar a melhor janela de aplicação de insumos na cafeicultura." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3XqQ2Xw7E5R0xj5u2N8Q8W9Q5Q5Q=" crossorigin="" />
+  <link rel="stylesheet" href="{% static 'styles.css' %}?v=7" />
+</head>
+<body>
+  <!-- Mobile overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="app-layout">
+    <!-- ===================== SIDEBAR ===================== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="16" cy="16" r="16" fill="#1a3d2b"/>
+              <path d="M16 6C16 6 10 10 10 16C10 19.5 12.5 22.5 16 24C19.5 22.5 22 19.5 22 16C22 10 16 6 16 6Z" fill="#c9a227" opacity="0.9"/>
+              <path d="M16 10C16 10 12 13 12 17C12 19.2 13.8 21 16 22C18.2 21 20 19.2 20 17C20 13 16 10 16 10Z" fill="#1a3d2b"/>
+              <path d="M16 13C16 13 14 15 14 17.5C14 18.8 14.9 20 16 20.5C17.1 20 18 18.8 18 17.5C18 15 16 13 16 13Z" fill="#c9a227" opacity="0.7"/>
+            </svg>
+          </div>
+          <div class="logo-text">
+            <span class="logo-name">GoldCrop</span>
+            <span class="logo-tagline">AgriTech Inteligente</span>
+          </div>
+        </div>
+        <button class="sidebar-close" id="sidebarClose">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </span>
+            <span class="nav-label">Visão Geral</span>
+          </button>
+          <button class="nav-item" data-page="calendar" id="nav-calendar">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            </span>
+            <span class="nav-label">Calendário</span>
+            <span class="nav-badge">3</span>
+          </button>
+          <button class="nav-item" data-page="talhoes" id="nav-talhoes">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+            </span>
+            <span class="nav-label">Talhões</span>
+          </button>
+          <button class="nav-item" data-page="fazenda" id="nav-fazenda">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/><path d="M3 12h3M18 12h3"/></svg>
+            </span>
+            <span class="nav-label">Minha Fazenda</span>
+          </button>
+          <button class="nav-item" data-page="aplicacoes" id="nav-aplicacoes">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </span>
+            <span class="nav-label">Aplicações</span>
+          </button>
+          <button class="nav-item" data-page="historico" id="nav-historico">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>
+            </span>
+            <span class="nav-label">Histórico</span>
+          </button>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-section">
+          <button class="nav-item" data-page="settings" id="nav-settings">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </span>
+            <span class="nav-label">Configurações</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile" id="sidebarUserProfile" title="Abrir menu de perfil">
+          <div class="user-avatar" id="sidebarAvatar">JO</div>
+          <div class="user-info">
+            <span class="user-name" id="sidebarUserName">João Oliveira</span>
+            <span class="user-farm" id="sidebarUserFarm">Fazenda Santa Clara</span>
+          </div>
+          <span class="user-menu-btn" id="sidebarUserMenuBtn" title="Menu do perfil">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+          </span>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ===================== MAIN CONTENT ===================== -->
+    <main class="main-content" id="mainContent">
+      <!-- TOP BAR -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="menu-toggle" id="menuToggle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="topbar-breadcrumb" id="breadcrumb">Visão Geral</div>
+        </div>
+        <div class="topbar-right">
+          <div class="weather-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <span id="weatherSummary">Carregando clima local...</span>
+          </div>
+          <button class="topbar-icon-btn" title="Notificações" id="notifBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="notif-badge">2</span>
+          </button>
+          <div class="topbar-user-wrapper" id="topbarUserWrapper">
+            <button class="topbar-user-btn" id="topbarUserBtn" title="Menu de Perfil">
+              <div class="user-avatar-sm" id="topbarAvatar">JO</div>
+              <span class="user-name-topbar" id="topbarUserName">João Oliveira</span>
+              <svg class="topbar-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            
+            <!-- Profile Dropdown Menu -->
+            <div class="profile-dropdown" id="profileDropdown">
+              <div class="dropdown-header">
+                <div class="user-avatar-lg" id="dropdownAvatar">JO</div>
+                <div class="dropdown-user-details">
+                  <span class="dropdown-user-name" id="dropdownUserName">João Oliveira</span>
+                  <span class="dropdown-user-email" id="dropdownUserEmail">joao.oliveira@santaclara.com.br</span>
+                  <span class="dropdown-user-role"><span class="role-badge" id="dropdownUserRole">Produtor / Administrador</span></span>
+                </div>
+              </div>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-menu-list">
+                <button class="dropdown-item" id="btnOpenPerfilModal">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Meu Perfil</span>
+                </button>
+                <button class="dropdown-item" id="btnProfileSettings">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  <span>Configurações</span>
+                </button>
+                <button class="dropdown-item" id="btnSwitchFarm">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  <span>Alternar Fazenda</span>
+                </button>
+                <button class="dropdown-item" id="btnSupport">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span>Ajuda e Suporte</span>
+                </button>
+              </div>
+              <div class="dropdown-divider"></div>
+              <a href="{% url 'dashboard:login' %}" class="dropdown-item danger">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                <span>Sair da Conta</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ===================== PAGE: DASHBOARD ===================== -->
+      <section class="page active" id="page-dashboard">
+        <div class="page-content">
+          <!-- Greeting -->
+          <div class="greeting-section">
+            <div>
+              <h1 class="greeting-title">Bom dia, João <span class="wave">👋</span></h1>
+              <p class="greeting-sub">Veja as melhores janelas de aplicação para sua lavoura hoje.</p>
+            </div>
+            <div class="farm-summary">
+              <div class="farm-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                Fazenda Santa Clara
+              </div>
+              <div class="farm-pill">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/></svg>
+                8 talhões
+              </div>
+              <div class="farm-pill update">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Atualizado 10:42
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="kpi-grid">
+            <div class="kpi-card gold" id="kpiIEA">
+              <div class="kpi-header">
+                <span class="kpi-label">IEA Atual</span>
+                <div class="kpi-icon gold-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+              </div>
+              <div class="kpi-value">87<span class="kpi-unit">%</span></div>
+              <div class="kpi-trend positive">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                +4% em relação a ontem
+              </div>
+              <p class="kpi-desc">Alta probabilidade de condições favoráveis</p>
+            </div>
+
+            <div class="kpi-card" id="kpiChuva">
+              <div class="kpi-header">
+                <span class="kpi-label">Chuva Prevista</span>
+                <div class="kpi-icon rain-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
+                </div>
+              </div>
+              <div class="kpi-value" id="rainForecastValue">15<span class="kpi-unit">mm</span></div>
+              <div class="kpi-trend neutral">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Próximas 24h
+              </div>
+              <p class="kpi-desc" id="rainForecastDesc">Previsão local carregando...</p>
+            </div>
+
+            <div class="kpi-card highlight-card" id="kpiJanela">
+              <div class="kpi-header">
+                <span class="kpi-label">Próxima Janela de Ouro</span>
+                <div class="kpi-icon window-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </div>
+              </div>
+              <div class="kpi-date">25 Ago • 08:00 – 11:30</div>
+              <div class="kpi-iea-badge">IEA <strong>91%</strong></div>
+              <p class="kpi-desc">Alta confiança · Talhão 03</p>
+            </div>
+          </div>
+
+          <!-- Main Grid -->
+          <div class="main-grid">
+            <!-- Golden Window Card -->
+            <div class="golden-window-card">
+              <div class="gw-header">
+                <div class="gw-title-wrap">
+                  <span class="gw-badge">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    Janela de Ouro
+                  </span>
+                  <span class="gw-confidence">Alta Confiança</span>
+                </div>
+                <div class="gw-iea-ring">
+                  <div class="ring-container">
+                    <svg class="ring-svg" viewBox="0 0 80 80" width="80" height="80">
+                      <circle cx="40" cy="40" r="34" fill="none" stroke="#e8f0eb" stroke-width="6"/>
+                      <circle cx="40" cy="40" r="34" fill="none" stroke="#c9a227" stroke-width="6"
+                        stroke-dasharray="213.6" stroke-dashoffset="19.2"
+                        stroke-linecap="round" transform="rotate(-90 40 40)"/>
+                    </svg>
+                    <div class="ring-label">
+                      <span class="ring-value">91</span>
+                      <span class="ring-unit">%</span>
+                    </div>
+                  </div>
+                  <span class="ring-caption">IEA</span>
+                </div>
+              </div>
+
+              <div class="gw-date">
+                <div class="gw-day">25 de Agosto de 2026</div>
+                <div class="gw-time">08:00 — 11:30</div>
+              </div>
+
+              <div class="gw-factors">
+                <div class="gw-factor">
+                  <div class="factor-icon rain">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>
+                  </div>
+                  <div class="factor-info">
+                    <span class="factor-label">Chuva Prevista</span>
+                    <span class="factor-value">12 mm</span>
+                  </div>
+                </div>
+                <div class="gw-factor">
+                  <div class="factor-icon temp">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+                  </div>
+                  <div class="factor-info">
+                    <span class="factor-label">Temperatura</span>
+                    <span class="factor-value">23°C</span>
+                  </div>
+                </div>
+                <div class="gw-factor">
+                  <div class="factor-icon wind">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+                  </div>
+                  <div class="factor-info">
+                    <span class="factor-label">Vento</span>
+                    <span class="factor-value">6 km/h</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gw-ai-insight">
+                <div class="ai-icon">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a10 10 0 0 1 10 10 10 10 0 0 1-10 10A10 10 0 0 1 2 12 10 10 0 0 1 12 2m0 4a2 2 0 0 0-2 2 2 2 0 0 0 2 2 2 2 0 0 0 2-2 2 2 0 0 0-2-2m0 10c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4"/></svg>
+                </div>
+                <div class="ai-text">
+                  <span class="ai-label">Análise da IA</span>
+                  <p>Com a previsão de 12 mm de chuva, o modelo estima condições favoráveis para a aplicação neste período. Temperatura e vento dentro da faixa ideal para absorção foliar.</p>
+                </div>
+              </div>
+
+              <button class="gw-btn" onclick="navigateTo('calendar')">
+                Ver análise completa
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </div>
+
+            <!-- Right Column -->
+            <div class="right-column">
+
+              <!-- AI Insights -->
+              <div class="card ai-card">
+                <div class="card-header">
+                  <h3 class="card-title">
+                    <span class="ai-dot"></span>
+                    Próximas decisões
+                  </h3>
+                  <span class="ai-model-badge">GPT-4o + Modelo Agro</span>
+                </div>
+                <div class="insight-list">
+                  <div class="insight-item positive">
+                    <div class="insight-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="insight-text">
+                      <strong>Talhão 03 · NPK 20-05-20</strong>
+                      <span>Janela ideal amanhã, 08:00–11:30 · IEA 91%</span>
+                    </div>
+                  </div>
+                  <div class="insight-item info">
+                    <div class="insight-icon">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    </div>
+                    <div class="insight-text">
+                      <strong>Talhão 04 · Ureia</strong>
+                      <span>Aguardar: solo com 63% de umidade · IEA 47%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="iea-summary">
+                  <div class="iea-sum-item">
+                    <span class="iea-sum-label">Aplicações planejadas</span>
+                    <span class="iea-sum-value gold-text">3</span>
+                  </div>
+                  <div class="iea-divider"></div>
+                  <div class="iea-sum-item">
+                    <span class="iea-sum-label">Janelas ideais hoje</span>
+                    <span class="iea-sum-value green-text">2</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: CALENDAR ===================== -->
+      <section class="page" id="page-calendar">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Calendário Inteligente</h1>
+              <p class="page-sub">Visualize as janelas de aplicação estimadas pela IA para cada dia.</p>
+            </div>
+            <button class="btn-primary" onclick="openRegistrar()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar Aplicação
+            </button>
+          </div>
+
+          <div class="calendar-layout">
+            <!-- Calendar -->
+            <div class="card calendar-card">
+              <div class="cal-header">
+                <button class="cal-nav-btn" id="calPrev">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <h2 class="cal-month" id="calMonthLabel">Agosto 2026</h2>
+                <button class="cal-nav-btn" id="calNext">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+              <div class="cal-legend">
+                <span class="cal-legend-item"><span class="cal-dot green"></span>Alta (≥80%)</span>
+                <span class="cal-legend-item"><span class="cal-dot yellow"></span>Média (60–79%)</span>
+                <span class="cal-legend-item"><span class="cal-dot red"></span>Baixa (&lt;60%)</span>
+                <span class="cal-legend-item"><span class="cal-dot gray"></span>Sem dados</span>
+                <span class="cal-legend-item"><span class="cal-ico">📋</span>Aplicação</span>
+              </div>
+              <div class="cal-weekdays">
+                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+              </div>
+              <div class="cal-grid" id="calGrid"></div>
+            </div>
+
+            <!-- Day Panel -->
+            <div class="card day-panel" id="dayPanel">
+              <div class="day-panel-empty" id="dayPanelEmpty">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <p>Selecione um dia para ver os detalhes</p>
+              </div>
+              <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: TALHÕES ===================== -->
+      <section class="page" id="page-talhoes">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Mapa dos Talhões</h1>
+              <p class="page-sub">Fazenda Santa Clara · 84 ha · 8 talhões monitorados</p>
+            </div>
+            <div class="talhoes-actions">
+              <div class="filter-pills">
+                <button class="filter-pill active">Todos</button>
+                <button class="filter-pill">Favoráveis</button>
+                <button class="filter-pill">Alerta</button>
+              </div>
+              <button class="btn-primary" type="button" id="btnCadastrarTalhao">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Cadastrar Talhão
+              </button>
+            </div>
+          </div>
+          <div class="talhoes-layout">
+            <div class="card talhoes-map-card">
+              <div class="map-container" id="mapContainer"></div>
+            </div>
+            <div class="talhoes-list" id="talhoesList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: MINHA FAZENDA ===================== -->
+      <section class="page" id="page-fazenda">
+        <div class="page-content">
+          <div id="fazendaContent"></div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: APLICAÇÕES ===================== -->
+      <section class="page" id="page-aplicacoes">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Aplicações</h1>
+              <p class="page-sub">Gerencie os registros de aplicação de insumos.</p>
+            </div>
+            <button class="btn-primary" onclick="openRegistrar()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Registrar Aplicação
+            </button>
+          </div>
+          <div id="aplicacoesContent"></div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: HISTÓRICO ===================== -->
+      <section class="page" id="page-historico">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Histórico de Aplicações</h1>
+              <p class="page-sub">Registro completo de todas as aplicações realizadas.</p>
+            </div>
+            <div class="filter-pills">
+              <button class="filter-pill active">Todos</button>
+              <button class="filter-pill">Realizados</button>
+              <button class="filter-pill">Não Realizados</button>
+            </div>
+          </div>
+          <div class="card">
+            <div id="historicoTable"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PAGE: SETTINGS ===================== -->
+      <section class="page" id="page-settings">
+        <div class="page-content">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">Configurações</h1>
+              <p class="page-sub">Preferências da fazenda e do sistema.</p>
+            </div>
+          </div>
+          <div id="settingsContent"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===================== MODAL: REGISTRAR APLICAÇÃO ===================== -->
+  <div class="modal-overlay" id="modalRegistrar" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Registrar Aplicação</h2>
+        <button class="modal-close" onclick="closeRegistrar()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Talhão</label>
+            <select class="form-input" id="formTalhao">
+              <option>Talhão 01</option>
+              <option>Talhão 02</option>
+              <option selected>Talhão 03</option>
+              <option>Talhão 04</option>
+              <option>Talhão 05</option>
+              <option>Talhão 06</option>
+              <option>Talhão 07</option>
+              <option>Talhão 08</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Produto</label>
+            <input class="form-input" type="text" value="NPK 20-05-20" id="formProduto" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Tipo de Insumo</label>
+            <select class="form-input" id="formTipo">
+              <option>Fertilizante</option>
+              <option>Defensivo</option>
+              <option>Foliar</option>
+              <option>Corretivo</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Quantidade (kg/ha)</label>
+            <input class="form-input" type="number" value="320" id="formQtd" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Data</label>
+            <input class="form-input" type="date" value="2026-08-25" id="formData" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Horário</label>
+            <input class="form-input" type="time" value="08:35" id="formHorario" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observações</label>
+          <textarea class="form-input form-textarea" rows="3" id="formObs" placeholder="Condições observadas, equipamentos, responsável..."></textarea>
+        </div>
+
+        <div class="iea-preview">
+          <div class="iea-preview-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <div class="iea-preview-text">
+            <strong>IEA para este período: 91%</strong>
+            <span>Condição favorável identificada pela IA</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeRegistrar()">Cancelar</button>
+        <button class="btn-primary" onclick="submitRegistrar()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Registrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR PESSOA -->
+  <div class="modal-overlay" id="modalPessoa" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header"><h2 class="modal-title">Adicionar pessoa à fazenda</h2><button class="modal-close" onclick="closePessoa()">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="pessoaNome" placeholder="Nome completo" /></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">E-mail</label><input class="form-input" id="pessoaEmail" type="email" placeholder="nome@exemplo.com" /></div><div class="form-group"><label class="form-label">Telefone</label><input class="form-input" id="pessoaTelefone" placeholder="(00) 00000-0000" /></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Função</label><select class="form-input" id="pessoaFuncao"><option>Proprietário</option><option>Gerente</option><option>Técnico/Agrônomo</option><option>Funcionário</option></select></div><div class="form-group"><label class="form-label">Nível de acesso</label><select class="form-input" id="pessoaAcesso"><option>Acesso completo</option><option>Operacional</option><option>Consulta técnica</option><option>Execução</option></select></div></div>
+      </div>
+      <div class="modal-footer"><button class="btn-ghost" onclick="closePessoa()">Cancelar</button><button class="btn-primary" onclick="submitPessoa()">Enviar convite</button></div>
+    </div>
+  </div>
+
+  <!-- MODAL: PLANEJAR APLICAÇÃO -->
+  <div class="modal-overlay" id="modalPlanejar" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header"><h2 class="modal-title">Planejar aplicação</h2><button class="modal-close" onclick="closePlanejar()">×</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Talhão</label><input class="form-input" id="planTalhao" readonly /></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Produto</label><input class="form-input" id="planProduto" /></div><div class="form-group"><label class="form-label">Tipo de insumo</label><input class="form-input" id="planTipo" /></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Dose planejada</label><input class="form-input" id="planDose" /></div><div class="form-group"><label class="form-label">Período desejado</label><input class="form-input" id="planPeriodo" /></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Data recomendada</label><input class="form-input" id="planData" type="date" value="2026-08-26" /></div><div class="form-group"><label class="form-label">Planejada por</label><select class="form-input" id="planResponsavel"><option>Carlos Souza</option><option>João Silva</option><option>Ana Oliveira</option></select></div></div>
+        <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" rows="3" placeholder="Objetivo da aplicação, equipe ou equipamento..."></textarea></div>
+      </div>
+      <div class="modal-footer"><button class="btn-ghost" onclick="closePlanejar()">Cancelar</button><button class="btn-primary" onclick="submitPlanejar()">Salvar planejamento</button></div>
+    </div>
+  </div>
+
+  <!-- ===================== TOAST ===================== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Talhão Modal -->
+  <div class="modal-overlay" id="modalTalhao" style="display:none">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title" id="talhaoModalTitle">Talhão 01</h2>
+        <button class="modal-close" onclick="closeTalhaoModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" id="talhaoModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Cadastrar Talhão -->
+  <div class="modal-overlay" id="modalCadastrarTalhao" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 class="modal-title">Cadastrar Talhão</h2>
+        <button class="modal-close" type="button" onclick="closeCadastrarTalhaoModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form class="modal-body" id="cadastroTalhaoForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="novoTalhaoNome">Nome do talhão</label>
+            <input class="form-input" id="novoTalhaoNome" type="text" placeholder="Ex.: Talhão 09" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="novoTalhaoArea">Área (ha)</label>
+            <input class="form-input" id="novoTalhaoArea" type="number" min="0.1" step="0.1" placeholder="Ex.: 10" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="novoTalhaoCultura">Cultura</label>
+          <input class="form-input" id="novoTalhaoCultura" type="text" value="Café" required />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="novoTalhaoLatitude">Latitude</label>
+            <input class="form-input" id="novoTalhaoLatitude" type="number" step="any" placeholder="Ex.: -20.896861" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="novoTalhaoLongitude">Longitude</label>
+            <input class="form-input" id="novoTalhaoLongitude" type="number" step="any" placeholder="Ex.: -46.088306" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="novoTalhaoRaio">Raio aproximado (metros)</label>
+          <input class="form-input" id="novoTalhaoRaio" type="number" min="10" step="1" value="80" required />
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ghost" type="button" onclick="closeCadastrarTalhaoModal()">Cancelar</button>
+          <button class="btn-primary" type="submit">Salvar Talhão</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Meu Perfil -->
+  <div class="modal-overlay" id="modalPerfil" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 class="modal-title">Meu Perfil</h2>
+        <button class="modal-close" onclick="closePerfilModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="profile-modal-avatar-wrapper">
+          <div class="user-avatar-xl" id="modalAvatarPreview">JO</div>
+          <div class="avatar-edit-actions">
+            <button class="btn-secondary-sm" id="btnChangeAvatar" type="button" onclick="triggerAvatarUpload()">Alterar Iniciais / Foto</button>
+            <span class="avatar-help-text">Insira suas iniciais ou atualize seus dados</span>
+          </div>
+        </div>
+        
+        <form id="profileForm" onsubmit="event.preventDefault(); saveProfileChanges();">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Nome Completo</label>
+              <input class="form-input" type="text" id="profileModalName" value="João Oliveira" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Iniciais do Avatar</label>
+              <input class="form-input" type="text" id="profileModalInitials" value="JO" maxlength="3" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">E-mail</label>
+              <input class="form-input" type="email" id="profileModalEmail" value="joao.oliveira@santaclara.com.br" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Telefone / WhatsApp</label>
+              <input class="form-input" type="tel" id="profileModalPhone" value="(35) 99876-5432" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Propriedade Principal</label>
+              <input class="form-input" type="text" id="profileModalFarm" value="Fazenda Santa Clara" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cargo / Função</label>
+              <select class="form-input" id="profileModalRole">
+                <option value="Produtor / Administrador" selected>Produtor / Administrador</option>
+                <option value="Engenheiro Agrônomo">Engenheiro Agrônomo</option>
+                <option value="Gerente Operacional">Gerente Operacional</option>
+                <option value="Técnico de Campo">Técnico de Campo</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="profile-security-box">
+            <div class="security-box-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Segurança da Conta</span>
+            </div>
+            <p class="security-box-desc">Sua senha foi alterada pela última vez há 30 dias.</p>
+            <button type="button" class="btn-ghost-sm" onclick="showToast('🔐 Instruções de redefinição de senha enviadas ao e-mail.', 'info')">Alterar Senha</button>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closePerfilModal()">Cancelar</button>
+        <button class="btn-primary" onclick="saveProfileChanges()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Salvar Alterações
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Alternar Fazenda -->
+  <div class="modal-overlay" id="modalTrocarFazenda" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 class="modal-title">Alternar Propriedade</h2>
+        <button class="modal-close" onclick="closeTrocarFazendaModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">Selecione a fazenda que você deseja monitorar no sistema:</p>
+        <div class="farms-selection-list">
+          <div class="farm-select-card active" onclick="selectFarm('Fazenda Santa Clara', 84, 8, this)">
+            <div class="farm-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="farm-card-info">
+              <div class="farm-card-name">Fazenda Santa Clara</div>
+              <div class="farm-card-meta">Café Arábica · 84 ha · 8 talhões</div>
+            </div>
+            <span class="farm-card-badge">Ativa</span>
+          </div>
+
+          <div class="farm-select-card" onclick="selectFarm('Sítio Boa Vista', 32, 4, this)">
+            <div class="farm-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="farm-card-info">
+              <div class="farm-card-name">Sítio Boa Vista</div>
+              <div class="farm-card-meta">Café Conilon / Arábica · 32 ha · 4 talhões</div>
+            </div>
+            <span class="farm-card-badge outline">Selecionar</span>
+          </div>
+
+          <div class="farm-select-card" onclick="selectFarm('Fazenda Monte Alto', 120, 12, this)">
+            <div class="farm-card-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            </div>
+            <div class="farm-card-info">
+              <div class="farm-card-name">Fazenda Monte Alto</div>
+              <div class="farm-card-meta">Café Especial · 120 ha · 12 talhões</div>
+            </div>
+            <span class="farm-card-badge outline">Selecionar</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeTrocarFazendaModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Suporte -->
+  <div class="modal-overlay" id="modalSuporte" style="display:none">
+    <div class="modal modal-md">
+      <div class="modal-header">
+        <h2 class="modal-title">Ajuda e Suporte GoldCrop</h2>
+        <button class="modal-close" onclick="closeSuporteModal()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div style="text-align:center;padding:.5rem 0 1.25rem">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--green-50);color:var(--green-700);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3 style="font-size:1.1rem;font-weight:700;color:var(--gray-900)">Como podemos ajudar você hoje?</h3>
+          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.25rem">Nossa equipe agronômica e técnica está disponível para auxiliar sua lavoura.</p>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:.75rem">
+          <a href="https://wa.me/5535999999999" target="_blank" class="support-channel-card">
+            <div class="support-channel-icon whatsapp">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </div>
+            <div>
+              <div style="font-size:.875rem;font-weight:600;color:var(--gray-900)">Atendimento Via WhatsApp</div>
+              <div style="font-size:.78rem;color:var(--gray-500)">Fale diretamente com um agrônomo especialista</div>
+            </div>
+          </a>
+
+          <a href="mailto:suporte@goldcrop.com.br" class="support-channel-card">
+            <div class="support-channel-icon email">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            </div>
+            <div>
+              <div style="font-size:.875rem;font-weight:600;color:var(--gray-900)">Suporte Técnico por E-mail</div>
+              <div style="font-size:.78rem;color:var(--gray-500)">suporte@goldcrop.com.br</div>
+            </div>
+          </a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" onclick="closeSuporteModal()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="{% static 'app.js' %}?v=11"></script>
+</body>
+</html>

@@ -1,0 +1,496 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro da Fazenda — GoldCrop Agritech Inteligente</title>
+  <meta name="description" content="Cadastre sua propriedade no GoldCrop para receber análises meteorológicas personalizadas e previsões de janelas de aplicação." />
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="{% static 'styles.css' %}" />
+  <link rel="stylesheet" href="{% static 'auth.css' %}" />
+</head>
+<body class="auth-page">
+
+  <div class="auth-container">
+    
+    <!-- ===================== HERO PANEL (LEFT SIDE) ===================== -->
+    <div class="auth-hero">
+      <div class="auth-hero-header">
+        <a href="{% url 'dashboard:home' %}" class="auth-hero-brand">
+          <svg class="auth-hero-logo-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="16" fill="#1a3d2b"/>
+            <path d="M16 6C16 6 10 10 10 16C10 19.5 12.5 22.5 16 24C19.5 22.5 22 19.5 22 16C22 10 16 6 16 6Z" fill="#c9a227" opacity="0.9"/>
+            <path d="M16 10C16 10 12 13 12 17C12 19.2 13.8 21 16 22C18.2 21 20 19.2 20 17C20 13 16 10 16 10Z" fill="#1a3d2b"/>
+            <path d="M16 13C16 13 14 15 14 17.5C14 18.8 14.9 20 16 20.5C17.1 20 18 18.8 18 17.5C18 15 16 13 16 13Z" fill="#c9a227" opacity="0.7"/>
+          </svg>
+          <div>
+            <span class="auth-hero-brand-name">GoldCrop</span>
+            <span class="auth-hero-brand-tagline">Agritech Inteligente</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="auth-hero-body">
+        <div class="auth-hero-badge">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+          Cadastro para Produtores Rurais
+        </div>
+
+        <h1 class="auth-hero-title">
+          Leve a <span>inteligência agritech</span> para a sua propriedade.
+        </h1>
+
+        <p class="auth-hero-description">
+          Cadastre os dados da sua fazenda e localização para que nossos algoritmos calculem com precisão o Índice de Eficiência de Aplicação (IEA) nas suas lavouras.
+        </p>
+
+        <div class="auth-hero-metrics">
+          <div class="metric-card">
+            <div class="metric-card-val">IEA</div>
+            <div class="metric-card-label">Análise de Janelas</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-card-val">ViaCEP</div>
+            <div class="metric-card-label">Localização Precisa</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="auth-hero-footer">
+        <div class="hero-testimonial">
+          <div class="testimonial-avatar">GC</div>
+          <div>
+            <p class="testimonial-text">
+              "Personalizamos as recomendações de cada talhão de acordo com a sua altitude, temperatura e umidade."
+            </p>
+            <span class="testimonial-author">Engenharia Agronômica GoldCrop</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== FORM PANEL (RIGHT SIDE) ===================== -->
+    <div class="auth-form-wrapper">
+      <div class="auth-form-card wide-card">
+        
+        <!-- Mobile Logo -->
+        <div class="auth-logo-mobile">
+          <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="16" fill="#1a3d2b"/>
+            <path d="M16 6C16 6 10 10 10 16C10 19.5 12.5 22.5 16 24C19.5 22.5 22 19.5 22 16C22 10 16 6 16 6Z" fill="#c9a227" opacity="0.9"/>
+          </svg>
+          <div>
+            <span class="auth-hero-brand-name" style="color: var(--gray-900);">GoldCrop</span>
+            <span class="auth-hero-brand-tagline">Agritech Inteligente</span>
+          </div>
+        </div>
+
+        <!-- Form Title -->
+        <div class="auth-form-header">
+          <h2 class="auth-form-title">Cadastre sua fazenda</h2>
+          <p class="auth-form-subtitle">Preencha as informações para configurar a inteligência da sua propriedade.</p>
+        </div>
+
+        <!-- STEPPER WIZARD INDICATOR -->
+        <div class="stepper-container">
+          <div class="stepper-steps">
+            <div class="stepper-track">
+              <div class="stepper-progress" id="stepper-progress"></div>
+            </div>
+
+            <!-- Step 1 Indicator -->
+            <div class="step-item active" id="step-indicator-1">
+              <div class="step-bubble">1</div>
+              <span class="step-label">Seus dados</span>
+            </div>
+
+            <!-- Step 2 Indicator -->
+            <div class="step-item" id="step-indicator-2">
+              <div class="step-bubble">2</div>
+              <span class="step-label">Sua fazenda</span>
+            </div>
+
+            <!-- Step 3 Indicator -->
+            <div class="step-item" id="step-indicator-3">
+              <div class="step-bubble">3</div>
+              <span class="step-label">Propriedade</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Global Registration Alert -->
+        <div id="register-alert" class="auth-alert">
+          <svg class="auth-alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="alert-msg"></span>
+        </div>
+
+        <!-- REGISTRATION FORM -->
+        <form id="cadastro-form" novalidate>
+          
+          <!-- ==================== ETAPA 1: SEUS DADOS ==================== -->
+          <div class="wizard-step active" id="wizard-step-1">
+            
+            <!-- Nome Completo -->
+            <div class="form-group">
+              <label class="form-label" for="nome">Nome Completo <span class="required-star">*</span></label>
+              <div class="input-icon-wrapper">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
+                <input type="text" id="nome" class="form-input" placeholder="ex: João Oliveira Silva" required />
+              </div>
+              <div class="form-error-msg">
+                <span>Informe seu nome completo.</span>
+              </div>
+            </div>
+
+            <!-- E-mail & Telefone Row -->
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label class="form-label" for="email">E-mail <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                  </span>
+                  <input type="email" id="email" class="form-input" placeholder="produtor@fazenda.com" required />
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe um e-mail válido.</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="telefone">Telefone / WhatsApp <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  </span>
+                  <input type="tel" id="telefone" class="form-input" placeholder="(35) 99876-5432" required />
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe um telefone válido.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Senha & Confirmar Senha Row -->
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label class="form-label" for="senha">Criar Senha <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper has-toggle">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  </span>
+                  <input type="password" id="senha" class="form-input" placeholder="••••••••••••" required />
+                  <button type="button" class="password-toggle-btn" title="Mostrar/Ocultar senha">
+                    <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+                
+                <!-- Password Strength Indicator -->
+                <div class="password-strength-wrap">
+                  <div class="strength-bar-track">
+                    <div class="strength-bar-fill" id="strength-bar-fill"></div>
+                  </div>
+                  <div class="strength-text">
+                    <span id="strength-text-label">Força da senha</span>
+                  </div>
+                  <ul class="strength-req-list">
+                    <li class="strength-req-item" id="req-len"><span>✓</span> 8+ caracteres</li>
+                    <li class="strength-req-item" id="req-num"><span>✓</span> Pelo menos 1 número</li>
+                    <li class="strength-req-item" id="req-upper"><span>✓</span> Letra maiúscula</li>
+                    <li class="strength-req-item" id="req-spec"><span>✓</span> Símbolo especial</li>
+                  </ul>
+                </div>
+                <div class="form-error-msg">
+                  <span>Sua senha não atende aos requisitos mínimos.</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="confirmar_senha">Confirmar Senha <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper has-toggle">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  </span>
+                  <input type="password" id="confirmar_senha" class="form-input" placeholder="••••••••••••" required />
+                  <button type="button" class="password-toggle-btn" title="Mostrar/Ocultar senha">
+                    <svg class="eye-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+                <div class="form-error-msg">
+                  <span>As senhas não coincidem.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 1 Navigation Action -->
+            <div class="wizard-actions">
+              <div></div>
+              <button type="button" id="btn-step1-next" class="btn-primary-gold" style="width: auto; padding-left: 2rem; padding-right: 2rem;">
+                Próximo: Sua Fazenda →
+              </button>
+            </div>
+          </div>
+
+          <!-- ==================== ETAPA 2: SUA FAZENDA (LOCALIZAÇÃO FUNDAMENTAL) ==================== -->
+          <div class="wizard-step" id="wizard-step-2">
+            
+            <!-- Callout: Importância da Localização para o IEA -->
+            <div class="location-info-callout">
+              <div class="callout-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div class="callout-content">
+                <h4>Localização — Dado fundamental para o IEA</h4>
+                <p>
+                  Os campos de <strong>Estado, Cidade e Bairro</strong> são essenciais para os algoritmos de Inteligência Agronômica da GoldCrop. A localização exata determinará a busca de variáveis meteorológicas (chuva, ventos, umidade) para calcular o <strong>Índice de Eficiência de Aplicação (IEA)</strong>.
+                </p>
+              </div>
+            </div>
+
+            <!-- Nome da Fazenda -->
+            <div class="form-group">
+              <label class="form-label" for="nome_fazenda">Nome da Fazenda / Propriedade <span class="required-star">*</span></label>
+              <div class="input-icon-wrapper">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                </span>
+                <input type="text" id="nome_fazenda" class="form-input" placeholder="ex: Fazenda Santa Clara" required />
+              </div>
+              <div class="form-error-msg">
+                <span>Informe o nome da fazenda.</span>
+              </div>
+            </div>
+
+            <!-- CEP & Estado Row -->
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label class="form-label" for="cep">CEP <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                  </span>
+                  <input type="text" id="cep" class="form-input" placeholder="37000-000" maxlength="9" required />
+                </div>
+                <span class="form-hint">Preenchimento automático via ViaCEP ao digitar.</span>
+                <div class="form-error-msg">
+                  <span>Informe um CEP válido.</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="estado">Estado (UF) <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                  </span>
+                  <select id="estado" class="form-select" required>
+                    <option value="">Selecione o Estado</option>
+                    <option value="MG">Minas Gerais (MG)</option>
+                    <option value="SP">São Paulo (SP)</option>
+                    <option value="PR">Paraná (PR)</option>
+                    <option value="ES">Espírito Santo (ES)</option>
+                    <option value="BA">Bahia (BA)</option>
+                    <option value="GO">Goiás (GO)</option>
+                    <option value="MT">Mato Grosso (MT)</option>
+                    <option value="MS">Mato Grosso do Sul (MS)</option>
+                    <option value="RS">Rio Grande do Sul (RS)</option>
+                    <option value="SC">Santa Catarina (SC)</option>
+                    <option value="RJ">Rio de Janeiro (RJ)</option>
+                    <option value="CE">Ceará (CE)</option>
+                    <option value="PE">Pernambuco (PE)</option>
+                    <option value="MA">Maranhão (MA)</option>
+                    <option value="PI">Piauí (PI)</option>
+                    <option value="TO">Tocantins (TO)</option>
+                  </select>
+                </div>
+                <div class="form-error-msg">
+                  <span>Selecione o estado.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cidade & Bairro Row -->
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label class="form-label" for="cidade">Cidade <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+                  </span>
+                  <select id="cidade" class="form-select" required>
+                    <option value="">Selecione primeiro o Estado</option>
+                  </select>
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe a cidade.</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="bairro">Bairro / Distrito Rural <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16"/><path d="M3 21h18"/></svg>
+                  </span>
+                  <input type="text" id="bairro" class="form-input" placeholder="ex: Zona Rural - Cafezal" required />
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe o bairro ou distrito.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Endereço Completo -->
+            <div class="form-group">
+              <label class="form-label" for="endereco">Endereço da Propriedade / Acesso Rural</label>
+              <div class="input-icon-wrapper">
+                <span class="input-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+                </span>
+                <input type="text" id="endereco" class="form-input" placeholder="Rodovia BR-491, Km 12 - Entrada da Porteira Principal" />
+              </div>
+            </div>
+
+            <!-- Step 2 Actions -->
+            <div class="wizard-actions">
+              <button type="button" id="btn-step2-prev" class="btn-secondary-outline">
+                ← Voltar
+              </button>
+              <button type="button" id="btn-step2-next" class="btn-primary-gold" style="width: auto;">
+                Próximo: Dados da Propriedade →
+              </button>
+            </div>
+          </div>
+
+          <!-- ==================== ETAPA 3: SUA PROPRIEDADE ==================== -->
+          <div class="wizard-step" id="wizard-step-3">
+            
+            <!-- Área Total & Talhões Row -->
+            <div class="form-row-2col">
+              <div class="form-group">
+                <label class="form-label" for="area_hectares">Área Total (Hectares - ha) <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                  </span>
+                  <input type="number" id="area_hectares" class="form-input" placeholder="ex: 120.5" step="0.1" min="0.1" required />
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe a área total em hectares.</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="quantidade_talhoes">Quantidade de Talhões <span class="required-star">*</span></label>
+                <div class="input-icon-wrapper">
+                  <span class="input-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+                  </span>
+                  <input type="number" id="quantidade_talhoes" class="form-input" placeholder="ex: 8" min="1" required />
+                </div>
+                <div class="form-error-msg">
+                  <span>Informe a quantidade de talhões.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Principais Culturas (Multi-select Chips) -->
+            <div class="form-group">
+              <label class="form-label">Principais Culturas Cultivadas <span class="required-star">*</span></label>
+              <p class="form-hint">Selecione uma ou mais culturas presentes na sua propriedade:</p>
+              <div class="culture-chips-grid">
+                <div class="culture-chip selected" data-value="Café Arábica">☕ Café Arábica</div>
+                <div class="culture-chip" data-value="Café Conilon">🌱 Café Conilon</div>
+                <div class="culture-chip" data-value="Milho">🌽 Milho</div>
+                <div class="culture-chip" data-value="Soja">🫘 Soja</div>
+                <div class="culture-chip" data-value="Algodão">☁️ Algodão</div>
+                <div class="culture-chip" data-value="Cana-de-Açúcar">🌾 Cana-de-Açúcar</div>
+                <div class="culture-chip" data-value="Citros">🍊 Citros</div>
+                <div class="culture-chip" data-value="Hortifrúti">🥦 Hortifrúti</div>
+                <div class="culture-chip" data-value="Outras">➕ Outras</div>
+              </div>
+            </div>
+
+            <!-- Tipo de Cultivo (Radio Chips) -->
+            <div class="form-group">
+              <label class="form-label">Tipo de Cultivo Predominante</label>
+              <div class="radio-chips-grid">
+                <div class="radio-chip-option">
+                  <input type="radio" id="cultivo_conv" name="tipo_cultivo" value="Convencional" checked />
+                  <label for="cultivo_conv" class="radio-chip-label">Convencional</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="cultivo_org" name="tipo_cultivo" value="Orgânico" />
+                  <label for="cultivo_org" class="radio-chip-label">Orgânico Certificado</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="cultivo_agro" name="tipo_cultivo" value="Agroflorestal" />
+                  <label for="cultivo_agro" class="radio-chip-label">Agroflorestal</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="cultivo_ilpf" name="tipo_cultivo" value="Integrado (ILPF)" />
+                  <label for="cultivo_ilpf" class="radio-chip-label">Integrado (ILPF)</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sistema de Irrigação (Radio Chips) -->
+            <div class="form-group">
+              <label class="form-label">Sistema de Irrigação</label>
+              <div class="radio-chips-grid">
+                <div class="radio-chip-option">
+                  <input type="radio" id="irr_got" name="irrigacao" value="Gotejamento" checked />
+                  <label for="irr_got" class="radio-chip-label">Gotejamento</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="irr_asp" name="irrigacao" value="Aspersão / Pivô Central" />
+                  <label for="irr_asp" class="radio-chip-label">Aspersão / Pivô</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="irr_micro" name="irrigacao" value="Microaspersão" />
+                  <label for="irr_micro" class="radio-chip-label">Microaspersão</label>
+                </div>
+                <div class="radio-chip-option">
+                  <input type="radio" id="irr_seq" name="irrigacao" value="Sem Irrigação (Sequeiro)" />
+                  <label for="irr_seq" class="radio-chip-label">Sem Irrigação (Sequeiro)</label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3 Actions -->
+            <div class="wizard-actions">
+              <button type="button" id="btn-step3-prev" class="btn-secondary-outline">
+                ← Voltar
+              </button>
+              <button type="submit" id="btn-register-submit" class="btn-primary-gold" style="width: auto;">
+                <span class="spinner"></span>
+                <span class="btn-text">Finalizar Cadastro da Fazenda</span>
+              </button>
+            </div>
+          </div>
+
+        </form>
+
+        <!-- Footer Link to Login -->
+        <div class="auth-form-footer">
+          Já possui uma conta? <a href="{% url 'dashboard:login' %}" class="auth-link">Acesse sua conta</a>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="{% static 'auth.js' %}"></script>
+</body>
+</html>

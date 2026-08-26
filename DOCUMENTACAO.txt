@@ -1,0 +1,332 @@
+GOLDCROP - DOCUMENTAÇÃO DO SISTEMA
+===================================
+
+1. VISÃO GERAL
+--------------
+
+O GoldCrop é um protótipo de sistema AgriTech para apoio à decisão na
+cafeicultura. A interface apresenta informações meteorológicas, o Índice de
+Eficiência de Aplicação (IEA), janelas recomendadas para aplicação de insumos,
+talhões, sensores, condição do solo, aplicações planejadas e realizadas e
+histórico.
+
+O projeto combina um backend Django mínimo com uma interface HTML, CSS e
+JavaScript. Atualmente, o backend apenas entrega as páginas. Os dados exibidos
+no painel são dados de demonstração mantidos no JavaScript.
+
+
+2. TECNOLOGIAS
+--------------
+
+- Python.
+- Django 5.2 ou superior, limitado a versões menores que 7.0.
+- SQLite, configurado como banco padrão do Django.
+- HTML e templates do Django.
+- CSS responsivo.
+- JavaScript sem framework.
+- Leaflet 1.9.4, usado para o mapa interativo no navegador.
+- NASA GIBS, usado como camada de imagem de satélite.
+- Open-Meteo, usado para consultar previsão meteorológica sem chave de API.
+- ViaCEP, consultado no navegador para preencher endereço a partir do CEP.
+- Google Fonts, usado pelas páginas para carregar Inter e Outfit.
+
+
+3. ESTRUTURA DE DIRETÓRIOS
+--------------------------
+
+manage.py
+    Ponto de entrada para os comandos administrativos do Django.
+
+goldcrop_project/
+    Configuração principal do projeto Django.
+    settings.py: configurações, banco de dados, templates e arquivos estáticos.
+    urls.py: rotas principais e inclusão das rotas do dashboard.
+    wsgi.py: ponto de entrada WSGI para publicação.
+
+dashboard/
+    Aplicação Django responsável pelas páginas do sistema.
+    views.py: views que renderizam a página inicial, login e cadastro.
+    urls.py: rotas da aplicação.
+    apps.py: configuração da aplicação dashboard.
+
+templates/
+    index.html: painel principal.
+    login.html: tela de login e recuperação de senha.
+    cadastro.html: formulário de cadastro da fazenda em três etapas.
+
+static/
+    styles.css: estilos do painel e componentes compartilhados.
+    auth.css: estilos das telas de autenticação e cadastro.
+   app.js: navegação, dados mockados e lógica do painel, talhões, sensores,
+   planejamento e aplicações.
+    auth.js: validações, máscaras e lógica de login/cadastro.
+
+db.sqlite3
+    Banco SQLite criado/configurado pelo Django. No estado atual não existem
+    modelos do dashboard usados para salvar usuários, fazendas ou aplicações.
+
+requirements.txt
+    Dependências Python do projeto.
+
+
+4. INSTALAÇÃO E EXECUÇÃO LOCAL
+------------------------------
+
+Pré-requisitos:
+
+- Python instalado e disponível no PATH.
+- PowerShell ou outro terminal.
+
+Passos recomendados no Windows:
+
+1. Abra o terminal na pasta raiz do projeto.
+2. Crie um ambiente virtual:
+
+   python -m venv .venv
+
+3. Ative o ambiente virtual no PowerShell:
+
+   .\.venv\Scripts\Activate.ps1
+
+4. Instale as dependências:
+
+   python -m pip install -r requirements.txt
+
+5. Execute as verificações do Django:
+
+   python manage.py check
+
+6. Inicie o servidor de desenvolvimento:
+
+   python manage.py runserver
+
+7. Acesse no navegador:
+
+   http://127.0.0.1:8000/
+
+Para interromper o servidor, pressione Ctrl+C no terminal.
+
+
+5. ROTAS DISPONÍVEIS
+--------------------
+
+GET /                Renderiza o painel principal.
+GET /login/          Renderiza a tela de login.
+GET /cadastro/       Renderiza a tela de cadastro da fazenda.
+GET /admin/          Área administrativa padrão do Django.
+
+Os arquivos estáticos são servidos pelo mecanismo de arquivos estáticos do
+Django durante o desenvolvimento.
+
+
+6. FUNCIONALIDADES DA INTERFACE
+-------------------------------
+
+6.1. Painel Visão Geral
+
+- Exibe resumo da fazenda, cultura, área e quantidade de talhões.
+- Exibe cards de IEA atual, chuva prevista e próxima Janela de Ouro.
+- Exibe fatores meteorológicos: chuva, temperatura e vento.
+- Exibe decisões contextualizadas por talhão, como a aplicação do Talhão 03
+   e a recomendação de aguardar no Talhão 04.
+- Mostra recomendações e alertas visuais.
+- Consulta o clima atual e a chuva prevista na API Open-Meteo usando a
+   coordenada do primeiro talhão localizado.
+- Atualiza temperatura, condição do tempo, chuva prevista, probabilidade de
+   chuva, umidade e vento. Em caso de falha, mantém os dados mockados e informa
+   que o clima local está indisponível.
+- Mantém o módulo de sensor de umidade bloqueado até que um sensor seja
+   disponibilizado. As leituras de umidade do sensor aparecem como
+   "Bloqueado" no mapa, no popup e nos detalhes do talhão.
+
+6.2. Calendário
+
+- Exibe os dias de agosto de 2026 com IEA, chuva e temperatura.
+- Classifica os dias como favoráveis, moderados ou desfavoráveis.
+- Permite selecionar um dia e consultar os detalhes da previsão.
+- Identifica dias com aplicação registrada ou planejada, incluindo talhão e
+   produto quando há planejamento.
+- Apresenta a condição do solo estimada para a data selecionada.
+- Permite abrir o formulário de registro de aplicação.
+
+6.3. Talhões
+
+- Trata o talhão como uma unidade de decisão agronômica e operacional.
+- Usa um mapa interativo Leaflet com mapa comum do OpenStreetMap. A camada de
+   satélite NASA GIBS não é carregada, para manter a abertura mais rápida.
+- Desenha o marcador e o perímetro aproximado de cada talhão que possui
+   latitude e longitude cadastradas.
+- O Talhão 03 está configurado com a coordenada `-20.896861, -46.088306` e
+   raio de 80 metros, convertida a partir de `20°53'48.7"S 46°05'17.9"W`.
+- Mantém a lista completa dos talhões, inclusive os que ainda não possuem
+   coordenadas para o mapa.
+- Quando há mais de um talhão localizado, ajusta o enquadramento para mostrar
+   todos os pontos cadastrados.
+- Usa a cor para indicar o IEA: favorável, moderado ou desfavorável.
+- Apresenta no mapa e na lista o IEA, a umidade, a cultura, o sensor, o
+   produto e a dose planejada.
+- Permite abrir detalhes do talhão em modal.
+- No detalhe, apresenta cultura, variedade, idade da lavoura, tipo de solo,
+   sensor, umidade atual, temperatura do solo, última leitura, aplicação
+   planejada, janela de ouro e histórico do talhão.
+- Exibe evolução estimada da umidade, diferenciando dados reais do sensor e
+   estimativas da IA.
+- Permite abrir um popup com o resumo do talhão ao clicar no marcador ou no
+   perímetro.
+- Permite planejar uma aplicação ou registrar uma aplicação para o talhão.
+- Permite cadastrar um novo talhão durante a sessão.
+
+6.4. Aplicações
+
+- Exibe quantidade de aplicações realizadas e não realizadas.
+- Calcula a taxa de aproveitamento usando o histórico em memória.
+- Permite registrar uma nova aplicação com talhão, produto, tipo de insumo,
+   quantidade, data, horário e observações.
+- Permite planejar uma aplicação a partir dos detalhes do talhão, informando
+   produto, tipo de insumo, dose, período desejado e observações.
+- O planejamento atualiza os dados do talhão e é refletido no calendário.
+
+6.5. Histórico
+
+- Lista data, talhão, produto, quantidade, IEA previsto, condição e resultado.
+- Nos detalhes de um talhão, filtra e exibe os últimos registros daquela área.
+- Usa registros de demonstração definidos em static/app.js.
+
+6.6. Configurações
+
+- Permite editar visualmente dados da propriedade.
+- Apresenta opções de notificações com botões de alternância.
+- Exibe informações fictícias sobre o modelo de IA e a fonte meteorológica.
+- As alterações ainda não são persistidas.
+- Exibe o módulo de sensor de umidade com status "Bloqueado" e a orientação
+   para disponibilizar um sensor antes de habilitar as leituras.
+
+
+7. LOGIN E CADASTRO
+-------------------
+
+Login:
+
+- Valida formato do e-mail e preenchimento da senha no navegador.
+- Possui botão para mostrar ou ocultar a senha.
+- Possui opção visual de lembrar de mim.
+- Possui modal de recuperação de senha.
+- Após a validação local, exibe sucesso e redireciona para a página inicial.
+
+Cadastro da fazenda:
+
+- Etapa 1: nome, e-mail, telefone, senha e confirmação de senha.
+- Etapa 2: nome da fazenda, CEP, estado, cidade, bairro e endereço.
+- Etapa 3: área, quantidade de talhões, culturas, tipo de cultivo e irrigação.
+- Valida campos obrigatórios e força da senha.
+- Aplica máscara de telefone e CEP.
+- Consulta o ViaCEP quando o CEP possui oito dígitos.
+- Ao finalizar, monta um objeto payload no navegador e exibe mensagem de
+  sucesso.
+
+
+8. DADOS E COMPORTAMENTO ATUAL
+------------------------------
+
+Os dados do painel estão definidos em constantes JavaScript, principalmente:
+
+- FARM: dados resumidos da fazenda.
+- TALHOES_DATA: dados agronômicos e operacionais dos talhões, incluindo área,
+   cultura, variedade, idade, solo, sensor, umidade, temperatura, janela,
+   produto, dose, período e previsão de umidade.
+- HISTORICO_DATA: histórico das aplicações.
+- CAL_DATA: dados do calendário, incluindo IEA, chuva, temperatura, aplicações
+   realizadas e aplicações planejadas.
+- USER_DATA: dados do usuário exibido na interface.
+
+O cadastro de talhão adiciona o item apenas ao array em memória. Talhões novos
+começam sem leituras de sensor, IEA, janela ou aplicação definida, aguardando
+dados para cálculo e sem localização geográfica até que coordenadas sejam
+informadas. O formulário de cadastro permite informar latitude, longitude e
+raio aproximado do perímetro.
+
+As coordenadas são armazenadas no objeto do talhão nos campos `latitude`,
+`longitude` e `radius`. O mapa usa `radius` em metros para criar o perímetro
+aproximado ao redor do ponto central. O perímetro não representa o limite real
+da área; para isso, deve ser fornecido um polígono ou arquivo GeoJSON.
+
+O planejamento altera os campos do talhão em memória e mostra uma mensagem de
+sucesso. No estado atual, a integração com o calendário é representada pelos
+dados planejados mockados do calendário; o formulário de planejamento não salva
+em banco nem cria uma nova entrada persistente de calendário.
+
+O registro de aplicação altera apenas os arrays JavaScript, marca o dia como
+aplicado quando há data correspondente e atualiza as telas de histórico e
+aplicações durante a sessão.
+Recarregar a página restaura os valores originais de demonstração.
+
+O serviço AuthService presente em auth.js simula chamadas de login, cadastro e
+recuperação de senha com atraso artificial. Não há autenticação real, envio de
+credenciais, criação de usuário nem envio de e-mail.
+
+6.7. Previsão meteorológica
+
+O frontend consulta o endpoint público do Open-Meteo com latitude, longitude,
+dados atuais, probabilidade horária de chuva e acumulado diário. A consulta é
+feita diretamente no navegador e não exige chave. Para uma operação com vários
+talhões, a próxima evolução deve consultar a previsão por coordenada de cada
+talhão e armazenar o resultado associado àquela área.
+
+
+9. CONFIGURAÇÃO DE PRODUÇÃO
+---------------------------
+
+Antes de disponibilizar o sistema publicamente, é necessário:
+
+- Trocar a SECRET_KEY de desenvolvimento por uma variável de ambiente segura.
+- Definir DEBUG=False.
+- Configurar ALLOWED_HOSTS para os domínios reais.
+- Implementar modelos Django para usuário, fazenda, talhão e aplicação.
+- Criar migrations e persistir os dados no banco.
+- Usar o sistema django.contrib.auth para login, sessão, logout e recuperação
+  de senha.
+- Criar endpoints protegidos para cadastro, aplicações, configurações e dados
+  meteorológicos.
+- Validar os dados também no servidor; validação somente no JavaScript não é
+  suficiente.
+- Configurar CSRF, HTTPS, cookies seguros e políticas de segurança.
+- Definir uma estratégia de arquivos estáticos para produção.
+- Substituir os dados fictícios por uma fonte meteorológica confiável.
+- Definir como o IEA será calculado, versionado e auditado.
+- Tratar limites, erros e disponibilidade da integração ViaCEP.
+- Adicionar testes automatizados para rotas, regras do IEA, formulários e APIs.
+
+
+10. MANUTENÇÃO E DIAGNÓSTICO
+----------------------------
+
+Verificar configuração do Django:
+
+   python manage.py check
+
+Executar migrações, quando existirem modelos:
+
+   python manage.py makemigrations
+   python manage.py migrate
+
+Criar usuário administrativo, quando necessário:
+
+   python manage.py createsuperuser
+
+Se a tela não carregar, confira:
+
+- Se o ambiente virtual está ativo.
+- Se as dependências foram instaladas.
+- Se o servidor está em execução.
+- Se os arquivos CSS e JavaScript estão dentro da pasta static.
+- Se o console do navegador aponta erro de JavaScript ou bloqueio do ViaCEP.
+
+
+11. RESUMO DO ESTADO DO PROJETO
+-------------------------------
+
+O GoldCrop está em estágio de protótipo navegável, adequado para demonstração
+visual e validação inicial de fluxo. A apresentação do produto está pronta em
+grande parte, mas os recursos de negócio ainda precisam de backend, persistência,
+autenticação real, integrações e regras de cálculo implementadas para se tornar
+um sistema operacional.

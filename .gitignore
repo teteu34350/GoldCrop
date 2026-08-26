@@ -1,0 +1,26 @@
+# .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Django
+*.log
+local_settings.py
+media/
+staticfiles/
+
+# SQLite database
+*.sqlite3
+db.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
