@@ -58,6 +58,31 @@ class PersistenciaSistemaTests(TestCase):
         self.assertEqual(state.status_code, 200)
         self.assertEqual(state.json()["talhoes"][0]["name"], "Talhão 01")
 
+    def test_talhao_converte_coordenadas_compactadas(self):
+        response = self.client.post(reverse("dashboard:talhao_create_api"), {"nome": "Talhão GPS", "area": 5, "cultura": "Café", "latitude": "205823", "longitude": "460704"}, content_type="application/json")
+        self.assertEqual(response.status_code, 201)
+        talhao = Talhao.objects.get(nome="Talhão GPS")
+        self.assertAlmostEqual(float(talhao.latitude), -20.973056, places=5)
+        self.assertAlmostEqual(float(talhao.longitude), -46.117778, places=5)
+
+    def test_talhao_pode_ser_atualizado(self):
+        talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão 01", area_hectares=5, cultura="Café", latitude=-20.89, longitude=-46.08, raio_metros=80)
+        response = self.client.put(
+            reverse("dashboard:talhao_update_api", args=[talhao.id]),
+            {"nome": "Talhão 01 Editado", "area": 7.5, "cultura": "Café Especial", "latitude": -20.90, "longitude": -46.09, "raio": 100},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        talhao.refresh_from_db()
+        self.assertEqual(talhao.nome, "Talhão 01 Editado")
+        self.assertEqual(float(talhao.area_hectares), 7.5)
+
+    def test_talhao_pode_ser_removido(self):
+        talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão 02", area_hectares=5, cultura="Café", latitude=-20.89, longitude=-46.08, raio_metros=80)
+        response = self.client.delete(reverse("dashboard:talhao_delete_api", args=[talhao.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Talhao.objects.filter(pk=talhao.pk).exists())
+
     def test_coleta_e_recomendacao_sao_persistidas(self):
         collection = self.client.post(reverse("dashboard:weather_ingest_api"), {"fetchedAt": "2026-08-26T12:00:00Z", "location": {"latitude": -20.89, "longitude": -46.08, "timezone": "America/Sao_Paulo"}, "current": {}, "hourly": {}, "daily": {}, "soil": {}}, content_type="application/json")
         self.assertEqual(collection.status_code, 201)
@@ -65,3 +90,12 @@ class PersistenciaSistemaTests(TestCase):
         self.assertEqual(recommendation.status_code, 201)
         self.assertEqual(RecomendacaoJanela.objects.count(), 1)
         self.assertEqual(ColetaMeteorologica.objects.count(), 1)
+
+    def test_perfil_atualiza_usuario_e_fazenda_da_sessao(self):
+        response = self.client.post(reverse("dashboard:profile_update_api"), {"name": "Produtor Atualizado", "email": "novo@example.com", "phone": "35999991234", "farm": "Fazenda Nova"}, content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.farm.refresh_from_db()
+        self.assertEqual(self.user.email, "novo@example.com")
+        self.assertEqual(self.user.perfil.nome_completo, "Produtor Atualizado")
+        self.assertEqual(self.farm.nome, "Fazenda Nova")

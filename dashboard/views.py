@@ -13,9 +13,9 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.shortcuts import redirect, render
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
-from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, PerfilProdutor, RecomendacaoJanela, Talhao
+from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, PerfilProdutor, RecomendacaoJanela, SensorIoT, Talhao
 
 
 def _json_body(request):
@@ -81,6 +81,26 @@ def _parse_datetime(value):
     return timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
 
 
+def _parse_coordinate(value, maximum):
+    raw = str(value).strip().upper().replace(" ", "")
+    direction = raw[-1] if raw and raw[-1] in "NSEW" else ""
+    if direction:
+        raw = raw[:-1]
+    if re.fullmatch(r"-?\d{6}", raw):
+        sign = -1 if raw.startswith("-") or direction in "SW" or not direction else 1
+        digits = raw.lstrip("-")
+        degrees, minutes, seconds = int(digits[:2]), int(digits[2:4]), int(digits[4:])
+        if minutes >= 60 or seconds >= 60:
+            raise ValueError
+        coordinate = Decimal(degrees) + Decimal(minutes) / 60 + Decimal(seconds) / 3600
+        coordinate *= sign
+    else:
+        coordinate = Decimal(raw)
+    if not -maximum <= coordinate <= maximum:
+        raise ValueError
+    return coordinate
+
+
 def _talhao_json(talhao):
     return {
         "id": talhao.id, "name": talhao.nome, "area": float(talhao.area_hectares or 0),
@@ -120,8 +140,14 @@ def system_state_api(request):
         return JsonResponse({"ok": True, "farm": None, "talhoes": [], "applications": [], "recommendations": []})
     latest_collection = farm.coletas_meteorologicas.first()
     recommendations = RecomendacaoJanela.objects.filter(coleta=latest_collection) if latest_collection else RecomendacaoJanela.objects.none()
+    owner_name = request.user.get_full_name() or request.user.username
     return JsonResponse({
-        "ok": True, "farm": {"id": farm.id, "name": farm.nome, "area": float(farm.area_hectares), "culture": farm.culturas[0] if farm.culturas else ""},
+        "ok": True, "farm": {
+            "id": farm.id, "name": farm.nome, "area": float(farm.area_hectares),
+            "culture": farm.culturas[0] if farm.culturas else "", "city": farm.cidade,
+            "state": farm.estado, "district": farm.bairro, "address": farm.endereco,
+            "owner": owner_name, "sensors": SensorIoT.objects.filter(fazenda=farm, ativo=True).count(),
+        },
         "talhoes": [_talhao_json(t) for t in farm.talhoes.filter(ativo=True)],
         "applications": [_application_json(item) for item in farm.aplicacoes.all()],
         "recommendations": [_recommendation_json(item) for item in recommendations],
@@ -207,14 +233,89 @@ def talhao_create_api(request):
     if not isinstance(data, dict) or not farm:
         return _error("Dados do talhão ou fazenda inválidos.")
     try:
+        latitude = _parse_coordinate(data.get("latitude"), 90)
+        longitude = _parse_coordinate(data.get("longitude"), 180)
         talhao = Talhao.objects.create(
             fazenda=farm, nome=str(data.get("nome", "")).strip(), area_hectares=data.get("area") or None,
-            cultura=str(data.get("cultura", "")).strip(), latitude=data.get("latitude"), longitude=data.get("longitude"),
+            cultura=str(data.get("cultura", "")).strip(), latitude=latitude, longitude=longitude,
             raio_metros=int(data.get("raio", 80)),
         )
-    except (IntegrityError, TypeError, ValueError):
+    except (IntegrityError, InvalidOperation, TypeError, ValueError):
         return _error("Não foi possível cadastrar este talhão.")
     return JsonResponse({"ok": True, "talhao": _talhao_json(talhao)}, status=201)
+
+
+@require_http_methods(["POST", "PUT"])
+def talhao_update_api(request, talhao_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    data = _json_body(request)
+    farm = _current_farm(request)
+    if not isinstance(data, dict) or not farm:
+        return _error("Dados do talhão ou fazenda inválidos.")
+    talhao = farm.talhoes.filter(pk=talhao_id).first()
+    if not talhao:
+        return _error("Talhão não encontrado.", 404)
+    try:
+        talhao.nome = str(data.get("nome", talhao.nome)).strip() or talhao.nome
+        talhao.area_hectares = data.get("area") if data.get("area") is not None else talhao.area_hectares
+        talhao.cultura = str(data.get("cultura", talhao.cultura)).strip() or talhao.cultura
+        talhao.latitude = _parse_coordinate(data.get("latitude"), 90) if data.get("latitude") is not None else talhao.latitude
+        talhao.longitude = _parse_coordinate(data.get("longitude"), 180) if data.get("longitude") is not None else talhao.longitude
+        talhao.raio_metros = int(data.get("raio", talhao.raio_metros))
+        talhao.save()
+    except (IntegrityError, InvalidOperation, TypeError, ValueError):
+        return _error("Não foi possível atualizar este talhão.")
+    return JsonResponse({"ok": True, "talhao": _talhao_json(talhao)})
+
+
+@require_http_methods(["POST", "DELETE"])
+def talhao_delete_api(request, talhao_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.")
+    talhao = farm.talhoes.filter(pk=talhao_id).first()
+    if not talhao:
+        return _error("Talhão não encontrado.", 404)
+    talhao.delete()
+    return JsonResponse({"ok": True, "deleted_id": talhao_id})
+
+
+@require_POST
+def profile_update_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados do perfil inválidos.")
+    name = str(data.get("name", "")).strip()
+    email = str(data.get("email", "")).strip().lower()
+    phone = re.sub(r"\D", "", str(data.get("phone", "")))
+    if not name or not email:
+        return _error("Nome e e-mail são obrigatórios.")
+    try:
+        validate_email(email)
+    except ValidationError:
+        return _error("Informe um e-mail válido.")
+    if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).exclude(pk=request.user.pk).exists():
+        return _error("Este e-mail já está vinculado a outro usuário.")
+    request.user.first_name, *last_name = name.split(maxsplit=1)
+    request.user.last_name = last_name[0] if last_name else ""
+    request.user.email = email
+    if "@" in request.user.username:
+        request.user.username = email
+    request.user.save(update_fields=["first_name", "last_name", "email", "username"])
+    perfil, _ = PerfilProdutor.objects.get_or_create(usuario=request.user, defaults={"nome_completo": name, "telefone": phone})
+    perfil.nome_completo = name
+    perfil.telefone = phone or perfil.telefone
+    perfil.save()
+    farm = _current_farm(request)
+    if farm and data.get("farm"):
+        farm.nome = str(data["farm"]).strip()
+        farm.save(update_fields=["nome", "atualizada_em"])
+    return JsonResponse({"ok": True, "name": name, "email": email, "phone": perfil.telefone, "farm": farm.nome if farm else "Sem fazenda cadastrada"})
 
 
 @require_POST

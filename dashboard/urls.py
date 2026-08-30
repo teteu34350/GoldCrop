@@ -4,7 +4,8 @@ from .views import (
     home, calendario_view, talhoes_view, fazenda_view,
     sensores_view, aplicacoes_view, historico_view, configuracoes_view,
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
-    system_state_api, weather_ingest_api, recommendations_ingest_api, application_create_api, talhao_create_api
+    system_state_api, weather_ingest_api, recommendations_ingest_api,
+    application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api, profile_update_api,
 )
 
 app_name = 'dashboard'
@@ -29,6 +30,9 @@ urlpatterns = [
     path('api/recommendations/ingest/', recommendations_ingest_api, name='recommendations_ingest_api'),
     path('api/applications/', application_create_api, name='application_create_api'),
     path('api/talhoes/', talhao_create_api, name='talhao_create_api'),
+    path('api/talhoes/<int:talhao_id>/', talhao_update_api, name='talhao_update_api'),
+    path('api/talhoes/<int:talhao_id>/delete/', talhao_delete_api, name='talhao_delete_api'),
+    path('api/profile/', profile_update_api, name='profile_update_api'),
 
     path('', home, name='home'),
 ]
