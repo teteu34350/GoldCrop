@@ -25,7 +25,10 @@ context.window = context;
 vm.runInNewContext(code, context);
 
 assert.strictEqual(typeof context.formatMetricValue, 'function', 'formatMetricValue should exist');
-assert.strictEqual(context.formatMetricValue(undefined, ' mm'), '0,0 mm');
+assert.strictEqual(context.formatMetricValue(undefined, ' mm'), '—');
+assert.strictEqual(context.formatMetricValue(0, ' mm'), '0,0 mm');
 assert.strictEqual(context.formatMetricValue(12.5, '°C'), '12,5°C');
+assert.strictEqual(vm.runInContext('calMonth.getFullYear()', context), new Date().getFullYear(), 'calendar should open in the current year');
+assert.strictEqual(vm.runInContext('calMonth.getMonth()', context), new Date().getMonth(), 'calendar should open in the current month');
 
 console.log('Calendar formatting tests passed');

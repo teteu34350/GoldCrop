@@ -140,4 +140,16 @@ function createEngine(overrides = {}) {
   }
 }
 
+// 5. Null weather values remain missing instead of being treated as zero rain
+{
+  const customWeather = JSON.parse(JSON.stringify(mockWeather));
+  customWeather.hourly.values.precipitation[0] = null;
+  const results = new GoldCropAnalysisEngine(customWeather).evaluate();
+  const incompleteWindow = results.recommendations.find(item => item.windowStart.endsWith('T00:00'));
+
+  assert(incompleteWindow, 'The engine should still return an assessment for the forecast window');
+  assert.strictEqual(incompleteWindow.metrics.rainVolume, null, 'Incomplete precipitation should remain null');
+  assert.strictEqual(incompleteWindow.decision, 'INSUFFICIENT_DATA', 'Incomplete critical precipitation should block recommendation');
+}
+
 console.log('All tests passed!');

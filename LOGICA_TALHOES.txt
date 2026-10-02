@@ -1,0 +1,403 @@
+GOLDCROP - GUIA COMPLETO DA LOGICA DOS TALHOES
+===============================================
+
+Este documento explica como os talhoes estao organizados no GoldCrop, como
+circulam entre as telas e o que e dado real do banco ou apenas demonstracao da
+interface. A descricao reflete o comportamento implementado no codigo do
+projeto.
+
+
+1. O QUE E UM TALHAO NO SISTEMA
+-------------------------------
+
+Um talhao e uma divisao operacional de uma fazenda. No sistema, cada registro
+de talhao pertence a uma unica Fazenda. A fazenda, por sua vez, pertence a um
+produtor/usuario.
+
+Relacao principal:
+
+    Usuario/Produtor
+        -> Fazenda
+            -> Talhoes
+                -> Planejamentos de aplicacao
+                -> Aplicacoes realizadas ou registradas
+                -> Sensor IoT (estrutura preparada)
+
+O identificador interno do talhao (ID do banco) e a referencia mais segura para
+relacionar registros. O nome, como "Talhao 01", e exibido nas telas, mas deve
+ser unico dentro da mesma fazenda. Duas fazendas diferentes podem ter talhoes
+com o mesmo nome.
+
+Importante: a quantidade de talhoes informada no cadastro da fazenda e um valor
+de referencia da propriedade. Ela nao limita a quantidade de registros que
+podem ser criados depois e nao e recalculada automaticamente quando um talhao
+e excluido. A contagem exibida no dashboard vem dos talhoes ativos devolvidos
+pela API.
+
+Tambem nao ha uma regra que obrigue a soma das areas dos talhoes a ser igual a
+area total da fazenda.
+
+
+2. DADOS QUE EXISTEM EM CADA TALHAO
+-----------------------------------
+
+O modelo Talhao no banco contem:
+
+- fazenda: fazenda proprietaria do registro;
+- nome: identificacao visivel, unica por fazenda;
+- area_hectares: area do talhao, opcional no modelo;
+- cultura: cultura plantada, opcional;
+- variedade: variedade cultivada, opcional;
+- idade_anos: idade da cultura, opcional;
+- tipo_solo: classificacao do solo, opcional;
+- codigo_sensor: identificador textual do sensor, opcional;
+- latitude e longitude: coordenadas do talhao, opcionais;
+- raio_metros: raio desenhado no mapa; o padrao do banco e 80 metros;
+- ativo: indica se deve aparecer nas consultas normais;
+- criado_em e atualizado_em: datas de criacao e atualizacao.
+
+O formulario de cadastro atualmente pede nome, area, cultura, latitude,
+longitude e raio. A edicao permite alterar esses mesmos campos. Variedade,
+idade, tipo de solo e codigo do sensor existem no modelo e aparecem em partes
+do modal de detalhes, mas nao sao preenchidos pelos formularios atuais de
+cadastro/edicao.
+
+Por isso, em uma fazenda criada agora, e normal variedade, idade, solo e codigo
+do sensor aparecerem vazios ou como "Nao informado"/"Nao disponivel". Os
+detalhes de sensor exibidos visualmente nao comprovam que exista um sensor
+fisico conectado.
+
+
+3. COMO OS TALHOES SAO CRIADOS E SALVOS
+---------------------------------------
+
+3.1. Cadastro inicial da fazenda
+
+No cadastro da conta, a pessoa informa a quantidade de talhoes. O backend
+cria a fazenda e, em seguida, cria registros com nomes sequenciais:
+
+    Talhao 01
+    Talhao 02
+    ...
+
+Esses registros iniciais recebem somente o nome e a fazenda. Area, cultura,
+coordenadas e demais atributos ficam sem preencher ate serem editados ou
+complementados.
+
+3.2. Novo talhao pela tela Talhoes
+
+O botao "Cadastrar Talhao" envia os dados para POST /api/talhoes/. O backend
+associa o novo registro a primeira fazenda encontrada para o usuario autenticado
+e grava nome, area, cultura, latitude, longitude e raio.
+
+O formulario exige coordenadas, entao o cadastro pela tela ja permite colocar
+o ponto no mapa. O backend aceita coordenadas decimais e tambem reconhece
+alguns formatos compactados de graus/minutos/segundos; coordenadas fora dos
+limites geograficos sao rejeitadas.
+
+O nome duplicado dentro da mesma fazenda e impedido pela restricao unica do
+banco.
+
+3.3. Edicao
+
+A edicao chama PUT /api/talhoes/<id>/. O backend procura o talhao dentro da
+fazenda atual do usuario e altera nome, area, cultura, coordenadas e raio.
+Depois da resposta bem-sucedida, a tela recarrega os dados do backend e atualiza
+mapa, lista, calendario, dashboard e telas que estiverem abertas.
+
+4. EXCLUSAO E EFEITOS NOS REGISTROS RELACIONADOS
+------------------------------------------------
+
+A exclusao usa DELETE /api/talhoes/<id>/delete/ e remove o registro do banco
+depois de uma confirmacao na interface. A operacao e uma exclusao real, nao
+apenas uma mudanca de "ativo".
+
+Planejamentos, aplicacoes e sensores apontam para Talhao com uma relacao que
+permite deixar o registro relacionado sem talhao (SET_NULL). Assim, ao excluir
+um talhao, esses registros historicos podem permanecer, mas deixam de apontar
+para aquele talhao. A fazenda tambem mantem o campo quantidade_talhoes original;
+ele nao e atualizado pela exclusao.
+
+Antes de excluir, considere que o historico pode perder a identificacao do
+talhao, mesmo que a aplicacao continue existindo.
+
+
+5. A TELA "TALHOES": MAPA, LISTA E FILTROS
+------------------------------------------
+
+Rota: /talhoes/
+
+A pagina combina um mapa e uma lista. Os dados sao lidos da lista TALHOES_DATA
+no JavaScript, que e preenchida pela resposta de /api/state/ quando ha fazenda
+cadastrada.
+
+Mapa:
+- usa Leaflet e mapas-base do OpenStreetMap;
+- so desenha talhoes com latitude e longitude numericas validas;
+- mostra um marcador no centro e um circulo com o raio cadastrado;
+- ajusta o enquadramento para incluir todos os talhoes georreferenciados;
+- clicar no marcador, no circulo ou no cartao da lista abre os detalhes;
+- talhao sem coordenadas continua na lista, mas nao pode ser exibido no mapa;
+- se nao houver coordenadas, aparece uma mensagem pedindo para cadastra-las.
+
+O circulo e apenas uma representacao aproximada do ponto e do raio informado.
+Ele nao e o desenho do limite real do talhao: o sistema nao guarda poligonos,
+vertices, divisas ou geometrias de propriedade.
+
+Status e cores:
+- favoravel: IEA igual ou acima de 80%;
+- moderado: IEA de 60% a 79%;
+- desfavoravel: IEA abaixo de 60%.
+
+Os botoes "Todos", "Favoraveis" e "Alerta" filtram a lista e os marcadores.
+Em uma fazenda real, o IEA e o status de cada cartao sao preenchidos somente
+quando existe analise/recomendacao salva para aquele proprio talhao. O talhao
+selecionado pode ser analisado sob demanda; o resultado nao e copiado para os
+demais.
+
+Sem recomendacao, o cartao informa "Aguardando dados" ou "Dados insuficientes".
+Valores demonstrativos so sao usados quando a aplicacao esta explicitamente
+em modo demonstracao.
+
+
+6. MODAL DE DETALHES DO TALHAO
+------------------------------
+
+Ao abrir um talhao, o modal apresenta:
+- area, cultura, idade, variedade e solo;
+- identificacao do sensor e estado de telemetria (sem leitura confirmada);
+- latitude, longitude e raio;
+- proxima aplicacao e "Janela de Ouro";
+- previsao de chuva, temperatura e vento, com umidade do sensor bloqueada;
+- historico recente;
+- botoes para editar, excluir, planejar ou registrar aplicacao.
+
+Os atributos cadastrais (area, cultura, variedade, idade, solo e coordenadas)
+vem do registro do talhao. IEA, janela e indicadores meteorologicos pertencem
+a analise do talhao e a sua previsao; nao sao atributos compartilhados da
+fazenda. O historico e filtrado pelo ID do talhao, nao apenas pelo nome.
+
+O modulo de umidade esta marcado como bloqueado. A tela nao deve ser entendida
+como leitura ao vivo de sensor, mesmo quando o modal apresenta textos como
+"Online" ou mostra um codigo de sensor de exemplo.
+
+
+7. SELECAO, CLIMA E ANALISE INDIVIDUAL
+---------------------------------------
+
+O talhao selecionado e o contexto ativo das telas de analise e operacao. A
+selecao fica salva no navegador e e sincronizada entre Dashboard, Calendario e
+Talhoes. Talhoes sem coordenadas continuam acessiveis, mas nao podem receber
+previsao local.
+
+Ao selecionar um talhao com coordenadas, o frontend consulta Open-Meteo para
+aquele ponto, normaliza previsao atual, horaria, diaria e estimativa de umidade
+do solo baseada em modelo meteorologico, e executa GoldCropAnalysisEngine.
+Clima, IEA, janelas e recomendacoes ficam vinculados ao ID daquele talhao.
+Trocar de talhao carrega/calcula o contexto do outro ID, sem copiar resultados.
+
+As coletas meteorologicas e recomendacoes sao persistidas com relacao a Fazenda
+e ao Talhao. Cada recomendacao tambem aponta para sua coleta. A API devolve
+clima e recomendacoes dentro do objeto do respectivo talhao. Recomendacoes
+legadas sem contexto individual nao sao usadas como analise de outro talhao.
+
+O motor exige dados criticos (umidade do solo estimada, chuva e probabilidade
+de chuva, vento, temperatura e umidade relativa). Valores nulos ou ausentes continuam nulos,
+nao sao convertidos em zero. Janelas com decisao INSUFFICIENT_DATA nao sao
+apresentadas nem gravadas como recomendacoes utilizaveis. Se existe previsao,
+mas faltam dados criticos, a tela informa "Dados insuficientes"; antes da
+consulta, informa "Aguardando dados". Uma avaliacao APPLY, WAIT ou AVOID nao
+equivale a execucao de uma aplicacao.
+
+A umidade do solo da Open-Meteo e estimativa de modelo, nao leitura de sensor
+instalado. A telemetria de SensorIoT continua indisponivel.
+
+
+8. COMO O TALHAO SE DISTRIBUI NAS OUTRAS ABAS
+---------------------------------------------
+
+8.1. Visao Geral / Dashboard
+
+Mostra a area e a quantidade de talhoes da fazenda e uma grade com ate seis
+talhoes. Cada cartao pode exibir cultura, area, IEA e status. Ha um atalho para
+abrir a tela completa de Talhoes.
+
+Os KPIs de recomendacao referem-se ao talhao selecionado e sao identificados na
+tela. Os cartoes dos demais talhoes mostram somente resultados que pertencem a
+cada um. Nenhum IEA, janela ou clima e copiado entre talhoes.
+
+8.2. Calendario
+
+O calendario mostra previsao e recomendacoes do talhao selecionado. Mesmo
+quando uma data nao tem recomendacao, valores climaticos disponiveis podem ser
+exibidos sem inventar um IEA. O painel distingue previsao indisponivel de dados
+insuficientes para recomendacao.
+
+Planejamentos e aplicacoes do banco sao carregados com talhao_id e filtrados
+para o talhao selecionado. Planejamentos ativos reaparecem apos recarregar a
+pagina. A execucao iniciada no calendario pode atualizar o planejamento
+correspondente e criar o registro no historico.
+
+8.3. Aplicacoes
+
+Uma aplicacao pode ser registrada escolhendo o talhao, produto, data e demais
+informacoes do formulario. O frontend envia o ID do talhao e o backend grava a
+aplicacao ligada a Fazenda e ao Talhao.
+
+O endpoint normaliza o status legado "REALIZADA" para o status oficial "done".
+Aplicacoes registradas ficam ligadas a fazenda e ao talhao escolhido. No modal
+de registro, o IEA e a recomendacao sao lidos somente daquele talhao e podem
+estar indisponiveis se nao houver previsao suficiente.
+
+8.4. Historico
+
+Apresenta aplicacoes e o talhao associado devolvido pela API. Se o talhao for
+excluido, a aplicacao pode permanecer, mas sem a relacao/nome do talhao.
+
+8.5. Minha Fazenda
+
+E uma pagina de resumo da fazenda, pessoas e atividades. Resumos operacionais
+de janela, planejamento e aplicacao respeitam o talhao selecionado. Dados de
+equipe e parte das atividades ainda sao demonstrativos no frontend e nao
+representam um sistema persistido de convites/permissoes.
+
+8.6. Sensores
+
+Existe estrutura no banco para SensorIoT, leitura de umidade e associacao
+opcional com talhao. No entanto, a tela de Sensores informa que o modulo esta
+bloqueado, e as leituras de umidade por talhao nao estao habilitadas nessa
+interface. O cadastro normal de talhao tambem nao cria automaticamente um
+SensorIoT.
+
+8.7. Configuracoes
+
+Exibe configuracoes visuais da propriedade, notificacoes, modelo e modulo de
+sensor. A tela de sensor continua bloqueada; os controles de configuracao
+apresentados nao devem ser confundidos com alteracoes de cada registro Talhao.
+
+8.8. Cadastro inicial
+
+Cria a Fazenda e os talhoes numerados, mas nao coleta a localizacao de cada
+talhao. Para usar mapa e previsao local, abra a tela Talhoes, edite cada
+registro e informe suas coordenadas.
+
+
+9. APLICACOES E PLANEJAMENTOS: DIFERENCA IMPORTANTE
+---------------------------------------------------
+
+Planejamento:
+- pertence a Fazenda e ao Talhao;
+- guarda produto, tipo, dose, data, horarios, responsavel e observacoes;
+- pode apontar para uma recomendacao do mesmo talhao; o backend rejeita
+  associacao com recomendacao de outro talhao;
+- status planejado/confirmado aparece no calendario desse talhao.
+
+Aplicacao/execucao:
+- registra a operacao com data, produto, quantidade e status;
+- pode ser vinculada ao planejamento e a recomendacao;
+- executar um planejamento cria o registro de aplicacao e atualiza o status do
+  planejamento;
+- registro direto tambem usa o talhao selecionado no formulario.
+
+Planejar nao marca automaticamente a aplicacao como realizada. A recomendacao
+e contexto de decisao; somente o registro de execucao representa a operacao.
+
+
+10. DADOS DE DEMONSTRACAO X DADOS DO BANCO
+------------------------------------------
+
+O arquivo static/app.js contem um conjunto de demonstracao inicial. Ele e
+substituido pelos registros ativos quando /api/state/ responde com a fazenda
+autenticada. Se a API falhar, a interface identifica "Modo demonstracao"; esses
+valores ficticios nao devem ser interpretados como observacoes reais.
+
+Na fazenda real, /api/state/ devolve talhoes ativos, clima e recomendacoes
+associados a cada talhao, planejamentos e aplicacoes. A consulta meteorologica
+mais recente de um talhao nao altera os demais. Dados sem coordenadas, sem
+previsao ou com campos criticos ausentes sao informados como indisponiveis.
+
+
+11. RESUMO DO QUE O TALHAO REALMENTE CONTROLA HOJE
+--------------------------------------------------
+
+Persistido de verdade:
+- identificacao do talhao e fazenda proprietaria;
+- area e cultura quando informadas;
+- coordenadas e raio quando informados;
+- variedade, idade, solo e codigo de sensor se forem preenchidos por outro
+  meio/admin, pois os formularios comuns ainda nao os editam;
+- relacoes com planejamentos, aplicacoes e sensores.
+
+Usado para comportamento de outras telas:
+- coordenadas determinam o ponto da consulta de clima daquele talhao;
+- a selecao e o ID ligam previsao, analise, recomendacoes, planejamentos,
+  aplicacoes, calendario e historico;
+- area e cultura aparecem em cartoes e detalhes;
+- recomendacoes e IEA persistidos pertencem ao talhao que originou a coleta.
+
+Ainda indisponivel ou limitado:
+- leituras reais de umidade por SensorIoT e temperatura de solo;
+- desenho de limites reais por poligono;
+- regras finais de recomendacao ajustadas por cultura, variedade, solo e idade;
+- funcionamento de equipe/convites e algumas atividades, que ainda sao
+  demonstrativos no frontend.
+
+
+12. ARQUIVOS E ROTAS PARA INVESTIGAR
+------------------------------------
+
+Modelo de dados:
+- dashboard/models.py: Fazenda, Talhao, PlanejamentoAplicacao,
+  ExecucaoAplicacao, SensorIoT e LeituraSensorIoT.
+
+Regras e APIs:
+- dashboard/views.py: estado, criacao/edicao/exclusao de talhao, aplicacoes,
+  clima e recomendacoes.
+- dashboard/urls.py: rotas das paginas e endpoints /api/.
+
+Interface:
+- templates/talhoes.html: mapa, lista e botoes de filtro/cadastro.
+- templates/base.html: modais de detalhe, cadastro, edicao e planejamento.
+- templates/calendario.html: seletor do talhao ativo no calendario.
+- templates/dashboard.html: resumo de talhoes.
+- static/app.js: carregamento, renderizacao e interacoes das telas.
+
+Rotas principais:
+- GET /api/state/: estado atual da fazenda, talhoes, aplicacoes e recomendacoes;
+- POST /api/talhoes/: cadastrar talhao;
+- PUT /api/talhoes/<id>/: atualizar talhao;
+- DELETE /api/talhoes/<id>/delete/: excluir talhao;
+- POST /api/applications/: registrar aplicacao;
+- POST /api/planejamentos/: criar planejamento;
+- POST /api/weather/ingest/: armazenar coleta meteorologica;
+- POST /api/recommendations/ingest/: armazenar recomendacoes da coleta.
+
+
+13. EXEMPLO PRATICO
+-------------------
+
+Suponha que uma fazenda tenha o "Talhao 01" com 6 hectares, cafe e coordenadas.
+
+1. Ele aparece na lista e no mapa.
+2. Seu ponto e raio sao desenhados no mapa, mas o raio nao define a divisa
+   oficial.
+3. Ao seleciona-lo, suas coordenadas sao usadas para consultar o clima e
+   calcular somente a analise do Talhao 01.
+4. Previsao, recomendacoes e IEA ficam vinculados ao Talhao 01; os outros
+   talhoes mantem seus dados ou continuam aguardando analise.
+5. Um planejamento e uma aplicacao iniciados para o Talhao 01 ficam ligados ao
+   ID dele no banco, calendario e historico.
+6. Se o talhao for excluido, aplicacoes e planejamentos podem continuar no
+   historico, mas sem a associacao ao nome do talhao.
+
+
+14. CONCLUSAO
+-------------
+
+O Talhao e a unidade de contexto operacional e de analise dentro da Fazenda.
+Cada talhao pode ter seu proprio ponto meteorologico, clima, IEA, recomendacoes,
+planejamentos, aplicacoes, calendario e historico. A selecao ativa controla as
+abas de analise e o sistema nao replica resultados entre talhoes. Ausencia de
+coordenadas, previsao ou dados criticos e apresentada explicitamente; umidade
+modelada nao e confundida com sensor real. Dados demonstrativos so aparecem
+quando a aplicacao informa que esta em modo demonstracao.

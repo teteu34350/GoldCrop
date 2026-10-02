@@ -33,6 +33,7 @@ class GoldCropAnalysisEngine {
       reliabilityWeights: {
         soilMoisture: 0.30,
         rainVolume: 0.20,
+        rainProbability: 0.05,
         windSpeed: 0.15,
         temperature: 0.15,
         humidity: 0.10,
@@ -88,6 +89,7 @@ class GoldCropAnalysisEngine {
       criticalVariables: [
         'soilMoisture',
         'rainVolume',
+        'rainProbability',
         'windSpeed',
         'temperature',
         'humidity',
@@ -243,31 +245,44 @@ class GoldCropAnalysisEngine {
     const slice = (name) => (values[name] || []).slice(startIndex, endIndex);
     const average = (items) => {
       const valid = items.filter(Number.isFinite);
-      return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+      return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : null;
     };
-    const precipitation = slice('precipitation').map(Number);
-    const probability = slice('precipitation_probability').map(Number);
-    const temperatures = slice('temperature_2m').map(Number);
-    const humidity = slice('relative_humidity_2m').map(Number);
-    const wind = slice('wind_speed_10m').map(Number);
-    const soil = slice('soil_moisture_9_to_27cm').map(Number);
-    const soilMoisture = soil.length ? average(soil) * 100 : null;
+    const isComplete = (items) => items.length > 0 && items.every(Number.isFinite);
+    const toNumbers = (name) => slice(name).map(value => value == null ? NaN : Number(value));
+    const sum = (items, requireComplete = false) => {
+      const valid = items.filter(Number.isFinite);
+      if (requireComplete && !isComplete(items)) return null;
+      return valid.length ? valid.reduce((total, value) => total + value, 0) : null;
+    };
+    const maximum = (items, requireComplete = false) => {
+      const valid = items.filter(Number.isFinite);
+      if (requireComplete && !isComplete(items)) return null;
+      return valid.length ? Math.max(...valid) : null;
+    };
+    const requiredAverage = (items) => isComplete(items) ? average(items) : null;
+    const precipitation = toNumbers('precipitation');
+    const probability = toNumbers('precipitation_probability');
+    const temperatures = toNumbers('temperature_2m');
+    const humidity = toNumbers('relative_humidity_2m');
+    const wind = toNumbers('wind_speed_10m');
+    const soilMoistureValue = requiredAverage(toNumbers('soil_moisture_9_to_27cm'));
+    const probabilityAverage = requiredAverage(probability);
 
     return {
-      rainVolume: precipitation.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0),
-      rainProbability: average(probability) / 100,
-      rainIntensityMax: Math.max(...precipitation.filter(Number.isFinite), 0),
+      rainVolume: sum(precipitation, true),
+      rainProbability: probabilityAverage == null ? null : probabilityAverage / 100,
+      rainIntensityMax: maximum(precipitation),
       hourlyPrecip: precipitation.filter(Number.isFinite),
-      et0: average(slice('et0_fao_evapotranspiration').map(Number)),
-      windSpeed: Math.max(...wind.filter(Number.isFinite), 0),
-      temperature: average(temperatures),
-      humidity: average(humidity),
-      soilMoisture,
-      rain: slice('rain').map(Number).reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0),
-      showers: slice('showers').map(Number).reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0),
-      windGusts: Math.max(...slice('wind_gusts_10m').map(Number).filter(Number.isFinite), 0),
-      cloudCover: average(slice('cloud_cover').map(Number)),
-      solarRadiation: average(slice('shortwave_radiation').map(Number)),
+      et0: average(toNumbers('et0_fao_evapotranspiration')),
+      windSpeed: maximum(wind, true),
+      temperature: requiredAverage(temperatures),
+      humidity: requiredAverage(humidity),
+      soilMoisture: soilMoistureValue == null ? null : soilMoistureValue * 100,
+      rain: sum(toNumbers('rain')),
+      showers: sum(toNumbers('showers')),
+      windGusts: maximum(toNumbers('wind_gusts_10m')),
+      cloudCover: average(toNumbers('cloud_cover')),
+      solarRadiation: average(toNumbers('shortwave_radiation')),
     };
   }
 

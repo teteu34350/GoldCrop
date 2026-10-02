@@ -145,7 +145,8 @@ Funcionalidades:
 - status de área e número de talhões
 - KPIs de IEA, chuva prevista e próxima janela de ouro
 - card de recomendação com data/hora mais favorável
-- análise de clima local por talhão de referência
+- análise de clima local do talhão selecionado
+- atualização individual do IEA, status e janela, sem replicar resultados nos outros talhões
 - leitura de temperatura, chuva, vento e condição meteorológica
 - estado de umidade bloqueado quando ainda não existe sensor habilitado
 
@@ -160,9 +161,11 @@ Funcionalidades:
   - moderado
   - desfavorável
   - sem dados
-- seleção de talhão de referência para cálculo meteorológico
+- seleção de talhão para análise meteorológica independente
 - painel lateral de detalhes do dia selecionado
 - exibição de recomendação, chuva, temperatura, IEA e planejamento
+- exibição separada de "Aguardando dados" e "Dados insuficientes"
+- filtro dos planejamentos e aplicações pelo talhão selecionado
 - opção de registrar aplicação diretamente no calendário
 - integração com recomendação do motor GoldCropAnalysisEngine
 
@@ -174,6 +177,8 @@ Funcionalidades:
 - exibição de mapa interativo com Leaflet
 - listagem de todos os talhões cadastrados
 - filtro por status visual
+- seleção do talhão ativo entre as telas
+- status e IEA somente quando houver análise daquele talhão
 - cadastro de novo talhão
 - modal com detalhes do talhão
 - visualização de latitude, longitude, raio e coordenadas
@@ -255,7 +260,7 @@ As principais estruturas de dados são:
 - ACTIVITY_DATA: eventos de uso do sistema
 
 O estado também dispõe de:
-- selectedTalhaoRefId: talhão referência atual usado para análises meteorológicas
+- selectedTalhaoRefId: ID do talhão selecionado para o contexto meteorológico
 - talhoesMap: instância do mapa Leaflet
 - currentPage: página ativa no momento
 
@@ -274,18 +279,24 @@ Cada talhão pode incluir:
 - longitude
 - raio em metros
 
-O sistema usa um talhão com coordenadas válidas como referência para:
+O talhão selecionado com coordenadas válidas fornece o ponto para sua própria:
 - consulta de previsão meteorológica via Open-Meteo
-- cálculo de janela recomendada
-- exibição do clima local no dashboard e calendário
+- análise e cálculo de janelas recomendadas
+- exibição do clima no dashboard e calendário
 
-Função de referência:
+O ID do talhão mantém separados coletas meteorológicas, recomendações,
+planejamentos e aplicações. Trocar a seleção muda o contexto das telas; o
+resultado de um talhão não é copiado aos demais. A escolha fica salva no
+navegador.
+
+Funções da seleção meteorológica:
 - getUsableTalhoes()
 - getSelectedReferenceTalhao()
 - syncCalendarTalhaoSelector()
 
-Se um talhão tiver latitude e longitude válidas, ele entra no mapa. Se não tiver,
-permanece na listagem, mas não aparece no mapa.
+Se um talhão tiver latitude e longitude válidas, ele entra no mapa. Se não
+tiver, permanece na listagem, mas não aparece no mapa e mostra que faltam
+coordenadas para análise meteorológica.
 
 O mapa:
 - é renderizado com Leaflet
@@ -306,15 +317,23 @@ A camada visual usa cores por status:
 A análise de recomendação é feita pelo motor GoldCropAnalysisEngine.js.
 
 O processo é:
-- o frontend pega o talhão de referência
-- consulta previsões meteorológicas da Open-Meteo para as coordenadas
-- calcula índices de adequação para janelas do calendário
-- identifica melhor data para aplicação
-- classifica o dia por adequação e risco
+- o usuário seleciona um talhão
+- o frontend consulta Open-Meteo para as coordenadas daquele talhão
+- normaliza previsão atual, horária, diária e variáveis de solo estimadas por modelo
+- o motor calcula índices, confiança, riscos e decisão para cada janela
+- janelas com dados críticos ausentes (inclusive precipitação ou sua
+  probabilidade) recebem INSUFFICIENT_DATA e não são exibidas
+  nem persistidas como recomendação utilizável
+- a melhor janela disponível alimenta o dashboard e o calendário daquele talhão
+
+A estimativa de umidade de solo meteorológica não é uma leitura de SensorIoT.
+Campos nulos continuam ausentes; não são convertidos em precipitação, temperatura
+ou vento iguais a zero para criar uma recomendação.
 
 Os dados podem ser carregados de duas formas:
-- via mock local em JS
-- via backend em /api/state/
+- via mock local em JS, claramente indicado como modo demonstração
+- via backend em /api/state/, que entrega clima e recomendações aninhados no
+  respectivo talhão
 
 No backend, o endpoint /api/state/ entrega:
 - farm
@@ -322,9 +341,10 @@ No backend, o endpoint /api/state/ entrega:
 - applications
 - recommendations
 
-Esses dados alimentam o dashboard e o calendário, tornando a análise mais real e
-consistente com o banco de dados. A recomendação mais forte geralmente aparece
-como Janela de Ouro.
+O front usa recomendações do talhão selecionado. O campo top-level
+recommendations continua existindo para compatibilidade com clientes antigos,
+mas o fluxo individual da interface não usa recomendações sem associação ao
+talhão ativo.
 
 
 9. COMO FUNCIONA O CRUD DE TALHÕES
@@ -421,14 +441,16 @@ consistência e persistência das informações.
 Um fluxo típico de uso é:
 
 1. usuário faz login
-2. acessa dashboard
-3. o sistema carrega dados da fazenda e talhões
-4. o talhão com coordenadas válidas é usado como referência
-5. o sistema consulta clima e gera recomendações
-6. o usuário visualiza janelas de aplicação no calendário
-7. pode abrir um talhão e registrar ou planejar aplicação
-8. o mapa mostra os talhões georreferenciados
-9. o histórico oficial e os dados do backend são exibidos nas páginas
+2. acessa dashboard e o sistema carrega fazenda e talhões ativos
+3. seleciona um talhão (a seleção é mantida entre as abas)
+4. se houver coordenadas, o sistema consulta clima e analisa somente esse talhão
+5. dashboard e calendário mostram sua previsão e recomendação, ou declaram
+   explicitamente que aguardam dados/que os dados são insuficientes
+6. planeja uma aplicação para esse talhão; o planejamento aparece no calendário
+7. registra a execução planejada ou registra uma aplicação diretamente
+8. aplicação e histórico permanecem associados ao ID do talhão
+9. seleciona outro talhão para analisar seu próprio clima e operações, sem
+   herdar o IEA ou a recomendação anterior
 
 
 13. ESTADO ATUAL DO PROJETO

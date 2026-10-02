@@ -1,6 +1,9 @@
+from datetime import date, datetime, time
+
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
+from django.utils import timezone
 
 
 phone_validator = RegexValidator(
@@ -84,19 +87,74 @@ class Talhao(models.Model):
         return f"{self.fazenda.nome} - {self.nome}"
 
 
+class PlanejamentoAplicacao(models.Model):
+    class Status(models.TextChoices):
+        PLANEJADA = "PLANEJADA", "Planejada"
+        CONFIRMADA = "CONFIRMADA", "Confirmada"
+        EXECUTADA = "EXECUTADA", "Executada"
+        CANCELADA = "CANCELADA", "Cancelada"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="planejamentos")
+    talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="planejamentos")
+    recomendacao = models.ForeignKey("RecomendacaoJanela", on_delete=models.SET_NULL, null=True, blank=True, related_name="planejamentos")
+    produto = models.CharField(max_length=150)
+    tipo_aplicacao = models.CharField(max_length=100, blank=True)
+    dose = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    unidade_dose = models.CharField(max_length=30, blank=True)
+    data_planejada = models.DateField()
+    horario_inicial = models.TimeField(null=True, blank=True)
+    horario_final = models.TimeField(null=True, blank=True)
+    observacoes = models.TextField(blank=True)
+    responsavel = models.CharField(max_length=150, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANEJADA)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="planejamentos_criados")
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data_planejada", "-criado_em"]
+
+    def dose_display(self):
+        if self.dose is None:
+            return ""
+        dose_text = f"{self.dose} {self.unidade_dose}".strip()
+        return dose_text or str(self.dose)
+
+    def dentro_da_janela(self, data_real=None, horario_real=None):
+        if not self.recomendacao:
+            return False
+        if data_real is None:
+            return False
+        horario = horario_real or time.min
+        moment = datetime.combine(data_real, horario)
+        if moment.tzinfo is None:
+            moment = timezone.make_aware(moment, timezone.get_current_timezone())
+        inicio = self.recomendacao.inicio
+        fim = self.recomendacao.fim
+        if inicio.tzinfo is None:
+            inicio = timezone.make_aware(inicio, timezone.get_current_timezone())
+        if fim.tzinfo is None:
+            fim = timezone.make_aware(fim, timezone.get_current_timezone())
+        return inicio <= moment <= fim
+
+
 class ExecucaoAplicacao(models.Model):
     class Status(models.TextChoices):
         PLANEJADA = "planned", "Planejada"
+        CONFIRMADA = "confirmed", "Confirmada"
         REALIZADA = "done", "Realizada"
         CANCELADA = "cancelled", "Cancelada"
 
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="aplicacoes")
     talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="aplicacoes")
+    planejamento = models.ForeignKey(PlanejamentoAplicacao, on_delete=models.SET_NULL, null=True, blank=True, related_name="execucoes")
+    recomendacao = models.ForeignKey("RecomendacaoJanela", on_delete=models.SET_NULL, null=True, blank=True, related_name="aplicacoes")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PLANEJADA)
     produto = models.CharField(max_length=150)
     tipo_insumo = models.CharField(max_length=100, blank=True)
     dose = models.CharField(max_length=80, blank=True)
     quantidade = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    quantidade_realizada = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     data_aplicacao = models.DateField()
     horario = models.TimeField(null=True, blank=True)
     observacoes = models.TextField(blank=True)
@@ -111,6 +169,7 @@ class ExecucaoAplicacao(models.Model):
 
 class ColetaMeteorologica(models.Model):
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="coletas_meteorologicas")
+    talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="coletas_meteorologicas")
     fonte = models.CharField(max_length=40, default="open-meteo")
     coletada_em = models.DateTimeField()
     latitude = models.DecimalField(max_digits=9, decimal_places=6)
@@ -129,6 +188,7 @@ class ColetaMeteorologica(models.Model):
 
 class RecomendacaoJanela(models.Model):
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="recomendacoes")
+    talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="recomendacoes")
     coleta = models.ForeignKey(ColetaMeteorologica, on_delete=models.CASCADE, related_name="recomendacoes")
     data = models.DateField()
     inicio = models.DateTimeField()

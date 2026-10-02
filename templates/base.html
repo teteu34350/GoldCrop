@@ -205,21 +205,13 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Talhão</label>
-            <select class="form-input" id="formTalhao">
-              <option>Talhão 01</option>
-              <option>Talhão 02</option>
-              <option selected>Talhão 03</option>
-              <option>Talhão 04</option>
-              <option>Talhão 05</option>
-              <option>Talhão 06</option>
-              <option>Talhão 07</option>
-              <option>Talhão 08</option>
-            </select>
+            <select class="form-input" id="formTalhao"></select>
           </div>
           <div class="form-group">
             <label class="form-label">Produto</label>
-            <input class="form-input" type="text" value="NPK 20-05-20" id="formProduto" />
+            <input class="form-input" type="text" id="formProduto" />
           </div>
+          <input type="hidden" id="formPlanejamentoId" />
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -233,17 +225,17 @@
           </div>
           <div class="form-group">
             <label class="form-label">Quantidade (kg/ha)</label>
-            <input class="form-input" type="number" value="320" id="formQtd" />
+            <input class="form-input" type="number" id="formQtd" />
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Data</label>
-            <input class="form-input" type="date" value="2026-08-25" id="formData" />
+            <input class="form-input" type="date" id="formData" />
           </div>
           <div class="form-group">
             <label class="form-label">Horário</label>
-            <input class="form-input" type="time" value="08:35" id="formHorario" />
+            <input class="form-input" type="time" id="formHorario" />
           </div>
         </div>
         <div class="form-group">
@@ -256,8 +248,8 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </div>
           <div class="iea-preview-text">
-            <strong>IEA para este período: 91%</strong>
-            <span>Condição favorável identificada pela IA</span>
+            <strong id="applicationIeaPreview">IEA indisponível para este talhão</strong>
+            <span id="applicationIeaDescription">Aguardando análise individual</span>
           </div>
         </div>
       </div>
@@ -290,6 +282,7 @@
       <div class="modal-header"><h2 class="modal-title">Planejar aplicação</h2><button class="modal-close" onclick="closePlanejar()">×</button></div>
       <div class="modal-body">
         <div class="form-group"><label class="form-label">Talhão</label><input class="form-input" id="planTalhao" readonly /></div>
+        <input type="hidden" id="planTalhaoId" />
         <div class="form-row"><div class="form-group"><label class="form-label">Produto</label><input class="form-input" id="planProduto" /></div><div class="form-group"><label class="form-label">Tipo de insumo</label><input class="form-input" id="planTipo" /></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Dose planejada</label><input class="form-input" id="planDose" /></div><div class="form-group"><label class="form-label">Período desejado</label><input class="form-input" id="planPeriodo" /></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Data recomendada</label><input class="form-input" id="planData" type="date" value="2026-08-26" /></div><div class="form-group"><label class="form-label">Planejada por</label><select class="form-input" id="planResponsavel"><option>Carlos Souza</option><option>João Silva</option><option>Ana Oliveira</option></select></div></div>

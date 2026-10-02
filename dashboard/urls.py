@@ -5,7 +5,8 @@ from .views import (
     sensores_view, aplicacoes_view, historico_view, configuracoes_view,
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
     system_state_api, weather_ingest_api, recommendations_ingest_api,
-    application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api, profile_update_api,
+    application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api,
+    profile_update_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
 )
 
 app_name = 'dashboard'
@@ -29,6 +30,9 @@ urlpatterns = [
     path('api/weather/ingest/', weather_ingest_api, name='weather_ingest_api'),
     path('api/recommendations/ingest/', recommendations_ingest_api, name='recommendations_ingest_api'),
     path('api/applications/', application_create_api, name='application_create_api'),
+    path('api/planejamentos/', planejamento_create_api, name='planejamento_create_api'),
+    path('api/planejamentos/<int:planejamento_id>/exec/', aplicacao_exec_api, name='aplicacao_exec_api'),
+    path('api/analytics/', analytics_api, name='analytics_api'),
     path('api/talhoes/', talhao_create_api, name='talhao_create_api'),
     path('api/talhoes/<int:talhao_id>/', talhao_update_api, name='talhao_update_api'),
     path('api/talhoes/<int:talhao_id>/delete/', talhao_delete_api, name='talhao_delete_api'),

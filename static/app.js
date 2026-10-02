@@ -86,47 +86,270 @@ async function apiRequest(url, options = {}) {
   return fetch(url, { credentials: 'same-origin', ...options, headers });
 }
 
+let DATA_SOURCE = 'demo';
+let APPLICATIONS_FROM_DB = [];
+let PLANNINGS_FROM_DB = [];
+
 function clearCalendarData() {
   Object.keys(CAL_DATA).forEach(date => delete CAL_DATA[date]);
 }
 
 async function loadDatabaseState() {
   try {
-    const response = await apiRequest('/api/state/');
+    if (!selectedTalhaoRefId) {
+      const storedTalhaoId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
+      selectedTalhaoRefId = TALHOES_DATA.some(item => item.id === storedTalhaoId) ? storedTalhaoId : null;
+    }
+    const query = selectedTalhaoRefId ? `?talhao_id=${encodeURIComponent(selectedTalhaoRefId)}` : '';
+    const response = await apiRequest(`/api/state/${query}`);
     if (!response.ok) throw new Error(`Database state request failed: ${response.status}`);
     const state = await response.json();
     if (!state.farm) {
-      Object.assign(FARM, { name: 'Fazenda Santa Clara', area: 84, talhoes: TALHOES_DATA.length, culture: 'Café' });
-      window.GOLDCROP_RECOMMENDATIONS = window.GOLDCROP_RECOMMENDATIONS || { recommendations: [], bestRecommendation: null };
+      DATA_SOURCE = 'empty';
+      Object.assign(FARM, { name: '', area: 0, talhoes: 0, culture: '' });
+      TALHOES_DATA.splice(0, TALHOES_DATA.length);
+      HISTORICO_DATA.splice(0, HISTORICO_DATA.length);
+      APPLICATIONS_FROM_DB = [];
+      PLANNINGS_FROM_DB = [];
+      clearCalendarData();
+      selectedTalhaoRefId = null;
+      window.GOLDCROP_RECOMMENDATIONS = { recommendations: [], bestRecommendation: null };
       return;
     }
+    DATA_SOURCE = 'database';
     Object.assign(FARM, state.farm, { talhoes: state.talhoes.length });
     clearCalendarData();
-    TALHOES_DATA.splice(0, TALHOES_DATA.length, ...state.talhoes.map(item => ({
-      ...item, variety: item.variety || '', age: item.age ? `${item.age} anos` : '', soil: item.soil || 'Não informado',
-      sensor: item.sensor || 'Não disponível', temp: 0, iea: 0, status: 'unfavorable', window: '—', product: '—',
-      inputType: '', dose: '', period: '', rain: 0, futureMoisture: 0, mapX: 8, mapY: 8, mapW: 18, mapH: 22,
-    })));
+    TALHOES_DATA.splice(0, TALHOES_DATA.length, ...state.talhoes.map(item => {
+      const recommendations = (item.recommendations || [])
+        .filter(recommendation => recommendation.decision !== 'INSUFFICIENT_DATA');
+      const bestRecommendation = recommendations.reduce(
+        (best, recommendation) => !best || recommendation.adequacyIndex > best.adequacyIndex ? recommendation : best,
+        null
+      );
+      return {
+        ...item,
+        variety: item.variety || '',
+        age: item.age ? `${item.age} anos` : '',
+        soil: item.soil || 'Não informado',
+        sensor: item.sensor || 'Não disponível',
+        temp: bestRecommendation?.metrics?.temperature ?? null,
+        iea: bestRecommendation?.adequacyIndex ?? null,
+        status: bestRecommendation ? (bestRecommendation.adequacyIndex >= 80 ? 'favorable' : bestRecommendation.adequacyIndex >= 60 ? 'moderate' : 'unfavorable') : 'insufficient',
+        window: bestRecommendation ? `${formatRecommendationDate(bestRecommendation.date)} · ${formatRecommendationTime(bestRecommendation)}` : '',
+        recommendations,
+        analysis: { recommendations, bestRecommendation },
+        weather: item.weather || null,
+        product: '',
+        inputType: '',
+        dose: '',
+        period: '',
+        rain: bestRecommendation?.metrics?.rainVolume ?? null,
+        futureMoisture: null,
+        mapX: 8,
+        mapY: 8,
+        mapW: 18,
+        mapH: 22,
+      };
+    }));
+    if (!TALHOES_DATA.some(item => item.id === Number(selectedTalhaoRefId))) {
+      const storedId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
+      selectedTalhaoRefId = TALHOES_DATA.some(item => item.id === storedId)
+        ? storedId
+        : TALHOES_DATA[0]?.id ?? null;
+    }
+    localStorage.setItem('goldcrop.selectedTalhaoId', String(selectedTalhaoRefId));
+    APPLICATIONS_FROM_DB = state.applications || [];
+    PLANNINGS_FROM_DB = state.planejamentos || [];
     HISTORICO_DATA.splice(0, HISTORICO_DATA.length, ...state.applications.map(item => ({
       ...item,
       resultClass: item.status === 'done' ? 'done' : 'skipped',
       cond: item.status === 'done' ? 'Favorável' : 'Pendente',
       condClass: 'favorable',
     })));
-    state.recommendations.forEach(recommendation => {
-      const existing = CAL_DATA[recommendation.date] || { app: false };
-      CAL_DATA[recommendation.date] = { ...existing, ...recommendation, iea: recommendation.adequacyIndex };
-    });
+    seedSelectedCalendarOperations();
+    const selectedTalhao = TALHOES_DATA.find(item => item.id === selectedTalhaoRefId);
+    const recommendations = selectedTalhao?.recommendations || [];
     window.GOLDCROP_RECOMMENDATIONS = {
       engine: 'GoldCropAnalysisEngine',
-      recommendations: state.recommendations,
-      bestRecommendation: state.recommendations.reduce((best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best, null),
+      recommendations,
+      bestRecommendation: recommendations.reduce((best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best, null),
     };
+    if (selectedTalhao) {
+      selectedTalhao.analysis = window.GOLDCROP_RECOMMENDATIONS;
+    }
+    syncTalhaoSelectors();
     updateSystemFromAnalysis();
   } catch (error) {
     console.warn('Dados do banco indisponíveis:', error);
-    Object.assign(FARM, { name: 'Fazenda Santa Clara', area: 84, talhoes: TALHOES_DATA.length, culture: 'Café' });
+    DATA_SOURCE = 'demo';
+    APPLICATIONS_FROM_DB = [];
+    PLANNINGS_FROM_DB = [];
+    Object.assign(FARM, { name: 'Modo demonstração', area: 84, talhoes: TALHOES_DATA.length, culture: 'Café' });
     window.GOLDCROP_RECOMMENDATIONS = window.GOLDCROP_RECOMMENDATIONS || { recommendations: [], bestRecommendation: null };
+  }
+}
+
+async function renderDashboard() {
+  const firstName = USER_DATA.name.split(' ')[0];
+  document.getElementById('dashboardGreeting').innerHTML = `Bom dia, ${firstName} <span class="wave">👋</span>`;
+
+  // Current date
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('pt-BR', { weekday: 'long', month: 'long', day: 'numeric' });
+  document.getElementById('dashboardCurrentDate').textContent = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+
+  // Farm info
+  document.getElementById('dashboardFarmName').textContent = FARM.name || '—';
+  const selectedTalhao = getSelectedReferenceTalhao();
+  const subtitle = document.getElementById('dashboardSubtitle');
+  if (subtitle) {
+    subtitle.textContent = DATA_SOURCE === 'demo'
+      ? 'Modo demonstração · os dados exibidos são fictícios'
+      : selectedTalhao
+        ? `Análise individual do ${selectedTalhao.name}`
+        : 'Cadastre um talhão para iniciar a análise';
+  }
+
+  // KPIs
+  document.getElementById('kpiAreaValue').textContent = FARM.area ? FARM.area.toFixed(1) : '—';
+  document.getElementById('kpiTalhoesValue').textContent = FARM.talhoes || '—';
+  document.getElementById('kpiApplicationsValue').textContent = HISTORICO_DATA.length || '—';
+
+  // Get analytics data
+  try {
+    const analyticsResponse = await apiRequest('/api/analytics/');
+    if (analyticsResponse.ok) {
+      const analytics = await analyticsResponse.json();
+      const avgIea = analytics.iea?.average || 0;
+      document.getElementById('kpiIEAAvgValue').textContent = avgIea > 0 ? avgIea.toFixed(0) : '—';
+    }
+  } catch (e) {
+    console.warn('Analytics unavailable', e);
+  }
+
+  // Golden Window
+  const bestRec = window.GOLDCROP_RECOMMENDATIONS?.bestRecommendation;
+  if (bestRec) {
+    const [year, month, day] = bestRec.date.split('-');
+    const dateDisplay = `${day}/${month}/${year}`;
+    document.getElementById('gwDateBig').textContent = dateDisplay;
+
+    const startTime = bestRec.windowStart.slice(11, 16);
+    const endTime = bestRec.windowEnd.slice(11, 16);
+    document.getElementById('gwTimeBig').textContent = `${startTime} — ${endTime}`;
+    document.getElementById('gwIEAValue').textContent = bestRec.adequacyIndex || '—';
+
+    // Update ring circle stroke
+    const iea = bestRec.adequacyIndex || 0;
+    const circumference = Math.PI * 80; // 2 * PI * r (r=40)
+    const offset = circumference * (1 - iea / 100);
+    const ringCircle = document.getElementById('ringCircle');
+    if (ringCircle) {
+      ringCircle.style.strokeDashoffset = offset;
+    }
+
+    // Metrics
+    const metrics = bestRec.metricas || bestRec.metrics || {};
+    document.getElementById('gwRainValue').textContent = metrics.rainVolume ? `${metrics.rainVolume.toFixed(1)} mm` : '—';
+    document.getElementById('gwTempValue').textContent = metrics.temperature ? `${metrics.temperature.toFixed(1)}°C` : '—';
+    document.getElementById('gwWindValue').textContent = metrics.windSpeed ? `${metrics.windSpeed.toFixed(1)} km/h` : '—';
+
+    // Insight
+    const insight = bestRec.explanation || `Condições favoráveis com adequação de ${bestRec.adequacyIndex}%.`;
+    document.getElementById('gwInsightText').textContent = insight;
+  } else {
+    document.getElementById('gwDateBig').textContent = 'Sem janela';
+    document.getElementById('gwTimeBig').textContent = '—';
+    document.getElementById('gwIEAValue').textContent = '—';
+    document.getElementById('gwRainValue').textContent = '—';
+    document.getElementById('gwTempValue').textContent = '—';
+    document.getElementById('gwWindValue').textContent = '—';
+    document.getElementById('gwInsightText').textContent = 'Aguardando dados meteorológicos para análise.';
+  }
+
+  // Talhões
+  renderDashboardTalhoes();
+
+  // Weather
+  if (window.GOLDCROP_WEATHER) {
+    const current = window.GOLDCROP_WEATHER.current.values;
+    const temp = current.temperature_2m?.toFixed(1) || '—';
+    document.getElementById('weatherTemp').textContent = `${temp}°C`;
+
+    const condition = WEATHER_CODES[current.weather_code] || 'Condição desconhecida';
+    document.getElementById('weatherCondition').textContent = condition;
+  }
+
+  // Applications stats
+  document.getElementById('appTotal').textContent = HISTORICO_DATA.length;
+  const executed = HISTORICO_DATA.filter(a => a.resultClass === 'done').length;
+  document.getElementById('appExecuted').textContent = executed;
+  document.getElementById('appInWindow').textContent = '—';
+  const successRate = HISTORICO_DATA.length > 0 ? ((executed / HISTORICO_DATA.length) * 100).toFixed(0) : '—';
+  document.getElementById('appSuccessRate').textContent = successRate + '%';
+
+  // Notifications
+  document.getElementById('dashboardNotifCount').textContent = '0';
+}
+
+function renderDashboardTalhoes() {
+  const grid = document.getElementById('talhoesGrid');
+  if (!grid) return;
+
+  if (TALHOES_DATA.length === 0) {
+    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: var(--text-muted);">Nenhum talhão cadastrado</div>';
+    return;
+  }
+
+  grid.innerHTML = TALHOES_DATA.slice(0, 6).map(talhao => `
+    <div class="talhao-card talhao-status-${talhao.status || 'insufficient'}" role="button" tabindex="0" data-talhao-id="${talhao.id}">
+      <div class="talhao-card-header">
+        <div>
+          <div class="talhao-card-title">${talhao.name || '—'}</div>
+          <div class="talhao-card-meta">${talhao.culture || '—'}</div>
+        </div>
+        <span class="talhao-status-badge ${talhao.status || 'insufficient'}">
+          <span class="status-dot"></span>
+          ${talhaoStatusPresentation(talhao).label}
+        </span>
+      </div>
+      <div class="talhao-card-body">
+        <div class="talhao-metric">
+          <span class="talhao-metric-label">IEA</span>
+          <span class="talhao-metric-value">${Number.isFinite(talhao.iea) ? `${talhao.iea}%` : '—'}</span>
+        </div>
+        <div class="talhao-metric">
+          <span class="talhao-metric-label">Área</span>
+          <span class="talhao-metric-value">${talhao.area ? talhao.area.toFixed(1) : '—'} ha</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  grid.querySelectorAll('[data-talhao-id]').forEach(card => {
+    const chooseTalhao = () => selectTalhao(card.dataset.talhaoId);
+    card.addEventListener('click', chooseTalhao);
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        chooseTalhao();
+      }
+    });
+  });
+}
+
+async function syncAllViewsFromServer() {
+  await loadDatabaseState();
+  syncCalendarTalhaoSelector();
+  if (document.getElementById('calGrid')) renderCalendar();
+  if (document.getElementById('mapContainer')) renderTalhoes();
+  if (document.getElementById('fazendaContent')) renderFazenda();
+  if (document.getElementById('historicoTable')) renderHistorico();
+  if (document.getElementById('aplicacoesContent')) renderAplicacoes();
+  if (document.getElementById('page-dashboard')) renderDashboard();
+  updateProfileDOM();
+  const reference = getSelectedReferenceTalhao();
+  if (reference) {
+    await loadLocalWeather(reference.id);
   }
 }
 
@@ -136,43 +359,66 @@ async function loadDatabaseState() {
 
 let currentPage = 'dashboard';
 let selectedCalDay = null;
-let calMonth = new Date(2026, 7, 1); // August 2026
+let calMonth = new Date();
+calMonth.setDate(1);
 let chartsInitialized = {};
 let sidebarOpen = false;
 let talhoesMap = null;
 let selectedTalhaoRefId = null;
+let activeTalhaoFilter = 'all';
 
 function getUsableTalhoes() {
   return TALHOES_DATA.filter(t => Number.isFinite(t.latitude) && Number.isFinite(t.longitude));
 }
 
 function getSelectedReferenceTalhao() {
-  const fromState = TALHOES_DATA.find(t => t.id === selectedTalhaoRefId && Number.isFinite(t.latitude) && Number.isFinite(t.longitude));
+  const fromState = TALHOES_DATA.find(t => t.id === selectedTalhaoRefId);
   if (fromState) return fromState;
-  const firstUsable = getUsableTalhoes()[0];
-  if (firstUsable) {
-    selectedTalhaoRefId = firstUsable.id;
-    return firstUsable;
+  const storedId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
+  const storedTalhao = TALHOES_DATA.find(t => t.id === storedId);
+  if (storedTalhao) {
+    selectedTalhaoRefId = storedTalhao.id;
+    return storedTalhao;
   }
-  return null;
+  const firstTalhao = TALHOES_DATA[0] || null;
+  selectedTalhaoRefId = firstTalhao?.id ?? null;
+  return firstTalhao;
 }
 
 function syncCalendarTalhaoSelector() {
-  const select = document.getElementById('calendarTalhaoSelect');
-  if (!select) return;
-
-  const usableTalhoes = getUsableTalhoes();
-  if (!usableTalhoes.length) {
-    select.disabled = true;
-    select.innerHTML = '<option value="">Cadastre um talhão com latitude e longitude</option>';
-    selectedTalhaoRefId = null;
-    return;
+  const selected = getSelectedReferenceTalhao();
+  ['calendarTalhaoSelect', 'dashboardTalhaoSelect', 'talhaoSelect'].forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    if (!TALHOES_DATA.length) {
+      select.disabled = true;
+      select.innerHTML = '<option value="">Nenhum talhão cadastrado</option>';
+      return;
+    }
+    select.disabled = false;
+    select.innerHTML = TALHOES_DATA.map(t => {
+      const location = Number.isFinite(t.latitude) && Number.isFinite(t.longitude) ? '' : ' · aguardando coordenadas';
+      return `<option value="${t.id}" ${t.id === selected?.id ? 'selected' : ''}>${t.name}${location}</option>`;
+    }).join('');
+  });
+  const summary = document.getElementById('talhoesFarmSummary');
+  if (summary) {
+    const sourceLabel = DATA_SOURCE === 'database' ? 'Dados da fazenda' : DATA_SOURCE === 'demo' ? 'Modo demonstração (dados fictícios)' : 'Nenhum dado cadastrado';
+    summary.textContent = `${FARM.name || 'Sem fazenda'} · ${FARM.area ? `${FARM.area} ha` : 'área não informada'} · ${TALHOES_DATA.length} talhões · ${sourceLabel}`;
   }
-
-  const selected = getSelectedReferenceTalhao() || usableTalhoes[0];
-  selectedTalhaoRefId = selected.id;
-  select.disabled = false;
-  select.innerHTML = usableTalhoes.map(t => `<option value="${t.id}" ${t.id === selected.id ? 'selected' : ''}>${t.name}</option>`).join('');
+  const state = document.getElementById('talhaoAnalysisState');
+  if (state) {
+    const hasCoordinates = selected && Number.isFinite(selected.latitude) && Number.isFinite(selected.longitude);
+    state.textContent = !selected
+      ? 'Cadastre um talhão para iniciar'
+      : !hasCoordinates
+        ? 'Dados insuficientes para análise: cadastre latitude e longitude'
+        : selected.analysis?.bestRecommendation
+          ? `Análise de ${selected.name} · IEA ${selected.analysis.bestRecommendation.adequacyIndex}%`
+          : selected.weather
+            ? `Dados insuficientes para análise individual de ${selected.name}`
+            : `Aguardando análise individual de ${selected.name}`;
+  }
 }
 
 const WEATHER_CODES = {
@@ -282,9 +528,59 @@ function normalizeOpenMeteoWeather(data, reference) {
   };
 }
 
+function seedSelectedCalendarOperations() {
+  PLANNINGS_FROM_DB
+    .filter(item => item.talhao_id === selectedTalhaoRefId && ['PLANEJADA', 'CONFIRMADA'].includes(item.status))
+    .forEach(planejamento => {
+      const entry = CAL_DATA[planejamento.data_planejada] || { type: 'future' };
+      CAL_DATA[planejamento.data_planejada] = {
+        ...entry,
+        planned: `${planejamento.talhao} · ${planejamento.produto}`,
+        planejamentoId: planejamento.id,
+        plannedBy: planejamento.responsavel,
+      };
+    });
+  APPLICATIONS_FROM_DB
+    .filter(item => item.talhao_id === selectedTalhaoRefId)
+    .forEach(application => {
+      const [day, month, year] = application.date.split('/');
+      const date = `${year}-${month}-${day}`;
+      const entry = CAL_DATA[date] || { type: 'past' };
+      CAL_DATA[date] = {
+        ...entry,
+        app: application.status === 'done',
+        done: application.product,
+        iea: application.ieaPrev ?? entry.iea,
+      };
+    });
+}
+
 function applyWeatherToCalendar(weather) {
-  const analysis = new GoldCropAnalysisEngine(weather).evaluate();
+  const evaluated = new GoldCropAnalysisEngine(weather).evaluate();
+  const recommendations = evaluated.recommendations.filter(item => item.decision !== 'INSUFFICIENT_DATA');
+  const analysis = {
+    ...evaluated,
+    recommendations,
+    bestRecommendation: recommendations.reduce(
+      (best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best,
+      null
+    ),
+  };
+  const talhao = TALHOES_DATA.find(item => item.id === selectedTalhaoRefId);
+  if (!talhao) return;
+  talhao.weather = weather;
+  talhao.analysis = analysis;
+  talhao.recommendations = analysis.recommendations;
+  talhao.iea = analysis.bestRecommendation?.adequacyIndex ?? null;
+  talhao.status = analysis.bestRecommendation
+    ? (analysis.bestRecommendation.adequacyIndex >= 80 ? 'favorable' : analysis.bestRecommendation.adequacyIndex >= 60 ? 'moderate' : 'unfavorable')
+    : 'insufficient';
+  talhao.window = analysis.bestRecommendation
+    ? `${formatRecommendationDate(analysis.bestRecommendation.date)} · ${formatRecommendationTime(analysis.bestRecommendation)}`
+    : '';
   window.GOLDCROP_RECOMMENDATIONS = analysis;
+  clearCalendarData();
+  seedSelectedCalendarOperations();
   const recommendationsByDate = {};
   analysis.recommendations.forEach(recommendation => {
     if (!recommendationsByDate[recommendation.date]) recommendationsByDate[recommendation.date] = [];
@@ -297,29 +593,29 @@ function applyWeatherToCalendar(weather) {
     const existing = CAL_DATA[date] || { app: false };
     const recommendations = recommendationsByDate[date] || [];
     const recommendation = recommendations.reduce((best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best, null);
-    if (!recommendation) return;
-    const metrics = recommendation.metrics;
+    const metrics = recommendation?.metrics || {};
     recommendations.sort((a, b) => a.windowStart.localeCompare(b.windowStart));
-    const rain = Number(values.precipitation_sum?.[index] || 0);
-    const probability = Number(values.precipitation_probability_max?.[index] || 0);
-    const gusts = Number(values.wind_gusts_10m_max?.[index] || 0);
-    const temperature = Number(values.temperature_2m_mean?.[index] ?? values.temperature_2m_max?.[index] ?? 0);
+    const rain = finiteWeatherValue(values.precipitation_sum?.[index]);
+    const probability = finiteWeatherValue(values.precipitation_probability_max?.[index]);
+    const gusts = finiteWeatherValue(values.wind_gusts_10m_max?.[index]);
+    const temperature = finiteWeatherValue(values.temperature_2m_mean?.[index])
+      ?? finiteWeatherValue(values.temperature_2m_max?.[index]);
 
     CAL_DATA[date] = {
       ...existing,
-      iea: recommendation.adequacyIndex,
+      iea: recommendation?.adequacyIndex ?? null,
       type: date === today ? 'today' : date < today ? 'past' : 'future',
       rain,
       temp: temperature,
       precipitationProbability: probability,
-      windSpeed: Number(values.wind_speed_10m_max?.[index] || 0),
+      windSpeed: finiteWeatherValue(values.wind_speed_10m_max?.[index]),
       windGusts: gusts,
       applicationWindow: metrics,
       recommendation,
       recommendations,
-      recommendationTime: formatRecommendationTime(recommendation),
-      solarRadiation: Number(values.shortwave_radiation_sum?.[index] || 0),
-      et0: Number(values.et0_fao_evapotranspiration?.[index] || 0),
+      recommendationTime: recommendation ? formatRecommendationTime(recommendation) : '',
+      solarRadiation: finiteWeatherValue(values.shortwave_radiation_sum?.[index]),
+      et0: finiteWeatherValue(values.et0_fao_evapotranspiration?.[index]),
     };
   });
 }
@@ -336,37 +632,90 @@ function formatRecommendationTime(recommendation) {
 }
 
 function formatWeatherValue(value, decimals = 1) {
-  return Number(value || 0).toLocaleString('pt-BR', {
+  const number = finiteWeatherValue(value);
+  if (number == null) return '—';
+  return number.toLocaleString('pt-BR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
 }
 
 function formatMetricValue(value, suffix = '', decimals = 1) {
-  const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
-  const formatted = safeValue.toLocaleString('pt-BR', {
+  const number = finiteWeatherValue(value);
+  if (number == null) return '—';
+  const formatted = number.toLocaleString('pt-BR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
   return `${formatted}${suffix}`;
 }
 
+function finiteWeatherValue(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function updateSystemFromAnalysis() {
   const analysis = window.GOLDCROP_RECOMMENDATIONS;
   const best = analysis?.bestRecommendation;
-  if (!best) return;
+  const selected = getSelectedReferenceTalhao();
+  const state = document.getElementById('talhaoAnalysisState');
+  if (state) {
+    state.textContent = !selected
+      ? 'Cadastre um talhão para iniciar'
+      : !Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude)
+        ? `Dados insuficientes para análise de ${selected.name}: cadastre latitude e longitude`
+        : best
+          ? `Análise individual de ${selected.name} · IEA ${best.adequacyIndex}%`
+          : selected.weather
+            ? `Dados insuficientes para análise de ${selected.name}`
+            : `Aguardando dados para análise de ${selected.name}`;
+  }
+  const talhaoBadge = document.getElementById('gwTalhaoBadge');
+  if (talhaoBadge) talhaoBadge.textContent = selected?.name || 'Nenhum talhão selecionado';
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  if (!best) {
+    setText('gwDateBig', selected ? 'Aguardando dados' : 'Sem talhão');
+    setText('gwTimeBig', '—');
+    setText('gwIEAValue', '—');
+    setText('gwRainValue', '—');
+    setText('gwTempValue', '—');
+    setText('gwWindValue', '—');
+    setText('gwInsightText', selected && (!Number.isFinite(selected.latitude) || !Number.isFinite(selected.longitude))
+      ? 'Dados insuficientes para analisar este talhão. Cadastre suas coordenadas.'
+      : selected?.weather
+        ? 'Dados meteorológicos insuficientes para gerar uma recomendação confiável para este talhão.'
+        : 'Aguardando dados meteorológicos deste talhão.');
+    setText('dashboardIeaValue', '—');
+    setText('dashboardRingValue', '—');
+    setText('dashboardNextDate', 'Aguardando análise');
+    setText('dashboardNextIea', '—');
+    setText('dashboardNextDesc', 'Sem recomendação');
+    setText('dashboardWindowDate', 'Aguardando análise');
+    setText('dashboardWindowTime', '—');
+    setText('dashboardWindowRain', '—');
+    setText('dashboardWindowTemperature', '—');
+    setText('dashboardWindowWind', '—');
+    setText('dashboardWindowInsight', 'Sem recomendação: aguardando dados deste talhão.');
+    syncCalendarTalhaoSelector();
+    if (document.getElementById('calGrid')) renderCalendar();
+    if (document.getElementById('mapContainer')) renderTalhoes();
+    if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
+    return;
+  }
 
   const metrics = best.metrics || {};
   const confidence = `${Math.round(best.confidence * 100)}% confiança`;
   const date = formatRecommendationDate(best.date);
   const time = formatRecommendationTime(best);
-  const setText = (id, value) => {
-    const element = document.getElementById(id);
-    if (element) element.textContent = value;
-  };
 
   const dashboardIeaValue = document.getElementById('dashboardIeaValue');
   if (dashboardIeaValue) dashboardIeaValue.innerHTML = `${best.adequacyIndex}<span class="kpi-unit">%</span>`;
+  setText('gwIEAValue', best.adequacyIndex);
   setText('dashboardRingValue', best.adequacyIndex);
   setText('dashboardNextDate', `${date} · ${time}`);
   setText('dashboardNextIea', `${best.adequacyIndex}%`);
@@ -376,25 +725,61 @@ function updateSystemFromAnalysis() {
   setText('dashboardWindowRain', `${formatWeatherValue(metrics.rainVolume)} mm`);
   setText('dashboardWindowTemperature', `${formatWeatherValue(metrics.temperature)}°C`);
   setText('dashboardWindowWind', `${formatWeatherValue(metrics.windSpeed)} km/h`);
-  setText('dashboardWindowInsight', `${best.explanation} Chuva ${formatWeatherValue(metrics.rainVolume)} mm, temperatura ${formatWeatherValue(metrics.temperature)}°C e vento ${formatWeatherValue(metrics.windSpeed)} km/h na janela analisada.`);
-
-  TALHOES_DATA.forEach(t => {
-    t.iea = best.adequacyIndex;
-    t.status = best.adequacyIndex >= 80 ? 'favorable' : best.adequacyIndex >= 60 ? 'moderate' : 'unfavorable';
-    t.window = `${date} · ${time}`;
-    t.rain = metrics.rainVolume;
-    t.temp = metrics.temperature;
-  });
+  const explanation = best.explanation || 'Janela estimada com base na previsão meteorológica deste talhão.';
+  setText('dashboardWindowInsight', `${explanation} Chuva ${formatWeatherValue(metrics.rainVolume)} mm, temperatura ${formatWeatherValue(metrics.temperature)}°C e vento ${formatWeatherValue(metrics.windSpeed)} km/h na janela analisada.`);
+  setText('gwDateBig', date);
+  setText('gwTimeBig', time);
+  setText('gwRainValue', `${formatWeatherValue(metrics.rainVolume)} mm`);
+  setText('gwTempValue', `${formatWeatherValue(metrics.temperature)}°C`);
+  setText('gwWindValue', `${formatWeatherValue(metrics.windSpeed)} km/h`);
+  setText('gwInsightText', explanation);
+  if (selected) {
+    selected.iea = best.adequacyIndex;
+    selected.status = best.adequacyIndex >= 80 ? 'favorable' : best.adequacyIndex >= 60 ? 'moderate' : 'unfavorable';
+    selected.window = `${date} · ${time}`;
+    selected.rain = metrics.rainVolume;
+    selected.temp = metrics.temperature;
+  }
+  syncCalendarTalhaoSelector();
   if (document.getElementById('mapContainer')) renderTalhoes();
+  if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
   if (document.getElementById('fazendaContent')) renderFazenda();
 }
 
 async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
-  const reference = TALHOES_DATA.find(t => t.id === referenceTalhaoId && Number.isFinite(t.latitude) && Number.isFinite(t.longitude))
-    || getSelectedReferenceTalhao();
-
-  if (!reference) return;
+  const reference = TALHOES_DATA.find(t => t.id === Number(referenceTalhaoId)) || getSelectedReferenceTalhao();
+  if (!reference) {
+    window.GOLDCROP_RECOMMENDATIONS = { recommendations: [], bestRecommendation: null };
+    window.GOLDCROP_WEATHER = null;
+    clearCalendarData();
+    updateSystemFromAnalysis();
+    return;
+  }
   selectedTalhaoRefId = reference.id;
+  localStorage.setItem('goldcrop.selectedTalhaoId', String(reference.id));
+  syncCalendarTalhaoSelector();
+  window.GOLDCROP_WEATHER = null;
+  window.GOLDCROP_RECOMMENDATIONS = reference.analysis || { recommendations: [], bestRecommendation: null };
+  clearCalendarData();
+  seedSelectedCalendarOperations();
+  if (!Number.isFinite(reference.latitude) || !Number.isFinite(reference.longitude)) {
+    reference.analysis = { recommendations: [], bestRecommendation: null };
+    reference.recommendations = [];
+    reference.iea = null;
+    reference.status = 'insufficient';
+    window.GOLDCROP_RECOMMENDATIONS = reference.analysis;
+    window.GOLDCROP_WEATHER = null;
+    clearCalendarData();
+    seedSelectedCalendarOperations();
+    updateSystemFromAnalysis();
+    if (document.getElementById('weatherSummary')) {
+      document.getElementById('weatherSummary').textContent = `${reference.name} · Dados insuficientes: cadastre as coordenadas`;
+    }
+    if (document.getElementById('calGrid')) renderCalendar();
+    if (document.getElementById('mapContainer')) renderTalhoes();
+    if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
+    return;
+  }
 
   const params = new URLSearchParams({
     latitude: reference.latitude,
@@ -413,32 +798,94 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     const normalized = normalizeOpenMeteoWeather(data, reference);
     window.GOLDCROP_WEATHER = normalized;
     applyWeatherToCalendar(normalized);
-    await apiRequest('/api/weather/ingest/', { method: 'POST', body: JSON.stringify(normalized) });
-    await apiRequest('/api/recommendations/ingest/', { method: 'POST', body: JSON.stringify(window.GOLDCROP_RECOMMENDATIONS) });
+    const collectionResponse = await apiRequest('/api/weather/ingest/', {
+      method: 'POST',
+      body: JSON.stringify({ ...normalized, talhao_id: reference.id }),
+    });
+    if (!collectionResponse.ok) throw new Error(`Weather persistence failed: ${collectionResponse.status}`);
+    const recommendationResponse = await apiRequest('/api/recommendations/ingest/', {
+      method: 'POST',
+      body: JSON.stringify({ ...window.GOLDCROP_RECOMMENDATIONS, talhao_id: reference.id }),
+    });
+    if (!recommendationResponse.ok) throw new Error(`Recommendation persistence failed: ${recommendationResponse.status}`);
+    const savedRecommendations = await recommendationResponse.json();
+    reference.recommendations = savedRecommendations.recommendations || [];
+    reference.analysis = {
+      ...window.GOLDCROP_RECOMMENDATIONS,
+      recommendations: reference.recommendations,
+      bestRecommendation: reference.recommendations.reduce(
+        (best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best,
+        null
+      ),
+    };
     updateSystemFromAnalysis();
     const current = normalized.current.values;
-    const rain = Number(normalized.daily.values.precipitation_sum?.[0] || 0);
-    const probability = Math.max(...(normalized.hourly.values.precipitation_probability || []).slice(0, 24), 0);
+    const rain = finiteWeatherValue(normalized.daily.values.precipitation_sum?.[0]);
+    const probabilities = (normalized.hourly.values.precipitation_probability || [])
+      .slice(0, 24)
+      .map(finiteWeatherValue)
+      .filter(value => value != null);
+    const probability = probabilities.length ? Math.max(...probabilities) : null;
     const condition = WEATHER_CODES[current.weather_code] || 'Condição não informada';
-    const temperature = Number(current.temperature_2m).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+    const temperatureValue = finiteWeatherValue(current.temperature_2m);
+    const temperature = temperatureValue == null
+      ? '—'
+      : temperatureValue.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
     const weatherSummary = document.getElementById('weatherSummary');
     const rainValue = document.getElementById('rainForecastValue');
     const rainDesc = document.getElementById('rainForecastDesc');
 
     if (weatherSummary) weatherSummary.textContent = `${reference.name} · ${temperature}°C · ${condition}`;
-    if (rainValue) rainValue.innerHTML = `${rain.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}<span class="kpi-unit">mm</span>`;
-    if (rainDesc) rainDesc.textContent = `${reference.name} · Probabilidade de ${probability}% · Open-Meteo`;
+    if (rainValue) rainValue.innerHTML = `${formatWeatherValue(rain)}<span class="kpi-unit">mm</span>`;
+    if (rainDesc) rainDesc.textContent = `${reference.name} · Probabilidade de ${formatWeatherValue(probability, 0)}% · Open-Meteo`;
+    const dashboardWeatherTemp = document.getElementById('weatherTemp');
+    const dashboardWeatherCondition = document.getElementById('weatherCondition');
+    if (dashboardWeatherTemp) dashboardWeatherTemp.textContent = `${temperature}°C`;
+    if (dashboardWeatherCondition) dashboardWeatherCondition.textContent = condition;
 
     reference.temp = current.temperature_2m;
     reference.moisture = current.relative_humidity_2m;
     reference.rain = rain;
     reference.wind = current.wind_speed_10m;
     if (document.getElementById('calGrid')) renderCalendar();
+    if (document.getElementById('mapContainer')) renderTalhoes();
+    if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
   } catch (error) {
     console.warn('Previsão local indisponível:', error);
     const weatherSummary = document.getElementById('weatherSummary');
-    if (weatherSummary) weatherSummary.textContent = `${reference.name} · Clima local indisponível`;
+    if (reference.weather?.hourly?.timestamps?.length) {
+      window.GOLDCROP_WEATHER = reference.weather;
+      applyWeatherToCalendar(reference.weather);
+      updateSystemFromAnalysis();
+      if (weatherSummary) weatherSummary.textContent = `${reference.name} · usando última previsão salva`;
+      if (document.getElementById('calGrid')) renderCalendar();
+      if (document.getElementById('mapContainer')) renderTalhoes();
+    } else if (weatherSummary) weatherSummary.textContent = `${reference.name} · Clima local indisponível`;
+    const dashboardWeatherTemp = document.getElementById('weatherTemp');
+    const dashboardWeatherCondition = document.getElementById('weatherCondition');
+    const currentWeather = reference.weather?.current?.values;
+    if (dashboardWeatherTemp) dashboardWeatherTemp.textContent = currentWeather?.temperature_2m != null ? `${currentWeather.temperature_2m}°C` : '—';
+    if (dashboardWeatherCondition) dashboardWeatherCondition.textContent = currentWeather?.weather_code != null
+      ? WEATHER_CODES[currentWeather.weather_code] || 'Condição não informada'
+      : 'Clima indisponível';
+    const state = document.getElementById('talhaoAnalysisState');
+    if (state) state.textContent = reference.weather?.hourly?.timestamps?.length
+      ? `${reference.name} · exibindo última análise salva; atualização indisponível`
+      : `${reference.name} · Falha ao obter clima/análise`;
   }
+}
+
+async function selectTalhao(talhaoId) {
+  const selected = TALHOES_DATA.find(item => item.id === Number(talhaoId));
+  if (!selected) return;
+  selectedTalhaoRefId = selected.id;
+  localStorage.setItem('goldcrop.selectedTalhaoId', String(selected.id));
+  syncCalendarTalhaoSelector();
+  window.GOLDCROP_RECOMMENDATIONS = selected.analysis || { recommendations: [], bestRecommendation: null };
+  clearCalendarData();
+  seedSelectedCalendarOperations();
+  updateSystemFromAnalysis();
+  await loadLocalWeather(selected.id);
 }
 
 // =====================================================
@@ -524,17 +971,15 @@ function renderCalendar() {
     let colorClass = '';
     let tagText = '';
 
-    if (data) {
+    const hasIea = Number.isFinite(data?.iea);
+    if (hasIea) {
       if (data.iea >= 80) colorClass = 'green-day';
       else if (data.iea >= 60) colorClass = 'yellow-day';
       else colorClass = 'red-day';
-
       if (data.type === 'past') tagText = 'Real';
       else if (data.type === 'today') tagText = 'Hoje';
       else tagText = 'Est.';
-    } else {
-      colorClass = 'no-data';
-    }
+    } else colorClass = 'no-data';
 
     let typeClass = data ? data.type : 'no-data';
     el.className = `cal-day ${colorClass} ${typeClass === 'today' ? 'today' : ''} ${typeClass === 'past' ? 'past' : ''}`;
@@ -542,13 +987,13 @@ function renderCalendar() {
 
     el.innerHTML = `
       <span class="cal-day-num">${d}</span>
-      ${data ? `<span class="cal-day-iea">${data.iea}%</span>` : '<span class="cal-day-iea" style="opacity:.3">—</span>'}
-      ${data ? `<span class="cal-day-tag">${tagText}</span>` : ''}
+      ${hasIea ? `<span class="cal-day-iea">${data.iea}%</span>` : '<span class="cal-day-iea" style="opacity:.3">—</span>'}
+      ${tagText ? `<span class="cal-day-tag">${tagText}</span>` : ''}
       ${data?.recommendationTime ? `<span class="cal-day-window">${data.recommendationTime}</span>` : ''}
       ${data && (data.app || data.planned) ? `<div class="cal-day-markers">${data.planned ? '<span class="cal-plan-marker" title="Aplicação planejada">P</span>' : ''}${data.app ? '<span class="cal-done-marker" title="Aplicação realizada">R</span>' : ''}</div>` : ''}
     `;
 
-    if (data && colorClass !== 'no-data') {
+    if (data && (hasIea || data.app || data.planned)) {
       el.addEventListener('click', () => selectCalDay(dateStr, d, data, el));
     }
 
@@ -577,49 +1022,54 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
   empty.style.display = 'none';
   content.style.display = 'block';
 
-  const selectedIea = recommendation?.adequacyIndex ?? data.iea;
-  const ieaColor = selectedIea >= 80 ? '#3a8554' : selectedIea >= 60 ? '#d97706' : '#ef4444';
-  const typeLabel = data.type === 'past' ? 'Dados reais' : data.type === 'today' ? 'Hoje — Dados reais + previsão' : 'Previsão estimada pela IA';
+  const selectedIeaValue = recommendation?.adequacyIndex ?? data.iea;
+  const selectedIea = Number.isFinite(selectedIeaValue) ? selectedIeaValue : null;
+  const ieaColor = selectedIea === null ? '#6b7280' : selectedIea >= 80 ? '#3a8554' : selectedIea >= 60 ? '#d97706' : '#ef4444';
+  const selectedTalhao = getSelectedReferenceTalhao();
+  const typeLabel = selectedIea === null
+    ? `Dados insuficientes para ${selectedTalhao?.name || 'este talhão'}`
+    : data.type === 'past' ? 'Dados reais' : data.type === 'today' ? 'Hoje — Dados reais + previsão' : 'Previsão estimada pela IA';
 
   const upFactors = [];
   const downFactors = [];
 
-  if (data.rain < 10) upFactors.push('Baixo acúmulo de chuva → menor risco de lixiviação');
-  if (data.temp >= 20 && data.temp <= 25) upFactors.push('Temperatura ideal para absorção foliar');
-  if (selectedIea >= 80) upFactors.push('Alta probabilidade de absorção eficiente');
+  if (Number.isFinite(data.rain) && data.rain < 10) upFactors.push('Baixo acúmulo de chuva → menor risco de lixiviação');
+  if (Number.isFinite(data.temp) && data.temp >= 20 && data.temp <= 25) upFactors.push('Temperatura dentro da faixa analisada');
+  if (selectedIea !== null && selectedIea >= 80) upFactors.push('Alta adequação calculada para este talhão');
 
-  if (data.rain > 15) downFactors.push('Chuva elevada → risco de lavagem do produto');
-  if (data.rain > 25) downFactors.push('Alta precipitação → aplicação contraindicada');
-  if (data.temp > 27) downFactors.push('Temperatura elevada → risco de volatilização');
-  if (selectedIea < 60) downFactors.push('Condições desfavoráveis nesta janela');
+  if (Number.isFinite(data.rain) && data.rain > 15) downFactors.push('Chuva elevada → risco de lavagem do produto');
+  if (Number.isFinite(data.rain) && data.rain > 25) downFactors.push('Alta precipitação → aplicação contraindicada');
+  if (Number.isFinite(data.temp) && data.temp > 27) downFactors.push('Temperatura elevada → risco de volatilização');
+  if (selectedIea !== null && selectedIea < 60) downFactors.push('Condições desfavoráveis nesta janela');
 
-  if (upFactors.length === 0) upFactors.push('Condições dentro do intervalo esperado');
-  if (downFactors.length === 0) downFactors.push('Sem fatores significativos desfavoráveis');
+  if (upFactors.length === 0) upFactors.push(selectedIea === null ? 'Sem dados suficientes para identificar fatores favoráveis' : 'Condições dentro do intervalo esperado');
+  if (downFactors.length === 0) downFactors.push(selectedIea === null ? 'Sem dados suficientes para avaliar riscos' : 'Sem fatores significativos desfavoráveis');
 
-  const confLabel = selectedIea >= 80 ? 'Alta' : selectedIea >= 60 ? 'Média' : 'Baixa';
-  const confColor = selectedIea >= 80 ? '#3a8554' : selectedIea >= 60 ? '#d97706' : '#ef4444';
+  const confLabel = selectedIea === null ? 'Indisponível' : selectedIea >= 80 ? 'Alta' : selectedIea >= 60 ? 'Média' : 'Baixa';
+  const confColor = selectedIea === null ? '#6b7280' : selectedIea >= 80 ? '#3a8554' : selectedIea >= 60 ? '#d97706' : '#ef4444';
 
   const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const monthName = months[calMonth.getMonth()];
 
-  const hasWindow = selectedIea >= 75;
-  const windowTime = recommendation ? formatRecommendationTime(recommendation) : data.recommendationTime || (data.iea >= 85 ? '08:00 — 11:30' : data.iea >= 75 ? '09:00 — 12:00' : '—');
+  const hasWindow = selectedIea !== null && selectedIea >= 75;
+  const windowTime = recommendation ? formatRecommendationTime(recommendation) : data.recommendationTime || '—';
   const applicationWindow = data.applicationWindow || {};
   const selectedMetrics = recommendation?.metrics || applicationWindow;
   const windowOptions = (data.recommendations || []).map(item => `<option value="${item.windowStart}" ${item.windowStart === recommendation?.windowStart ? 'selected' : ''}>${formatRecommendationTime(item)} · IEA ${item.adequacyIndex}%</option>`).join('');
 
-  const safeRain = formatMetricValue(data.rain, ' mm');
-  const safeTemp = formatMetricValue(data.temp, '°C');
-  const safeWind = formatMetricValue(selectedMetrics.windSpeed ?? data.windSpeed ?? 6, ' km/h');
-  const safeGusts = formatMetricValue(selectedMetrics.windGusts ?? data.windGusts ?? 0, ' km/h');
-  const safeProbability = formatMetricValue(
-    selectedMetrics.rainProbability != null ? Math.round(selectedMetrics.rainProbability * 100) : data.precipitationProbability ?? 72,
-    '%',
-    0
-  );
-  const safeRainPlusShowers = formatMetricValue(((selectedMetrics.rain ?? 0) + (selectedMetrics.showers ?? 0)), ' mm');
-  const safeSolar = formatMetricValue(data.solarRadiation ?? 0, ' MJ/m²');
-  const safeEt0 = formatMetricValue(data.et0 ?? 0, ' mm');
+  const safeRain = Number.isFinite(data.rain) ? formatMetricValue(data.rain, ' mm') : '—';
+  const safeTemp = Number.isFinite(data.temp) ? formatMetricValue(data.temp, '°C') : '—';
+  const safeWind = Number.isFinite(selectedMetrics.windSpeed ?? data.windSpeed) ? formatMetricValue(selectedMetrics.windSpeed ?? data.windSpeed, ' km/h') : '—';
+  const safeGusts = Number.isFinite(selectedMetrics.windGusts ?? data.windGusts) ? formatMetricValue(selectedMetrics.windGusts ?? data.windGusts, ' km/h') : '—';
+  const probability = selectedMetrics.rainProbability != null
+    ? Math.round(selectedMetrics.rainProbability * 100)
+    : data.precipitationProbability;
+  const safeProbability = Number.isFinite(probability) ? formatMetricValue(probability, '%', 0) : '—';
+  const safeRainPlusShowers = Number.isFinite(selectedMetrics.rain) && Number.isFinite(selectedMetrics.showers)
+    ? formatMetricValue(selectedMetrics.rain + selectedMetrics.showers, ' mm')
+    : '—';
+  const safeSolar = Number.isFinite(data.solarRadiation) ? formatMetricValue(data.solarRadiation, ' MJ/m²') : '—';
+  const safeEt0 = Number.isFinite(data.et0) ? formatMetricValue(data.et0, ' mm') : '—';
 
   content.innerHTML = `
     <div class="dpanel-title">${day} de ${monthName === 'Ago' ? 'Agosto' : monthName} de ${calMonth.getFullYear()}</div>
@@ -629,16 +1079,16 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
     <div class="dpanel-iea-row">
       <div>
         <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">IEA</div>
-        <div class="dpanel-iea-value" style="color:${ieaColor}">${selectedIea}%</div>
+        <div class="dpanel-iea-value" style="color:${ieaColor}">${selectedIea === null ? '—' : `${selectedIea}%`}</div>
       </div>
       <div class="dpanel-iea-meta">
-        <span style="font-size:.8rem;font-weight:700;color:${confColor}">${confLabel} confiança</span>
+        <span style="font-size:.8rem;font-weight:700;color:${confColor}">${confLabel}${selectedIea === null ? '' : ' confiança'}</span>
         ${hasWindow ? `<span style="font-size:.75rem;color:#4b5563">Janela: ${windowTime}</span>` : '<span style="font-size:.75rem;color:#9ca3af">Sem janela ideal</span>'}
       </div>
     </div>
 
-    ${data.planned ? `<div class="calendar-plan"><b>Aplicação planejada</b><span>${data.planned}</span><small>Planejada por ${data.plannedBy || 'Carlos Souza'} · IEA ${recommendation?.adequacyIndex ?? data.iea}%</small></div>` : ''}
-    ${data.app ? `<div class="calendar-done"><b>Aplicação realizada</b><span>${data.done || 'Registro operacional concluído'}</span><small>Realizada por ${data.doneBy || 'Pedro Santos'}${data.doneTime ? ' às ' + data.doneTime : ''}</small></div>` : ''}
+    ${data.planned ? `<div class="calendar-plan"><b>Aplicação planejada</b><span>${data.planned}</span><small>${data.plannedBy ? `Planejada por ${data.plannedBy}` : 'Planejamento salvo'}</small></div>` : ''}
+    ${data.app ? `<div class="calendar-done"><b>Aplicação realizada</b><span>${data.done || 'Registro operacional concluído'}</span><small>${data.doneTime ? `Realizada às ${data.doneTime}` : 'Registro salvo no histórico'}</small></div>` : ''}
     <div class="dpanel-section-title">Previsão Meteorológica</div>
     <div class="dpanel-row"><span class="dpanel-row-label">Chuva</span><span class="dpanel-row-value">${safeRain}</span></div>
     <div class="dpanel-row"><span class="dpanel-row-label">Temperatura</span><span class="dpanel-row-value">${safeTemp}</span></div>
@@ -652,11 +1102,17 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
     ${hasWindow ? `
     <div class="dpanel-rec">
       🌿 <strong>Janela favorável</strong> para aplicação entre <strong>${windowTime}</strong>.<br>
-      <span style="font-size:.75rem;opacity:.8;margin-top:4px;display:block">Recomendado para: Talhão 03 · NPK 20-05-20</span>
+      <span style="font-size:.75rem;opacity:.8;margin-top:4px;display:block">Análise do ${selectedTalhao?.name || 'talhão selecionado'}</span>
     </div>` : `
     <div class="dpanel-rec" style="background:#fef2f2;border-color:#fecaca;color:#991b1b">
-      ⚠️ <strong>Condições desfavoráveis.</strong> Não recomendado para aplicação neste dia.
+      ${selectedIea === null
+        ? selectedTalhao?.weather
+          ? '<strong>Dados insuficientes.</strong> Não há recomendação calculada para este talhão neste dia.'
+          : '<strong>Aguardando dados.</strong> Ainda não há previsão meteorológica para este talhão.'
+        : '⚠️ <strong>Condições desfavoráveis.</strong> Não recomendado para aplicação neste dia.'}
     </div>`}
+    ${data.planned && data.planejamentoId && !data.app ? `<button class="btn-primary" style="width:100%;margin-top:.75rem;justify-content:center" onclick="openRegistrar(${selectedTalhao?.id}, ${data.planejamentoId})">Registrar execução planejada</button>` : ''}
+    ${selectedTalhao ? `<button class="btn-ghost" style="width:100%;margin-top:.5rem;justify-content:center" onclick="openPlanejar(${selectedTalhao.id}, '${selectedCalDay}')">Planejar para ${selectedTalhao.name}</button>` : ''}
 
     <div class="dpanel-why">
       <div class="dpanel-why-title">
@@ -677,10 +1133,27 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
 // TALHÕES MAP
 // =====================================================
 
+function talhaoStatusPresentation(talhao) {
+  if (!talhao.analysis?.bestRecommendation && DATA_SOURCE !== 'demo') {
+    const hasCoordinates = Number.isFinite(talhao.latitude) && Number.isFinite(talhao.longitude);
+    return {
+      label: !hasCoordinates || talhao.weather ? 'Dados insuficientes' : 'Aguardando dados',
+      color: '#6b7280',
+      chip: 'gray',
+    };
+  }
+  if (talhao.status === 'favorable') return { label: 'Favorável', color: '#3a8554', chip: 'green' };
+  if (talhao.status === 'moderate') return { label: 'Atenção', color: '#d97706', chip: 'yellow' };
+  return { label: 'Desfavorável', color: '#ef4444', chip: 'red' };
+}
+
 function renderTalhoes() {
   const container = document.getElementById('mapContainer');
   const list = document.getElementById('talhoesList');
   if (!container || !list) return;
+  const visibleTalhoes = TALHOES_DATA.filter(t => activeTalhaoFilter === 'all'
+    || (activeTalhaoFilter === 'favorable' && t.status === 'favorable')
+    || (activeTalhaoFilter === 'alert' && ['moderate', 'unfavorable', 'insufficient'].includes(t.status)));
 
   if (talhoesMap) {
     talhoesMap.remove();
@@ -689,15 +1162,11 @@ function renderTalhoes() {
   container.innerHTML = '';
   container.classList.add('leaflet-map-container');
 
-  const colors = {
-    favorable: { bg: '#3a8554', opacity: 0.75 },
-    moderate: { bg: '#d97706', opacity: 0.7 },
-    unfavorable: { bg: '#ef4444', opacity: 0.65 },
-  };
-
-  const locatedTalhoes = TALHOES_DATA.filter(t => Number.isFinite(t.latitude) && Number.isFinite(t.longitude));
+  const locatedTalhoes = visibleTalhoes.filter(t => Number.isFinite(t.latitude) && Number.isFinite(t.longitude));
   if (typeof L === 'undefined') {
     container.innerHTML = '<div class="map-loading-message">Mapa indisponível. Verifique sua conexão.</div>';
+  } else if (!visibleTalhoes.length) {
+    container.innerHTML = '<div class="map-loading-message">Nenhum talhão corresponde a este filtro.</div>';
   } else if (!locatedTalhoes.length) {
     container.innerHTML = '<div class="map-loading-message">Adicione coordenadas para visualizar os talhões no mapa.</div>';
   } else {
@@ -709,8 +1178,10 @@ function renderTalhoes() {
     }).addTo(talhoesMap);
 
     locatedTalhoes.forEach(t => {
-      const color = colors[t.status].bg;
-      const popup = `<strong>${t.name}</strong><br>IEA ${t.iea}%<br>Umidade do sensor: ${SENSOR_HUMIDITY_LOCKED}<br>${t.product} programado`;
+      const status = talhaoStatusPresentation(t);
+      const color = status.color;
+      const iea = Number.isFinite(t.iea) ? `IEA ${t.iea}%` : 'Aguardando análise individual';
+      const popup = `<strong>${t.name}</strong><br>${status.label}<br>${iea}`;
       const marker = L.circleMarker([t.latitude, t.longitude], {
         radius: 7,
         color: '#fff',
@@ -728,8 +1199,8 @@ function renderTalhoes() {
 
       marker.bindPopup(popup);
       perimeter.bindPopup(popup);
-      marker.on('click', () => openTalhaoModal(t));
-      perimeter.on('click', () => openTalhaoModal(t));
+      marker.on('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
+      perimeter.on('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
     });
 
     if (locatedTalhoes.length > 1) {
@@ -749,26 +1220,25 @@ function renderTalhoes() {
 
   // List
   list.innerHTML = '';
-  TALHOES_DATA.forEach(t => {
-    const chipClass = t.status === 'favorable' ? 'green' : t.status === 'moderate' ? 'yellow' : 'red';
-    const statusLabel = t.status === 'favorable' ? 'Favorável' : t.status === 'moderate' ? 'Atenção' : 'Desfavorável';
+  visibleTalhoes.forEach(t => {
+    const status = talhaoStatusPresentation(t);
     const el = document.createElement('div');
-    el.className = `talhao-list-card talhao-status-${t.status}`;
+    el.className = `talhao-list-card talhao-status-${t.status} ${t.id === selectedTalhaoRefId ? 'selected' : ''}`;
     el.innerHTML = `
       <div class="talhao-card-top">
         <div class="talhao-num">${String(t.id).padStart(2,'0')}</div>
-        <span class="talhao-status-label ${chipClass}">${statusLabel}</span>
+        <span class="talhao-status-label ${status.chip}">${status.label}</span>
       </div>
       <div class="talhao-info">
         <div class="talhao-name">${t.name}</div>
-        <div class="talhao-meta">${t.area} ha · ${t.culture} · Sensor ${t.sensor}</div>
+        <div class="talhao-meta">${Number(t.area) ? `${Number(t.area).toFixed(1)} ha` : 'Área não informada'} · ${t.culture || 'Cultura não informada'}</div>
       </div>
       <div class="talhao-card-bottom">
-        <span>${t.product} · ${t.dose}</span>
-        <strong class="talhao-iea-chip ${chipClass}">${t.iea}%</strong>
+        <span>${t.window || 'Sem janela recomendada'}</span>
+        <strong class="talhao-iea-chip ${status.chip}">${Number.isFinite(t.iea) ? `${t.iea}%` : '—'}</strong>
       </div>
     `;
-    el.addEventListener('click', () => openTalhaoModal(t));
+    el.addEventListener('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
     list.appendChild(el);
   });
 }
@@ -790,7 +1260,7 @@ function openEditarTalhaoModal(talhaoId) {
   if (!t) return;
   document.getElementById('editarTalhaoId').value = t.id;
   document.getElementById('editarTalhaoNome').value = t.name;
-  document.getElementById('editarTalhaoArea').value = t.area;
+  document.getElementById('editarTalhaoArea').value = t.area ?? '';
   document.getElementById('editarTalhaoCultura').value = t.culture || 'Café';
   document.getElementById('editarTalhaoLatitude').value = t.latitude ?? '';
   document.getElementById('editarTalhaoLongitude').value = t.longitude ?? '';
@@ -825,9 +1295,11 @@ async function cadastrarTalhao(e) {
       return;
     }
     const saved = (await response.json()).talhao;
-    TALHOES_DATA.push({ ...saved, temp: 0, iea: 0, status: 'unfavorable', window: '—', product: '—', mapX: 8, mapY: 8, mapW: 18, mapH: 22 });
-    renderTalhoes();
+    TALHOES_DATA.push({ ...saved, temp: null, iea: null, status: 'insufficient', window: '', product: '', mapX: 8, mapY: 8, mapW: 18, mapH: 22 });
+    selectedTalhaoRefId = saved.id;
+    localStorage.setItem('goldcrop.selectedTalhaoId', String(saved.id));
     closeCadastrarTalhaoModal();
+    await syncAllViewsFromServer();
     showToast(`${name} cadastrado. Aguardando dados para calcular a necessidade.`);
   } catch (error) {
     console.error('Erro ao cadastrar talhão:', error);
@@ -871,8 +1343,10 @@ async function atualizarTalhao(e) {
       radius: updated.radius ?? talhao.radius,
     });
 
-    renderTalhoes();
+    selectedTalhaoRefId = id;
+    localStorage.setItem('goldcrop.selectedTalhaoId', String(id));
     closeEditarTalhaoModal();
+    await syncAllViewsFromServer();
     showToast(`Talhão atualizado: ${payload.nome}`, 'success');
   } catch (error) {
     console.error('Erro ao atualizar talhão:', error);
@@ -898,7 +1372,7 @@ async function excluirTalhao(talhaoId) {
     const index = TALHOES_DATA.findIndex(item => item.id === talhaoId);
     if (index >= 0) TALHOES_DATA.splice(index, 1);
     closeTalhaoModal();
-    renderTalhoes();
+    await syncAllViewsFromServer();
     showToast(`Talhão removido: ${talhao.name}`, 'success');
   } catch (error) {
     console.error('Erro ao excluir talhão:', error);
@@ -912,26 +1386,32 @@ function openTalhaoModal(t) {
   if (!body || !title) return;
 
   const safeName = t.name || 'Talhão';
-  const safeArea = Number.isFinite(Number(t.area)) ? Number(t.area) : 0;
-  const safeCulture = t.culture || 'Café';
+  const safeArea = finiteWeatherValue(t.area);
+  const safeCulture = t.culture || (DATA_SOURCE === 'demo' ? 'Café' : 'Não informada');
   const safeAge = t.age || '—';
   const safeVariety = t.variety || '—';
   const safeSoil = t.soil || 'Não informado';
   const safeSensor = t.sensor || 'Não disponível';
-  const safeLastReading = t.lastReading || '—';
-  const safeProduct = t.product || '—';
-  const safeInputType = t.inputType || '—';
-  const safeDose = t.dose || '—';
-  const safePeriod = t.period || '—';
-  const safeIea = Number.isFinite(Number(t.iea)) ? Number(t.iea) : 0;
-  const safeRain = Number.isFinite(Number(t.rain)) ? Number(t.rain) : 0;
-  const safeFutureMoisture = Number.isFinite(Number(t.futureMoisture)) ? Number(t.futureMoisture) : 0;
-  const safeTemp = Number.isFinite(Number(t.temp)) ? Number(t.temp) : 0;
-  const safeLatitude = Number.isFinite(Number(t.latitude)) ? Number(t.latitude) : null;
-  const safeLongitude = Number.isFinite(Number(t.longitude)) ? Number(t.longitude) : null;
-  const safeRadius = Number.isFinite(Number(t.radius)) ? Number(t.radius) : 80;
-  const statusColor = t.status === 'favorable' ? '#3a8554' : t.status === 'moderate' ? '#d97706' : '#ef4444';
-  const previous = HISTORICO_DATA.filter(h => h.talhao === safeName).slice(0, 3);
+  const safeLastReading = t.lastReading || 'Sem leitura disponível';
+  const nextPlanning = PLANNINGS_FROM_DB
+    .filter(item => item.talhao_id === t.id && item.status === 'PLANEJADA')
+    .sort((a, b) => a.data_planejada.localeCompare(b.data_planejada))[0];
+  const safeProduct = nextPlanning?.produto || 'Nenhum planejamento cadastrado';
+  const safeInputType = nextPlanning?.tipo_aplicacao || '';
+  const safeDose = nextPlanning ? `${nextPlanning.dose || ''} ${nextPlanning.unidade_dose || ''}`.trim() : '';
+  const safePeriod = nextPlanning?.data_planejada || '';
+  const safeIea = Number.isFinite(t.iea) ? t.iea : null;
+  const safeRain = Number.isFinite(t.rain) ? t.rain : null;
+  const safeTemp = Number.isFinite(t.temp) ? t.temp : null;
+  const bestMetrics = t.analysis?.bestRecommendation?.metrics || {};
+  const safeWind = Number.isFinite(bestMetrics.windSpeed) ? bestMetrics.windSpeed : null;
+  const safeLatitude = finiteWeatherValue(t.latitude);
+  const safeLongitude = finiteWeatherValue(t.longitude);
+  const safeRadius = finiteWeatherValue(t.radius) ?? 80;
+  const statusColor = t.status === 'favorable' ? '#3a8554' : t.status === 'moderate' ? '#d97706' : t.status === 'unfavorable' ? '#ef4444' : '#6b7280';
+  const previous = HISTORICO_DATA.filter(h => h.talhao_id != null
+    ? Number(h.talhao_id) === Number(t.id)
+    : DATA_SOURCE === 'demo' && h.talhao === safeName).slice(0, 3);
   const coordsText = safeLatitude !== null && safeLongitude !== null
     ? `${safeLatitude.toFixed(6)}, ${safeLongitude.toFixed(6)}`
     : 'Coordenadas não cadastradas';
@@ -939,12 +1419,12 @@ function openTalhaoModal(t) {
 
   title.textContent = safeName;
   body.innerHTML = `
-    <div class="talhao-detail-head"><div><strong>${safeArea} ha · ${safeCulture} · ${safeAge}</strong><span>${safeVariety} · Solo ${safeSoil}</span></div><span class="monitoring-status">● Monitoramento ativo</span></div>
-    <div class="detail-section-title">Condição atual <small>Dados do sensor ${safeSensor}</small></div>
+    <div class="talhao-detail-head"><div><strong>${safeArea === null ? 'Área não informada' : `${formatMetricValue(safeArea, ' ha')}`} · ${safeCulture} · ${safeAge}</strong><span>${safeVariety} · Solo ${safeSoil}</span></div><span class="monitoring-status">${talhaoStatusPresentation(t).label}</span></div>
+    <div class="detail-section-title">Condição e telemetria <small>Sensor: ${safeSensor}</small></div>
     <div class="talhao-modal-grid">
       <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Umidade do sensor</div><div class="talhao-modal-metric-value sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</div></div>
-      <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Temperatura do solo</div><div class="talhao-modal-metric-value">${formatMetricValue(safeTemp, '°C')}</div></div>
-      <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Sensor</div><div class="talhao-modal-metric-value">${safeSensor} <small>Online</small></div></div>
+      <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Temperatura do ar prevista</div><div class="talhao-modal-metric-value">${safeTemp === null ? '—' : formatMetricValue(safeTemp, '°C')}</div></div>
+      <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Status do sensor</div><div class="talhao-modal-metric-value">${safeSensor} <small>Sem telemetria confirmada</small></div></div>
       <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Última leitura</div><div class="talhao-modal-metric-value">${safeLastReading}</div></div>
     </div>
 
@@ -957,12 +1437,12 @@ function openTalhaoModal(t) {
     </div>
 
     <div class="detail-section-title">Próxima aplicação planejada</div>
-    <div class="planned-application"><div><strong>${safeProduct}</strong><span>${safeInputType} · ${safeDose} · Período ${safePeriod}</span></div><button class="btn-ghost" type="button" onclick="openPlanejar(${t.id})">Planejar aplicação</button></div>
-    <section class="gold-window-detail" style="--iea-color:${statusColor}"><div class="gold-window-heading"><div><span>Janela de Ouro</span><strong>${t.window || '—'}</strong><small>IEA de ${safeIea}% para aplicação de ${safeProduct} no ${safeName}</small></div><b>${safeIea}%<small>IEA</small></b></div><div class="window-factors"><span>Chuva prevista <b>${formatMetricValue(safeRain, ' mm')}</b></span><span>Umidade do sensor <b class="sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</b></span><span>Estimativa IA <b>${formatMetricValue(safeFutureMoisture, '%')}</b></span><span>Vento <b>6 km/h</b></span></div><p>O modelo usa a previsão meteorológica e os dados disponíveis para estimar condições de aplicação. A leitura de umidade do sensor está bloqueada.</p></section>
+    <div class="planned-application"><div><strong>${safeProduct}</strong><span>${[safeInputType, safeDose, safePeriod].filter(Boolean).join(' · ')}</span></div><button class="btn-ghost" type="button" onclick="openPlanejar(${t.id})">Planejar aplicação</button></div>
+    <section class="gold-window-detail" style="--iea-color:${statusColor}"><div class="gold-window-heading"><div><span>Janela de Ouro · ${safeName}</span><strong>${t.window || 'Aguardando dados'}</strong><small>${safeIea === null ? 'Sem recomendação calculada para este talhão' : `IEA de ${safeIea}% para análise deste talhão`}</small></div><b>${safeIea === null ? '—' : `${safeIea}%`}<small>IEA</small></b></div><div class="window-factors"><span>Chuva prevista <b>${safeRain === null ? '—' : formatMetricValue(safeRain, ' mm')}</b></span><span>Umidade do sensor <b class="sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</b></span><span>Vento previsto <b>${safeWind === null ? '—' : formatMetricValue(safeWind, ' km/h')}</b></span></div><p>A análise meteorológica é calculada para este talhão quando há coordenadas. Leituras de sensor não estão disponíveis e não são estimadas como telemetria real.</p></section>
     <div class="detail-section-title">Evolução estimada da umidade <small>Disponível após disponibilizar um sensor</small></div>
     <div class="moisture-chart moisture-chart-locked"><div class="sensor-locked-message">Módulo de umidade bloqueado<br><small>Disponibilize um sensor para habilitar as leituras.</small></div></div>
     <div class="detail-section-title">Histórico do talhão</div>
-    <div class="detail-history">${previous.length ? previous.map(h => `<div><span>${h.date}</span><strong>${h.product} · ${h.qty}</strong><em>IEA ${h.ieaPrev}% · ${h.result}</em></div>`).join('') : '<p>Nenhuma aplicação registrada neste talhão.</p>'}</div>
+    <div class="detail-history">${previous.length ? previous.map(h => `<div><span>${h.date}</span><strong>${h.product} · ${h.qty}</strong><em>${h.ieaPrev == null ? 'IEA indisponível' : `IEA ${h.ieaPrev}%`} · ${h.result}</em></div>`).join('') : '<p>Nenhuma aplicação registrada neste talhão.</p>'}</div>
     <div class="detail-actions">
       <button class="btn-ghost" type="button" onclick="closeTalhaoModal()">Fechar</button>
       ${canManageTalhoes ? `
@@ -995,10 +1475,22 @@ function renderFazenda() {
     action: item.resultClass === 'done' ? 'registrou aplicação no' : 'planejou aplicação no',
     target: `${item.talhao} · ${item.product}`, time: item.date,
   }))];
-  const best = window.GOLDCROP_RECOMMENDATIONS?.bestRecommendation;
-  const nextDate = best ? formatRecommendationDate(best.date) : '25/08/2026';
-  const nextTime = best ? formatRecommendationTime(best) : '08:00 — 11:30';
-  const nextIea = best?.adequacyIndex ?? 91;
+  const best = getSelectedReferenceTalhao()?.analysis?.bestRecommendation;
+  const selected = getSelectedReferenceTalhao();
+  const nextPlanning = PLANNINGS_FROM_DB.find(item =>
+    item.talhao_id === selected?.id && ['PLANEJADA', 'CONFIRMADA'].includes(item.status)
+  );
+  const latestApplication = APPLICATIONS_FROM_DB.find(item => item.talhao_id === selected?.id);
+  const notifications = [];
+  if (nextPlanning) notifications.push(`Aplicação planejada em ${nextPlanning.talhao} · ${nextPlanning.data_planejada}`);
+  if (best) notifications.push(`Janela analisada para ${selected.name} · IEA ${best.adequacyIndex}%`);
+  if (latestApplication) notifications.push(`Registro mais recente de ${selected.name}: ${latestApplication.product} · ${latestApplication.date}`);
+  const notificationText = notifications.length
+    ? notifications.join(' · ')
+    : 'Nenhuma notificação operacional para o talhão selecionado.';
+  const nextDate = best ? formatRecommendationDate(best.date) : 'Aguardando análise';
+  const nextTime = best ? formatRecommendationTime(best) : '—';
+  const nextIea = best?.adequacyIndex;
   const plannedCount = Object.values(CAL_DATA).filter(day => day.planned).length;
   const teamCards = teamData.map(person => `
     <article class="team-member-card">
@@ -1016,10 +1508,10 @@ function renderFazenda() {
       <button class="btn-primary" onclick="openPessoa()">+ Adicionar pessoa</button>
     </header>
     <div class="farm-shared-note"><span>◉</span><div><strong>Dados compartilhados da fazenda</strong><p>Todos os membros autorizados visualizam os mesmos dados da fazenda de acordo com suas permissões.</p></div></div>
-    <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro</span><b>${nextDate} · ${nextTime}</b><small>Recomendação do motor · IEA ${nextIea}%</small></div></div>
+    <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${getSelectedReferenceTalhao()?.name || 'Sem talhão'}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
     <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">A equipe que opera no mesmo ambiente de dados.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Operações registradas pela equipe.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
     <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Permissões da equipe</h2><p class="farm-section-sub">Cada perfil vê e opera a fazenda dentro da sua responsabilidade.</p></div></div><div class="permission-table-wrap"><table class="permission-table"><thead><tr><th>Perfil</th><th>Visualizar</th><th>Planejar</th><th>Registrar</th><th>Gerenciar equipe</th></tr></thead><tbody><tr><td><b>Proprietário</b></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr><tr><td><b>Gerente</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Técnico / Agrônomo</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Funcionário</b></td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr></tbody></table></div></section>
-    <section class="farm-section farm-notifications"><div><span>Notificações internas</span><p>Nova aplicação planejada no Talhão 03 · Janela de Ouro identificada para amanhã · Pedro registrou uma aplicação realizada.</p></div><button class="btn-ghost" onclick="navigateTo('calendar')">Ver calendário compartilhado</button></section>`;
+    <section class="farm-section farm-notifications"><div><span>Resumo operacional · ${selected?.name || 'Nenhum talhão selecionado'}</span><p>${notificationText}</p></div><button class="btn-ghost" onclick="navigateTo('calendar')">Ver calendário compartilhado</button></section>`;
 }
 
 function openPessoa() { document.getElementById('pessoaNome').value = ''; document.getElementById('pessoaEmail').value = ''; document.getElementById('pessoaTelefone').value = ''; document.getElementById('modalPessoa').style.display = 'flex'; document.body.style.overflow = 'hidden'; }
@@ -1042,7 +1534,7 @@ function renderHistorico() {
   const container = document.getElementById('historicoTable');
   if (!container) return;
 
-  const ieaClass = iea => iea >= 80 ? 'high' : iea >= 60 ? 'medium' : 'low';
+  const ieaClass = iea => iea == null || !Number.isFinite(Number(iea)) ? 'unavailable' : Number(iea) >= 80 ? 'high' : Number(iea) >= 60 ? 'medium' : 'low';
 
   container.innerHTML = `
     <div style="overflow-x:auto">
@@ -1066,9 +1558,9 @@ function renderHistorico() {
             <td class="hist-talhao">${h.talhao}</td>
             <td class="hist-product">${h.product}</td>
             <td style="color:#6b7280">${h.qty}</td>
-            <td><span class="hist-iea-badge ${ieaClass(h.ieaPrev)}">${h.ieaPrev}%</span></td>
+            <td><span class="hist-iea-badge ${ieaClass(h.ieaPrev)}">${h.ieaPrev == null ? '—' : `${h.ieaPrev}%`}</span></td>
             <td><span class="hist-cond-badge ${h.condClass}">${h.cond}</span></td>
-            <td style="font-size:.72rem"><strong>${h.plannedBy || 'Carlos Souza'}</strong><br><span style="color:#9ca3af">Realizada: ${h.doneBy || 'Pedro Santos'}</span></td>
+            <td style="font-size:.72rem"><strong>${h.plannedBy || '—'}</strong><br><span style="color:#9ca3af">Realizada: ${h.doneBy || '—'}</span></td>
             <td><span class="hist-result-badge ${h.resultClass}">
               ${h.resultClass === 'done' ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '—'}
               ${h.result}
@@ -1091,6 +1583,7 @@ function renderAplicacoes() {
 
   const done = HISTORICO_DATA.filter(h => h.resultClass === 'done').length;
   const total = HISTORICO_DATA.length;
+  const successRate = total ? Math.round(done / total * 100) : 0;
 
   container.innerHTML = `
     <div class="aplicacoes-stats">
@@ -1103,7 +1596,7 @@ function renderAplicacoes() {
         <div class="aplic-stat-label">Não realizadas</div>
       </div>
       <div class="aplic-stat-card">
-        <div class="aplic-stat-value" style="color:#c9a227">${Math.round(done/total*100)}%</div>
+        <div class="aplic-stat-value" style="color:#c9a227">${total ? `${successRate}%` : '—'}</div>
         <div class="aplic-stat-label">Taxa de aproveitamento</div>
       </div>
     </div>
@@ -1121,7 +1614,7 @@ function renderAplicacoes() {
 
   // Reuse historico table
   const tableContainer = document.getElementById('aplicacoesTableInner');
-  const ieaClass = iea => iea >= 80 ? 'high' : iea >= 60 ? 'medium' : 'low';
+  const ieaClass = iea => iea == null || !Number.isFinite(Number(iea)) ? 'unavailable' : Number(iea) >= 80 ? 'high' : Number(iea) >= 60 ? 'medium' : 'low';
   tableContainer.innerHTML = `
     <div style="overflow-x:auto">
     <table class="hist-table">
@@ -1140,7 +1633,7 @@ function renderAplicacoes() {
             <td class="hist-date">${h.date}</td>
             <td class="hist-talhao">${h.talhao}</td>
             <td class="hist-product">${h.product}</td>
-            <td><span class="hist-iea-badge ${ieaClass(h.ieaPrev)}">${h.ieaPrev}%</span></td>
+            <td><span class="hist-iea-badge ${ieaClass(h.ieaPrev)}">${h.ieaPrev == null ? '—' : `${h.ieaPrev}%`}</span></td>
             <td><span class="hist-result-badge ${h.resultClass}">${h.result}</span></td>
           </tr>
         `).join('')}
@@ -1217,28 +1710,37 @@ function renderSettings() {
 // MODAL: REGISTRAR APLICAÇÃO
 // =====================================================
 
-function openRegistrar(talhaoId) {
-  if (talhaoId) {
-    const t = TALHOES_DATA.find(item => item.id === talhaoId);
-    if (t) {
-      document.getElementById('formTalhao').value = t.name;
-      document.getElementById('formProduto').value = t.product;
-      document.getElementById('formQtd').value = parseFloat(t.dose) || '';
-      document.getElementById('formTipo').value = (t.inputType || '').includes('Defensivo') ? 'Defensivo' : 'Fertilizante';
-    }
-  }
+function openRegistrar(talhaoId, planejamentoId = null) {
+  const select = document.getElementById('formTalhao');
+  const selectedId = Number(talhaoId || selectedTalhaoRefId);
+  select.innerHTML = TALHOES_DATA.map(t => `<option value="${t.id}" ${t.id === selectedId ? 'selected' : ''}>${t.name}</option>`).join('');
+  document.getElementById('formPlanejamentoId').value = planejamentoId || '';
+  const t = TALHOES_DATA.find(item => item.id === selectedId);
+  const planejamento = PLANNINGS_FROM_DB.find(item => item.id === Number(planejamentoId));
+  document.getElementById('formProduto').value = planejamento?.produto || '';
+  document.getElementById('formQtd').value = planejamento?.dose || '';
+  document.getElementById('formTipo').value = planejamento?.tipo_aplicacao || 'Fertilizante';
+  document.getElementById('formData').value = new Date().toISOString().slice(0, 10);
+  const preview = document.getElementById('applicationIeaPreview');
+  const description = document.getElementById('applicationIeaDescription');
+  const recommendation = t?.analysis?.bestRecommendation;
+  if (preview) preview.textContent = recommendation ? `IEA para ${t.name}: ${recommendation.adequacyIndex}%` : 'IEA indisponível para este talhão';
+  if (description) description.textContent = recommendation ? `${recommendation.decision} · ${formatRecommendationDate(recommendation.date)}` : 'Aguardando análise individual';
   document.getElementById('modalRegistrar').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 
-function openPlanejar(talhaoId) {
+function openPlanejar(talhaoId, plannedDate = null) {
   const t = TALHOES_DATA.find(item => item.id === talhaoId);
   if (!t) return;
   document.getElementById('planTalhao').value = t.name;
-  document.getElementById('planProduto').value = t.product;
-  document.getElementById('planTipo').value = t.inputType;
-  document.getElementById('planDose').value = t.dose;
-  document.getElementById('planPeriodo').value = t.period;
+  document.getElementById('planTalhaoId').value = t.id;
+  document.getElementById('planProduto').value = '';
+  document.getElementById('planTipo').value = '';
+  document.getElementById('planDose').value = '';
+  document.getElementById('planPeriodo').value = '';
+  const best = t.analysis?.bestRecommendation;
+  document.getElementById('planData').value = plannedDate || best?.date || new Date().toISOString().slice(0, 10);
   document.getElementById('modalPlanejar').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
@@ -1249,36 +1751,65 @@ function closePlanejar() {
 }
 
 async function submitPlanejar() {
-  const t = TALHOES_DATA.find(item => item.name === document.getElementById('planTalhao').value);
+  const t = TALHOES_DATA.find(item => item.id === Number(document.getElementById('planTalhaoId').value));
   const date = document.getElementById('planData').value;
   const plannedBy = document.getElementById('planResponsavel').value;
-  if (t) {
-    const product = document.getElementById('planProduto').value;
-    const type = document.getElementById('planTipo').value;
-    const dose = document.getElementById('planDose').value;
-    const response = await apiRequest('/api/applications/', { method: 'POST', body: JSON.stringify({
-      talhao: t.name, produto: product, tipo: type, dose, data: date, status: 'planned', observacoes: document.querySelector('#modalPlanejar textarea')?.value || '',
-    }) });
+  if (!t) {
+    showToast('Talhão não encontrado para o planejamento.', 'error');
+    return;
+  }
+
+  const product = document.getElementById('planProduto').value.trim();
+  const type = document.getElementById('planTipo').value.trim();
+  const doseRaw = document.getElementById('planDose').value.trim();
+  const doseValue = doseRaw.match(/\d+(?:[.,]\d+)?/) ? doseRaw.match(/\d+(?:[.,]\d+)?/)[0].replace(',', '.') : doseRaw;
+  const unidadeDose = doseRaw.includes('/') ? doseRaw.split(/\s+/).slice(-1)[0] : 'kg/ha';
+  const observacoes = document.querySelector('#modalPlanejar textarea')?.value || '';
+
+  if (!product || !date) {
+    showToast('Preencha o produto e a data recomendada.', 'error');
+    return;
+  }
+
+  try {
+    const recommendation = (t.recommendations || []).find(item => item.date === date);
+    const response = await apiRequest('/api/planejamentos/', {
+      method: 'POST',
+      body: JSON.stringify({
+        talhao_id: t.id,
+        recomendacao_id: recommendation?.id || null,
+        produto: product,
+        tipo_aplicacao: type,
+        dose: doseValue,
+        unidade_dose: unidadeDose,
+        data_planejada: date,
+        horario_inicial: '08:00',
+        horario_final: '11:00',
+        responsavel: plannedBy,
+        observacoes,
+      }),
+    });
+
     if (!response.ok) {
-      showToast('Não foi possível salvar o planejamento no banco.', 'error');
+      const error = await response.json().catch(() => ({}));
+      showToast(error.message || 'Não foi possível salvar o planejamento no banco.', 'error');
       return;
     }
-    t.product = document.getElementById('planProduto').value;
-    t.inputType = document.getElementById('planTipo').value;
-    t.dose = document.getElementById('planDose').value;
-    t.period = document.getElementById('planPeriodo').value;
-    if (date) {
-      const calendarData = CAL_DATA[date] || { iea: t.iea, type: 'future', rain: t.rain, temp: t.temp, app: false };
-      CAL_DATA[date] = { ...calendarData, planned: `${t.name} · ${t.product}`, plannedBy };
-    }
+
+    const planejamento = (await response.json()).planejamento;
+    PLANNINGS_FROM_DB.push(planejamento);
+    const calendarData = CAL_DATA[date] || { iea: recommendation?.adequacyIndex, type: 'future', rain: t.rain, temp: t.temp, app: false };
+    CAL_DATA[date] = { ...calendarData, planned: `${t.name} · ${product}`, plannedBy, planejamentoId: planejamento?.id };
+
     const initials = plannedBy.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
-    ACTIVITY_DATA.unshift({ initials, name: plannedBy, action: 'planejou aplicação no', target: `${t.name} · ${t.product} · ${t.dose}`, time: 'Agora' });
+    ACTIVITY_DATA.unshift({ initials, name: plannedBy, action: 'planejou aplicação no', target: `${t.name} · ${product} · ${t.dose}`, time: 'Agora' });
+    closePlanejar();
+    await syncAllViewsFromServer();
+    showToast('Aplicação planejada e integrada ao calendário.', 'success');
+  } catch (error) {
+    console.error('Erro ao criar planejamento:', error);
+    showToast('Não foi possível conectar ao servidor.', 'error');
   }
-  closePlanejar();
-  if (currentPage === 'talhoes') renderTalhoes();
-  if (currentPage === 'calendar') renderCalendar();
-  if (currentPage === 'fazenda') renderFazenda();
-  showToast('Aplicação planejada e integrada ao calendário.', 'success');
 }
 
 function closeRegistrar() {
@@ -1287,8 +1818,9 @@ function closeRegistrar() {
 }
 
 async function submitRegistrar() {
-  const talhao = document.getElementById('formTalhao').value;
-  const produto = document.getElementById('formProduto').value;
+  const talhaoSelect = document.getElementById('formTalhao');
+  const talhaoId = Number(talhaoSelect?.value);
+  const produto = document.getElementById('formProduto').value.trim();
   const data = document.getElementById('formData').value;
   const horario = document.getElementById('formHorario').value;
 
@@ -1297,49 +1829,62 @@ async function submitRegistrar() {
     return;
   }
 
-  const response = await apiRequest('/api/applications/', { method: 'POST', body: JSON.stringify({
-    talhao, produto, tipo: document.getElementById('formTipo').value,
-    quantidade: document.getElementById('formQtd').value, data, horario,
-    status: 'done', observacoes: document.getElementById('formObs').value,
-  }) });
-  if (!response.ok) {
-    showToast('Não foi possível registrar a aplicação no banco.', 'error');
+  const talhaoEntity = TALHOES_DATA.find(item => item.id === talhaoId);
+  if (!talhaoEntity) {
+    showToast('Cadastre pelo menos um talhão antes de registrar.', 'error');
     return;
   }
 
-  // Keep the current view synchronized with the persisted record.
-  const savedApplication = (await response.json()).application;
-  const dateFormatted = data ? new Date(data + 'T12:00:00').toLocaleDateString('pt-BR') : '25/08/2026';
-  HISTORICO_DATA.unshift({
-    id: savedApplication.id,
-    date: dateFormatted,
-    talhao,
-    product: produto,
-    qty: document.getElementById('formQtd').value + ' kg/ha',
-    ieaPrev: 91,
-    cond: 'Favorável',
-    result: 'Realizado',
-    condClass: 'favorable',
-    resultClass: 'done',
-    plannedBy: 'Carlos Souza',
-    doneBy: 'Pedro Santos',
-  });
+  try {
+    const response = await apiRequest('/api/applications/', {
+      method: 'POST',
+      body: JSON.stringify({
+        talhao_id: talhaoEntity.id,
+        planejamento_id: Number(document.getElementById('formPlanejamentoId').value) || null,
+        produto,
+        tipo: document.getElementById('formTipo').value,
+        quantidade: document.getElementById('formQtd').value,
+        data,
+        horario,
+        status: 'done',
+        observacoes: document.getElementById('formObs').value,
+      }),
+    });
 
-  ACTIVITY_DATA.unshift({ initials: 'PS', name: 'Pedro Santos', action: 'registrou aplicação realizada no', target: `${talhao} · ${produto} · ${horario || '08:35'}`, time: 'Agora' });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      showToast(error.message || 'Não foi possível registrar a aplicação no banco.', 'error');
+      return;
+    }
 
-  closeRegistrar();
-  showToast(`✅ Aplicação registrada: ${talhao} · ${produto}`, 'success');
+    const savedApplication = (await response.json()).application;
+    const savedIea = Number.isFinite(savedApplication.ieaPrev) ? savedApplication.ieaPrev : null;
+    const dateFormatted = savedApplication.date;
+    HISTORICO_DATA.unshift({
+      id: savedApplication.id,
+      date: dateFormatted,
+      talhao: talhaoEntity.name,
+      product: produto,
+      qty: document.getElementById('formQtd').value || '',
+      ieaPrev: savedIea,
+      cond: savedIea === null ? 'Sem análise' : savedIea >= 80 ? 'Favorável' : savedIea >= 60 ? 'Moderada' : 'Desfavorável',
+      result: 'Realizado',
+      condClass: savedIea === null ? 'unavailable' : savedIea >= 80 ? 'favorable' : savedIea >= 60 ? 'moderate' : 'unfavorable',
+      resultClass: 'done',
+      plannedBy: '',
+      doneBy: savedApplication.created_by || USER_DATA.name,
+    });
 
-  // Mark calendar day
-  if (data) {
-    const calendarData = CAL_DATA[data] || { iea: 91, type: 'future', rain: 0, temp: 23 };
-    CAL_DATA[data] = { ...calendarData, app: true, done: `${talhao} · ${produto}`, doneBy: 'Pedro Santos', doneTime: horario || '08:35' };
-    if (currentPage === 'calendar') renderCalendar();
+    const userInitials = USER_DATA.name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
+    ACTIVITY_DATA.unshift({ initials: userInitials, name: USER_DATA.name, action: 'registrou aplicação realizada no', target: `${talhaoEntity.name} · ${produto} · ${horario || ''}`, time: 'Agora' });
+
+    closeRegistrar();
+    await syncAllViewsFromServer();
+    showToast(`✅ Aplicação registrada: ${talhaoEntity.name} · ${produto}`, 'success');
+  } catch (error) {
+    console.error('Erro ao registrar aplicação:', error);
+    showToast('Não foi possível conectar ao servidor.', 'error');
   }
-
-  if (currentPage === 'historico') renderHistorico();
-  if (currentPage === 'aplicacoes') renderAplicacoes();
-  if (currentPage === 'fazenda') renderFazenda();
 }
 
 // =====================================================
@@ -1567,11 +2112,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnCadastrarTalhao')?.addEventListener('click', openCadastrarTalhaoModal);
   document.getElementById('cadastroTalhaoForm')?.addEventListener('submit', cadastrarTalhao);
   document.getElementById('edicaoTalhaoForm')?.addEventListener('submit', atualizarTalhao);
-  document.getElementById('calendarTalhaoSelect')?.addEventListener('change', async (event) => {
-    const talhaoId = Number(event.target.value);
-    if (!talhaoId) return;
-    selectedTalhaoRefId = talhaoId;
-    await loadLocalWeather(talhaoId);
+  ['calendarTalhaoSelect', 'dashboardTalhaoSelect', 'talhaoSelect'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', async event => {
+      await selectTalhao(event.target.value);
+    });
   });
 
   updateProfileDOM();
@@ -1656,6 +2200,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Render the page-specific content after each template is loaded.
+  if (document.getElementById('page-dashboard')) renderDashboard();
   if (document.getElementById('calGrid')) renderCalendar();
   if (document.getElementById('mapContainer')) renderTalhoes();
   if (document.getElementById('fazendaContent')) renderFazenda();
@@ -1663,11 +2208,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (document.getElementById('aplicacoesContent')) renderAplicacoes();
   if (document.getElementById('settingsContent')) renderSettings();
 
-  // Filter pills (non-functional, just visual)
+  // Filter pills
   document.querySelectorAll('.filter-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       pill.closest('.filter-pills').querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
+      if (pill.dataset.talhaoFilter) {
+        activeTalhaoFilter = pill.dataset.talhaoFilter;
+        renderTalhoes();
+      }
     });
   });
 
