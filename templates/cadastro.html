@@ -374,6 +374,21 @@
 
           <!-- ==================== ETAPA 3: SUA PROPRIEDADE ==================== -->
           <div class="wizard-step" id="wizard-step-3">
+
+            <div class="form-group">
+              <label class="form-label" for="funcao">Sua função nesta fazenda <span class="required-star">*</span></label>
+              <select id="funcao" class="form-select" required>
+                <option value="">Selecione sua função</option>
+                <option value="OWNER">Proprietário — gerencia a fazenda, talhões e equipe</option>
+                <option value="MANAGER">Gerente — gerencia a fazenda e os talhões</option>
+                <option value="TECHNICIAN">Técnico / Agrônomo — visualiza, planeja e registra aplicações</option>
+                <option value="EMPLOYEE">Funcionário — visualiza e registra aplicações</option>
+              </select>
+              <p class="form-hint">A função escolhida define as permissões desta conta nesta fazenda.</p>
+              <div class="form-error-msg">
+                <span>Selecione sua função na fazenda.</span>
+              </div>
+            </div>
             
             <!-- Área Total & Talhões Row -->
             <div class="form-row-2col">
@@ -492,6 +507,6 @@
   </div>
 
   <!-- Scripts -->
-  <script src="{% static 'auth.js' %}"></script>
+  <script src="{% static 'auth.js' %}?v=3"></script>
 </body>
 </html>

@@ -1,0 +1,199 @@
+ORGANIZACAO DA PAGINA TALHOES EM CELULARES
+==========================================
+
+Este documento descreve como a pagina "Mapa dos Talhoes" se organiza em telas
+estreitas, com base no HTML, CSS e JavaScript atuais do GoldCrop.
+
+
+1. ORDEM GERAL DA PAGINA
+------------------------
+
+Em um celular, a pagina e percorrida verticalmente. A ordem principal e:
+
+1. Cabecalho "Mapa dos Talhoes" e resumo da fazenda/quantidade de talhoes.
+2. Controles: seletor de talhao, filtros e botao para cadastrar.
+3. Cartao do mapa.
+4. Resumo compacto do talhao selecionado, com status, janela, IEA e acesso
+   "Ver detalhes".
+5. Lista de cartoes dos talhoes.
+6. Detalhes completos do talhao selecionado, em uma secao separada apos a lista.
+
+O painel de detalhes nao e uma janela sobreposta: ele faz parte do fluxo da
+pagina e aparece depois da lista. Selecionar um cartao ou marcador foca o mapa
+naquele talhao, abre o popup resumido do marcador e atualiza o resumo e os
+detalhes completos.
+
+
+2. CABECALHO E CONTROLES
+------------------------
+
+O titulo "Mapa dos Talhoes" e o resumo aparecem no topo. Em telas de ate 768 px,
+o cabecalho da pagina deixa de ficar lado a lado e passa a se organizar em
+coluna.
+
+Os controles disponiveis sao:
+
+- "Talhao selecionado": seletor para escolher o talhao de analise.
+- Filtros "Todos", "Favoraveis" e "Alerta".
+- Botao "Cadastrar Talhao".
+
+Os controles usam uma linha flexivel que permite quebra para linhas seguintes.
+Assim, em celulares estreitos, eles podem ocupar mais de uma linha. O seletor
+mantem largura minima definida pelo estilo da pagina, por isso pode ocupar uma
+linha propria ou compartilhar espaco apenas quando houver largura suficiente.
+
+
+3. MAPA E POSICAO NO CELULAR
+----------------------------
+
+Em telas largas, a area da pagina pode mostrar o mapa e a lista em colunas.
+Em larguras de ate 1024 px, o layout muda para uma coluna: o cartao do mapa fica
+primeiro e a lista passa para baixo dele.
+
+Em telas de ate 640 px:
+
+- O mapa tem 300 px de altura; em telas de ate 360 px, tem 280 px.
+- Os marcadores representam talhoes com coordenadas.
+- Tocar em um marcador seleciona o talhao, aproxima o mapa e abre um popup.
+- O popup mostra nome, cultura, area, status, IEA, coordenadas e janela.
+- Uma legenda identifica as cores de status dos marcadores.
+
+Se nenhum talhao tiver coordenadas validas, o mapa informa que e preciso
+cadastrar coordenadas. Talhoes sem coordenadas continuam disponiveis na lista,
+mas nao possuem ponto para centralizar no mapa.
+
+
+4. CARTOES DA LISTA
+-------------------
+
+A lista aparece depois do mapa e do resumo compacto, antes dos detalhes
+completos. Em telas de ate 768 px, cada cartao ocupa uma coluna, facilitando a
+leitura e o toque.
+
+Cada cartao apresenta:
+
+- Numero identificador do talhao.
+- Etiqueta de status, como favoravel, atencao ou dados insuficientes.
+- Nome.
+- Area e cultura.
+- Janela recomendada ou indicacao de que nao ha janela.
+- IEA, quando calculado.
+
+Tocar em qualquer cartao seleciona aquele talhao e leva o mapa para sua
+localizacao. O mesmo toque atualiza o resumo compacto e os detalhes completos.
+A selecao nao abre o modal "Janela de Ouro".
+
+
+5. PAINEL DE DETALHES APOS A LISTA
+----------------------------------
+
+O painel e exibido quando existe um talhao selecionado. Ele reutiliza o conteudo
+completo dos detalhes do talhao e apresenta as secoes a seguir, nesta ordem.
+
+5.1. Identificacao e situacao
+
+- Area em hectares, ou aviso de area nao informada.
+- Cultura e idade.
+- Variedade e tipo de solo.
+- Etiqueta com a situacao de monitoramento/analise.
+
+Em telas de ate 640 px, o cabecalho dos detalhes passa a empilhar seus elementos
+verticalmente, em vez de tentar manter identificacao e status lado a lado.
+
+5.2. Condicao e telemetria
+
+Mostra o identificador ou nome do sensor e quatro indicadores:
+
+- Umidade do sensor. A leitura fica identificada como indisponivel/bloqueada
+  enquanto nao houver telemetria real.
+- Temperatura do ar prevista.
+- Status do sensor, com indicacao de que nao ha telemetria confirmada.
+- Ultima leitura, ou aviso de que nao ha leitura disponivel.
+
+5.3. Localizacao do talhao
+
+Apresenta:
+
+- Latitude.
+- Longitude.
+- Raio de referencia do talhao, em metros.
+- Coordenadas completas ou aviso de coordenadas nao cadastradas.
+
+As metricas do painel usam uma grade responsiva com largura minima de 190 px
+por cartao. Em telas estreitas, a grade pode se reduzir a uma coluna; em
+celulares maiores, pode caber mais de um cartao por linha.
+
+5.4. Proxima aplicacao planejada
+
+Mostra o produto planejado e, quando disponiveis, tipo de aplicacao, dose,
+unidade e data. Tambem apresenta a acao "Planejar aplicacao".
+
+Em telas de ate 640 px, os dados e o botao deixam de ficar lado a lado e passam
+a ser empilhados.
+
+5.5. Janela de Ouro e IEA
+
+O bloco colorido mostra:
+
+- Nome do talhao e titulo "Janela de Ouro".
+- Janela atual ou indicacao de que esta aguardando dados.
+- IEA do talhao, se houver analise.
+- Chuva prevista, umidade do sensor e vento previsto.
+- Explicacao de que a analise meteorologica e individual e de que a umidade
+  apresentada nao substitui uma leitura de sensor real.
+
+Os fatores da janela passam de quatro colunas para duas colunas em telas de ate
+640 px.
+
+5.6. Evolucao estimada da umidade
+
+O painel reserva uma area para o grafico de umidade, mas o modulo aparece
+bloqueado ate que haja um sensor disponivel. A mensagem explica que as leituras
+serao habilitadas quando o sensor for disponibilizado.
+
+5.7. Historico do talhao
+
+Mostra ate tres registros associados ao talhao, quando existirem. Cada registro
+pode conter data, produto, quantidade, IEA anterior e resultado. Se nao houver
+registros, aparece a mensagem de que nenhuma aplicacao foi registrada naquele
+talhao.
+
+Em telas de ate 640 px, cada linha do historico empilha data, descricao e
+resultado verticalmente, em vez de comprimi-los em colunas.
+
+5.8. Acoes
+
+No final do painel ficam as acoes:
+
+- Editar localizacao.
+- Excluir talhao.
+- Registrar aplicacao.
+
+Os botoes podem quebrar para mais de uma linha em telas estreitas. A acao de
+planejar aplicacao tambem fica disponivel na secao de planejamento.
+
+
+6. COMO OS DETALHES SE ATUALIZAM
+--------------------------------
+
+Ao selecionar outro talhao pela lista ou pelo mapa, os dados do painel mudam
+para aquele registro. O seletor no cabecalho escolhe o talhao usado como
+referencia nas analises do sistema; para focar o mapa e atualizar o painel de
+detalhes desta pagina, use um cartao ou marcador. Clima, IEA, recomendacao,
+coordenadas, planejamento e historico pertencem ao talhao correspondente; os
+valores nao devem ser interpretados como dados compartilhados com todos os
+talhoes.
+
+Dados ausentes sao indicados como indisponiveis, nao informados ou aguardando
+dados. A umidade do sensor permanece explicitamente bloqueada enquanto nao
+existir telemetria confirmada.
+
+
+7. RESUMO DA EXPERIENCIA NO CELULAR
+-----------------------------------
+
+O fluxo de leitura e: identificar o talhao no resumo, conferir status, janela e
+IEA, ver sua localizacao no mapa, comparar os cartoes e abrir/consultar os
+detalhes completos apos a lista. O mapa permanece relevante para situar o
+talhao, enquanto a secao final concentra as informacoes operacionais e
+historicas sem abrir uma janela modal.

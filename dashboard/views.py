@@ -1,21 +1,32 @@
 import json
+import hashlib
 import re
-from datetime import date, datetime, time
+import secrets
+import smtplib
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela, SensorIoT, Talhao
+from .models import (
+    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
+    SensorIoT, Talhao,
+)
 
 
 def _json_body(request):
@@ -36,14 +47,15 @@ def _protected_page(request, template):
     if not request.user.is_authenticated:
         return redirect(f"/login/?next={request.path}")
     perfil = getattr(request.user, "perfil", None)
-    fazenda = request.user.fazendas.first()
+    fazenda = _current_farm(request)
     nome = perfil.nome_completo if perfil else request.user.get_full_name() or request.user.username
+    membership = _membership(fazenda, request.user) if fazenda else None
     return render(request, template, {"auth_user_data": {
         "name": nome,
         "initials": "".join(part[0] for part in nome.split()[:2]).upper(),
         "email": request.user.email,
         "phone": perfil.telefone if perfil else "",
-        "role": "Produtor / Administrador",
+        "role": membership.get_funcao_display() if membership else "",
         "farm": fazenda.nome if fazenda else "Sem fazenda cadastrada",
     }})
 
@@ -71,7 +83,430 @@ def cadastro_view(request):
 
 
 def _current_farm(request):
-    return request.user.fazendas.first()
+    if not request.user.is_authenticated:
+        return None
+    farms = _accessible_farms(request.user)
+    selected_id = request.session.get("current_farm_id")
+    if selected_id:
+        farm = farms.filter(pk=selected_id).first()
+        if farm:
+            _membership(farm, request.user)
+            return farm
+        request.session.pop("current_farm_id", None)
+    farm = farms.first()
+    if farm:
+        _membership(farm, request.user)
+        request.session["current_farm_id"] = farm.id
+    return farm
+
+
+def _accessible_farms(user):
+    return Fazenda.objects.filter(Q(produtor=user) | Q(membros__usuario=user)).distinct().order_by("nome", "id")
+
+
+def _membership(farm, user):
+    if not farm or not user.is_authenticated:
+        return None
+    membership = MembroFazenda.objects.filter(fazenda=farm, usuario=user).first()
+    if membership:
+        return membership
+    if farm.produtor_id == user.id:
+        membership, _ = MembroFazenda.objects.get_or_create(
+            fazenda=farm,
+            usuario=user,
+            defaults={"funcao": MembroFazenda.Funcao.PROPRIETARIO},
+        )
+        return membership
+    return None
+
+
+FARM_PERMISSIONS = {
+    "view": {
+        MembroFazenda.Funcao.PROPRIETARIO,
+        MembroFazenda.Funcao.GERENTE,
+        MembroFazenda.Funcao.TECNICO,
+        MembroFazenda.Funcao.FUNCIONARIO,
+    },
+    "manage": {MembroFazenda.Funcao.PROPRIETARIO, MembroFazenda.Funcao.GERENTE},
+    "plan": {MembroFazenda.Funcao.PROPRIETARIO, MembroFazenda.Funcao.GERENTE, MembroFazenda.Funcao.TECNICO},
+    "record": {
+        MembroFazenda.Funcao.PROPRIETARIO,
+        MembroFazenda.Funcao.GERENTE,
+        MembroFazenda.Funcao.TECNICO,
+        MembroFazenda.Funcao.FUNCIONARIO,
+    },
+    "team": {MembroFazenda.Funcao.PROPRIETARIO},
+}
+
+
+def _has_farm_permission(farm, user, permission):
+    membership = _membership(farm, user)
+    return bool(membership and membership.funcao in FARM_PERMISSIONS[permission])
+
+
+def _create_farm_notification(farm, actor, kind, title, message):
+    _membership(farm, farm.produtor)
+    member_ids = farm.membros.values_list("usuario_id", flat=True)
+    NotificacaoFazenda.objects.bulk_create([
+        NotificacaoFazenda(
+            fazenda=farm,
+            destinatario_id=user_id,
+            ator=actor,
+            tipo=kind,
+            titulo=title,
+            mensagem=message,
+        )
+        for user_id in member_ids
+    ])
+
+
+def _role_json(membership):
+    return {
+        "id": membership.usuario_id,
+        "name": membership.usuario.get_full_name() or membership.usuario.username,
+        "email": membership.usuario.email,
+        "role": membership.funcao,
+        "role_label": membership.get_funcao_display(),
+    }
+
+
+@require_http_methods(["GET", "POST"])
+def farms_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farms = _accessible_farms(request.user)
+    if request.method == "POST":
+        data = _json_body(request)
+        if not isinstance(data, dict):
+            return _error("Seleção de fazenda inválida.")
+        try:
+            farm_id = int(data.get("farm_id"))
+        except (TypeError, ValueError):
+            return _error("Selecione uma fazenda válida.")
+        farm = farms.filter(pk=farm_id).first()
+        if not farm:
+            return _error("Você não tem acesso a essa fazenda.", 403)
+        request.session["current_farm_id"] = farm.id
+        return JsonResponse({"ok": True, "selected_farm_id": farm.id})
+
+    current_id = _current_farm(request)
+    return JsonResponse({
+        "ok": True,
+        "selected_farm_id": current_id.id if current_id else None,
+        "farms": [{
+            "id": farm.id,
+            "name": farm.nome,
+            "area": float(farm.area_hectares),
+            "culture": farm.culturas[0] if farm.culturas else "",
+            "talhoes": farm.talhoes.filter(ativo=True).count(),
+            "role": _membership(farm, request.user).get_funcao_display(),
+        } for farm in farms],
+    })
+
+
+@require_POST
+def farm_settings_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.")
+    if not _has_farm_permission(farm, request.user, "manage"):
+        return _error("Seu perfil não pode alterar os dados desta fazenda.", 403)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados da fazenda inválidos.")
+    name = str(data.get("name", "")).strip()
+    culture = str(data.get("culture", "")).strip()
+    try:
+        area = Decimal(str(data.get("area", "")))
+        if not name or len(name) > 150 or area <= 0:
+            raise InvalidOperation
+        farm.nome = name
+        farm.area_hectares = area
+        farm.culturas = [culture] if culture else []
+        farm.full_clean()
+        farm.save(update_fields=["nome", "area_hectares", "culturas", "atualizada_em"])
+    except (InvalidOperation, TypeError, ValueError, ValidationError, IntegrityError):
+        return _error("Informe nome e área válidos para a fazenda.")
+    return JsonResponse({
+        "ok": True,
+        "farm": {
+            "id": farm.id,
+            "name": farm.nome,
+            "area": float(farm.area_hectares),
+            "culture": farm.culturas[0] if farm.culturas else "",
+        },
+    })
+
+
+@require_GET
+def farm_team_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return JsonResponse({"ok": True, "members": [], "invitations": []})
+    members = farm.membros.select_related("usuario").all()
+    invitations = farm.convites.filter(
+        status=ConviteFazenda.Status.PENDENTE,
+        expira_em__gt=timezone.now(),
+    ).select_related("convidado_por")
+    return JsonResponse({
+        "ok": True,
+        "members": [_role_json(member) for member in members],
+        "invitations": [{
+            "id": invitation.id,
+            "email": invitation.email,
+            "role": invitation.funcao,
+            "role_label": invitation.get_funcao_display(),
+            "expires_at": invitation.expira_em.isoformat(),
+        } for invitation in invitations],
+    })
+
+
+@require_http_methods(["DELETE"])
+def farm_member_api(request, user_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.")
+    if not _has_farm_permission(farm, request.user, "team"):
+        return _error("Somente o proprietário pode gerenciar a equipe.", 403)
+    member = farm.membros.filter(usuario_id=user_id).first()
+    if not member:
+        return _error("Membro não encontrado nesta fazenda.", 404)
+    if member.funcao == MembroFazenda.Funcao.PROPRIETARIO:
+        return _error("O proprietário não pode ser removido da própria fazenda.", 400)
+    member.delete()
+    return JsonResponse({"ok": True, "removed_user_id": user_id})
+
+
+@require_http_methods(["POST", "DELETE"])
+def farm_invitation_api(request, invitation_id=None):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.")
+    if not _has_farm_permission(farm, request.user, "team"):
+        return _error("Somente o proprietário pode gerenciar a equipe.", 403)
+    if request.method == "DELETE":
+        invitation = farm.convites.filter(pk=invitation_id, status=ConviteFazenda.Status.PENDENTE).first()
+        if not invitation:
+            return _error("Convite pendente não encontrado.", 404)
+        invitation.status = ConviteFazenda.Status.REVOGADO
+        invitation.save(update_fields=["status"])
+        return JsonResponse({"ok": True, "revoked_id": invitation.id})
+
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados do convite inválidos.")
+    email = str(data.get("email", "")).strip().lower()
+    role = str(data.get("role", ""))
+    try:
+        validate_email(email)
+    except ValidationError:
+        return _error("Informe um e-mail válido.", field_errors={"email": "Informe um e-mail válido."})
+    allowed_roles = {
+        MembroFazenda.Funcao.GERENTE,
+        MembroFazenda.Funcao.TECNICO,
+        MembroFazenda.Funcao.FUNCIONARIO,
+    }
+    if role not in allowed_roles:
+        return _error("Selecione uma função válida.")
+    if farm.membros.filter(usuario__email__iexact=email).exists():
+        return _error("Este usuário já faz parte da equipe.")
+    if farm.convites.filter(email__iexact=email, status=ConviteFazenda.Status.PENDENTE, expira_em__gt=timezone.now()).exists():
+        return _error("Já existe um convite pendente para este e-mail.")
+    if not settings.EMAIL_HOST or not settings.DEFAULT_FROM_EMAIL or (settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL):
+        return _error("O envio de convites não está disponível: configure EMAIL_HOST e DEFAULT_FROM_EMAIL no ambiente.", 503)
+
+    token = secrets.token_urlsafe(32)
+    invitation_url = request.build_absolute_uri(reverse("dashboard:accept_invitation", args=[token]))
+    role_label = dict(MembroFazenda.Funcao.choices)[role]
+    message = (
+        f"Você foi convidado para participar da fazenda {farm.nome} no GoldCrop como {role_label}.\n\n"
+        f"Para aceitar o convite e acessar a fazenda, abra este link:\n{invitation_url}\n\n"
+        "O convite expira em 7 dias. Se você não esperava este e-mail, ignore-o."
+    )
+    try:
+        with transaction.atomic():
+            invitation = ConviteFazenda.objects.create(
+                fazenda=farm,
+                email=email,
+                funcao=role,
+                token_digest=hashlib.sha256(token.encode("utf-8")).hexdigest(),
+                convidado_por=request.user,
+                expira_em=timezone.now() + timedelta(days=7),
+            )
+            sent_count = send_mail(
+                f"Convite para a fazenda {farm.nome} no GoldCrop",
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+                fail_silently=False,
+            )
+            if sent_count != 1:
+                raise RuntimeError("O servidor de e-mail não confirmou o envio.")
+    except (OSError, RuntimeError, smtplib.SMTPException, ValueError) as error:
+        return _error(f"Não foi possível enviar o convite por e-mail: {error}", 503)
+
+    return JsonResponse({
+        "ok": True,
+        "invitation": {
+            "id": invitation.id,
+            "email": invitation.email,
+            "role": invitation.funcao,
+            "role_label": invitation.get_funcao_display(),
+            "expires_at": invitation.expira_em.isoformat(),
+        },
+    }, status=201)
+
+
+def accept_invitation(request, token):
+    token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    invitation = get_object_or_404(
+        ConviteFazenda.objects.select_related("fazenda"),
+        token_digest=token_digest,
+        status=ConviteFazenda.Status.PENDENTE,
+    )
+    if invitation.expira_em <= timezone.now():
+        invitation.status = ConviteFazenda.Status.REVOGADO
+        invitation.save(update_fields=["status"])
+        return HttpResponse("Este convite expirou. Solicite um novo convite ao proprietário.", status=410)
+
+    invited_user = User.objects.filter(email__iexact=invitation.email).first()
+    if request.user.is_authenticated and request.user.email.lower() != invitation.email.lower():
+        return HttpResponse("Entre com a conta vinculada ao e-mail do convite.", status=403)
+    if invited_user and not request.user.is_authenticated:
+        request.session["pending_invitation_token"] = token
+        return redirect(f"{reverse('dashboard:login')}?next={reverse('dashboard:accept_invitation', args=[token])}")
+
+    if request.method == "GET":
+        return render(request, "invitation_accept.html", {
+            "invitation": invitation,
+            "existing_account": invited_user is not None,
+        })
+    if request.method != "POST":
+        return HttpResponse(status=405)
+
+    user = request.user if request.user.is_authenticated else None
+    created_user = False
+    if user is None:
+        name = str(request.POST.get("name", "")).strip()
+        password = request.POST.get("password", "")
+        if not name:
+            return render(request, "invitation_accept.html", {
+                "invitation": invitation,
+                "existing_account": False,
+                "error": "Informe seu nome completo.",
+            }, status=400)
+        try:
+            validate_password(password)
+        except ValidationError as error:
+            return render(request, "invitation_accept.html", {
+                "invitation": invitation,
+                "existing_account": False,
+                "error": " ".join(error.messages),
+            }, status=400)
+        if len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+            return render(request, "invitation_accept.html", {
+                "invitation": invitation,
+                "existing_account": False,
+                "error": "A senha deve ter pelo menos 8 caracteres, incluindo letras e números.",
+            }, status=400)
+        if User.objects.filter(Q(username__iexact=invitation.email) | Q(email__iexact=invitation.email)).exists():
+            return HttpResponse("Já existe uma conta para este e-mail. Entre nessa conta para aceitar o convite.", status=409)
+        user = None
+        try:
+            with transaction.atomic():
+                first_name, *last_name = name.split(maxsplit=1)
+                user = User.objects.create_user(
+                    username=invitation.email,
+                    email=invitation.email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name[0] if last_name else "",
+                )
+                PerfilProdutor.objects.create(usuario=user, nome_completo=name, telefone="")
+                created_user = True
+        except IntegrityError:
+            return HttpResponse("Não foi possível criar a conta. Tente novamente ou entre na conta existente.", status=409)
+
+    try:
+        with transaction.atomic():
+            membership, created = MembroFazenda.objects.get_or_create(
+                fazenda=invitation.fazenda,
+                usuario=user,
+                defaults={"funcao": invitation.funcao},
+            )
+            if not created:
+                return HttpResponse("Esta conta já possui acesso à fazenda.", status=409)
+            invitation.status = ConviteFazenda.Status.ACEITO
+            invitation.aceito_em = timezone.now()
+            invitation.save(update_fields=["status", "aceito_em"])
+            _create_farm_notification(
+                invitation.fazenda,
+                user,
+                NotificacaoFazenda.Tipo.MEMBRO,
+                "Convite aceito",
+                f"{user.get_full_name() or user.email} agora faz parte da equipe da fazenda.",
+            )
+    except IntegrityError:
+        if created_user and user:
+            user.delete()
+        return HttpResponse("Não foi possível aceitar este convite. Solicite um novo ao proprietário.", status=409)
+
+    request.session["current_farm_id"] = invitation.fazenda_id
+    if created_user:
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    request.session.pop("pending_invitation_token", None)
+    return redirect("dashboard:fazenda")
+
+
+@require_GET
+def notifications_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    notifications = NotificacaoFazenda.objects.filter(
+        fazenda=farm,
+        destinatario=request.user,
+    ).select_related("ator")[:50] if farm else NotificacaoFazenda.objects.none()
+    payload = [{
+        "id": item.id,
+        "type": item.tipo,
+        "title": item.titulo,
+        "message": item.mensagem,
+        "actor": (item.ator.get_full_name() or item.ator.username) if item.ator else "",
+        "created_at": item.criada_em.isoformat(),
+        "read": item.lida_em is not None,
+    } for item in notifications]
+    return JsonResponse({
+        "ok": True,
+        "unread_count": sum(not item["read"] for item in payload),
+        "notifications": payload,
+    })
+
+
+@require_POST
+def notification_read_api(request, notification_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    notification = NotificacaoFazenda.objects.filter(
+        pk=notification_id,
+        fazenda=farm,
+        destinatario=request.user,
+    ).first() if farm else None
+    if not notification:
+        return _error("Notificação não encontrada.", 404)
+    if notification.lida_em is None:
+        notification.lida_em = timezone.now()
+        notification.save(update_fields=["lida_em"])
+    return JsonResponse({"ok": True, "id": notification.id, "read": True})
 
 
 def _parse_datetime(value):
@@ -169,7 +604,10 @@ def system_state_api(request):
         return _error("Autenticação necessária.", 401)
     farm = _current_farm(request)
     if not farm:
-        return JsonResponse({"ok": True, "farm": None, "talhoes": [], "applications": [], "recommendations": []})
+        return JsonResponse({
+            "ok": True, "farm": None, "talhoes": [], "applications": [],
+            "planejamentos": [], "recommendations": [],
+        })
     talhoes = list(farm.talhoes.filter(ativo=True))
     talhao_context = {}
     for talhao in talhoes:
@@ -183,7 +621,8 @@ def system_state_api(request):
     selected_context = talhao_context.get(int(requested_talhao_id)) if requested_talhao_id and requested_talhao_id.isdigit() else None
     latest_collection = selected_context["collection"] if selected_context else farm.coletas_meteorologicas.first()
     recommendations = latest_collection.recomendacoes.all() if latest_collection else RecomendacaoJanela.objects.none()
-    owner_name = request.user.get_full_name() or request.user.username
+    owner_name = farm.produtor.get_full_name() or farm.produtor.username
+    membership = _membership(farm, request.user)
     talhao_payload = []
     for talhao in talhoes:
         context = talhao_context[talhao.id]
@@ -209,6 +648,12 @@ def system_state_api(request):
             "culture": farm.culturas[0] if farm.culturas else "", "city": farm.cidade,
             "state": farm.estado, "district": farm.bairro, "address": farm.endereco,
             "owner": owner_name, "sensors": SensorIoT.objects.filter(fazenda=farm, ativo=True).count(),
+            "role": membership.funcao if membership else "",
+            "role_label": membership.get_funcao_display() if membership else "",
+            "permissions": {
+                permission: _has_farm_permission(farm, request.user, permission)
+                for permission in FARM_PERMISSIONS
+            },
         },
         "talhoes": talhao_payload,
         "applications": [_application_json(item) for item in farm.aplicacoes.all()],
@@ -262,6 +707,17 @@ def recommendations_ingest_api(request):
     if not collection:
         return _error("Salve a coleta meteorológica antes da recomendação.")
     recommendations = data.get("recommendations", [])
+    old_signatures = {
+        (
+            item.data.isoformat(),
+            timezone.localtime(item.inicio).isoformat(),
+            timezone.localtime(item.fim).isoformat(),
+            item.adequacao,
+            item.decisao,
+            json.dumps(item.metricas, sort_keys=True, separators=(",", ":")),
+        )
+        for item in collection.recomendacoes.all()
+    }
     RecomendacaoJanela.objects.filter(coleta=collection).delete()
     created_recommendations = []
     for item in recommendations:
@@ -274,6 +730,27 @@ def recommendations_ingest_api(request):
             fatores=item.get("factors", {}), riscos=item.get("risks", {}), qualidade_dados=item.get("dataQuality", {}),
             metricas=item.get("metrics", {}), proximas_24h=item.get("next24h", {}), proximas_48h=item.get("next48h", {}),
         ))
+    new_signatures = {
+        (
+            item.data.isoformat(),
+            timezone.localtime(item.inicio).isoformat(),
+            timezone.localtime(item.fim).isoformat(),
+            item.adequacao,
+            item.decisao,
+            json.dumps(item.metricas, sort_keys=True, separators=(",", ":")),
+        )
+        for item in created_recommendations
+    }
+    if created_recommendations and new_signatures != old_signatures:
+        best = max(created_recommendations, key=lambda item: item.adequacao)
+        talhao_name = collection.talhao.nome if collection.talhao else farm.nome
+        _create_farm_notification(
+            farm,
+            request.user,
+            NotificacaoFazenda.Tipo.RECOMENDACAO,
+            "Análise meteorológica atualizada",
+            f"Nova recomendação para {talhao_name}: IEA {best.adequacao}%.",
+        )
     return JsonResponse({
         "ok": True, "count": len(created_recommendations),
         "recommendations": [_recommendation_json(item) for item in created_recommendations],
@@ -288,6 +765,8 @@ def application_create_api(request):
     farm = _current_farm(request)
     if not isinstance(data, dict) or not farm:
         return _error("Dados da aplicação ou fazenda inválidos.")
+    if not _has_farm_permission(farm, request.user, "record"):
+        return _error("Seu perfil não pode registrar aplicações nesta fazenda.", 403)
     talhao = farm.talhoes.filter(pk=data.get("talhao_id"), ativo=True).first() if data.get("talhao_id") is not None else farm.talhoes.filter(nome=data.get("talhao", ""), ativo=True).first()
     if talhao is None:
         return _error("Talhão não encontrado na sua fazenda.", 404)
@@ -326,6 +805,14 @@ def application_create_api(request):
     if planejamento and status == ExecucaoAplicacao.Status.REALIZADA:
         planejamento.status = PlanejamentoAplicacao.Status.EXECUTADA
         planejamento.save(update_fields=["status", "atualizado_em"])
+    if application.status == ExecucaoAplicacao.Status.REALIZADA:
+        _create_farm_notification(
+            farm,
+            request.user,
+            NotificacaoFazenda.Tipo.APLICACAO,
+            "Aplicação registrada",
+            f"{request.user.get_full_name() or request.user.username} registrou {application.produto} em {talhao.nome}.",
+        )
     return JsonResponse({"ok": True, "application": _application_json(application)}, status=201)
 
 
@@ -337,6 +824,8 @@ def planejamento_create_api(request):
     farm = _current_farm(request)
     if not isinstance(data, dict) or not farm:
         return _error("Dados do planejamento ou fazenda inválidos.")
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode planejar aplicações nesta fazenda.", 403)
     talhao_id = data.get("talhao_id")
     talhao = farm.talhoes.filter(pk=talhao_id).first() if talhao_id is not None else None
     if talhao is None:
@@ -374,6 +863,13 @@ def planejamento_create_api(request):
         status=PlanejamentoAplicacao.Status.PLANEJADA,
         criado_por=request.user,
     )
+    _create_farm_notification(
+        farm,
+        request.user,
+        NotificacaoFazenda.Tipo.PLANEJAMENTO,
+        "Aplicação planejada",
+        f"{request.user.get_full_name() or request.user.username} planejou {planejamento.produto} para {talhao.nome} em {data_planejada:%d/%m/%Y}.",
+    )
     return JsonResponse({"ok": True, "planejamento": _planejamento_json(planejamento)}, status=201)
 
 
@@ -387,6 +883,8 @@ def aplicacao_exec_api(request, planejamento_id):
     farm = _current_farm(request)
     if not farm:
         return _error("Fazenda não encontrada.")
+    if not _has_farm_permission(farm, request.user, "record"):
+        return _error("Seu perfil não pode registrar aplicações nesta fazenda.", 403)
     planejamento = farm.planejamentos.filter(pk=planejamento_id).first()
     if not planejamento:
         return _error("Planejamento não encontrado na sua fazenda.", 404)
@@ -427,6 +925,14 @@ def aplicacao_exec_api(request, planejamento_id):
     )
     planejamento.status = PlanejamentoAplicacao.Status.EXECUTADA if status == "EXECUTADA" else PlanejamentoAplicacao.Status.CANCELADA if status == "CANCELADA" else PlanejamentoAplicacao.Status.CONFIRMADA
     planejamento.save(update_fields=["status", "atualizado_em"])
+    if status == "EXECUTADA":
+        _create_farm_notification(
+            farm,
+            request.user,
+            NotificacaoFazenda.Tipo.APLICACAO,
+            "Aplicação registrada",
+            f"{request.user.get_full_name() or request.user.username} registrou {planejamento.produto} em {planejamento.talhao.nome if planejamento.talhao else farm.nome}.",
+        )
     dentro_janela = planejamento.dentro_da_janela(data_real, horario_real)
     mensagem = "Aplicação realizada dentro da janela recomendada." if dentro_janela else "Aplicação realizada fora da janela recomendada."
     return JsonResponse({"ok": True, "app": _application_json(app), "dentro_janela": dentro_janela, "mensagem": mensagem}, status=201)
@@ -493,6 +999,8 @@ def talhao_create_api(request):
     farm = _current_farm(request)
     if not isinstance(data, dict) or not farm:
         return _error("Dados do talhão ou fazenda inválidos.")
+    if not _has_farm_permission(farm, request.user, "manage"):
+        return _error("Seu perfil não pode gerenciar os talhões desta fazenda.", 403)
     try:
         latitude = _parse_coordinate(data.get("latitude"), 90)
         longitude = _parse_coordinate(data.get("longitude"), 180)
@@ -514,6 +1022,8 @@ def talhao_update_api(request, talhao_id):
     farm = _current_farm(request)
     if not isinstance(data, dict) or not farm:
         return _error("Dados do talhão ou fazenda inválidos.")
+    if not _has_farm_permission(farm, request.user, "manage"):
+        return _error("Seu perfil não pode gerenciar os talhões desta fazenda.", 403)
     talhao = farm.talhoes.filter(pk=talhao_id).first()
     if not talhao:
         return _error("Talhão não encontrado.", 404)
@@ -537,6 +1047,8 @@ def talhao_delete_api(request, talhao_id):
     farm = _current_farm(request)
     if not farm:
         return _error("Fazenda não encontrada.")
+    if not _has_farm_permission(farm, request.user, "manage"):
+        return _error("Seu perfil não pode gerenciar os talhões desta fazenda.", 403)
     talhao = farm.talhoes.filter(pk=talhao_id).first()
     if not talhao:
         return _error("Talhão não encontrado.", 404)
@@ -556,6 +1068,9 @@ def profile_update_api(request):
     phone = re.sub(r"\D", "", str(data.get("phone", "")))
     if not name or not email:
         return _error("Nome e e-mail são obrigatórios.")
+    farm = _current_farm(request)
+    if "farm" in data and farm and not _has_farm_permission(farm, request.user, "manage"):
+        return _error("Seu perfil não pode alterar os dados desta fazenda.", 403)
     try:
         validate_email(email)
     except ValidationError:
@@ -572,7 +1087,6 @@ def profile_update_api(request):
     perfil.nome_completo = name
     perfil.telefone = phone or perfil.telefone
     perfil.save()
-    farm = _current_farm(request)
     if farm and data.get("farm"):
         farm.nome = str(data["farm"]).strip()
         farm.save(update_fields=["nome", "atualizada_em"])
@@ -596,10 +1110,51 @@ def login_api(request):
     user = authenticate(request, username=user_record.username, password=password) if user_record else None
     if user is None:
         return _error("E-mail ou senha incorretos.", 401)
+    pending_token = request.session.get("pending_invitation_token")
     login(request, user)
     if not data.get("remember_me"):
         request.session.set_expiry(0)
-    return JsonResponse({"ok": True, "redirect_url": "/dashboard/"})
+    redirect_url = "/dashboard/"
+    if pending_token:
+        invitation = ConviteFazenda.objects.filter(
+            token_digest=hashlib.sha256(pending_token.encode("utf-8")).hexdigest(),
+            status=ConviteFazenda.Status.PENDENTE,
+            email__iexact=user.email,
+        ).first()
+        if invitation and invitation.expira_em > timezone.now():
+            redirect_url = reverse("dashboard:accept_invitation", args=[pending_token])
+        else:
+            request.session.pop("pending_invitation_token", None)
+    return JsonResponse({"ok": True, "redirect_url": redirect_url})
+
+
+@require_POST
+def password_reset_api(request):
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Informe um e-mail válido.")
+    email = str(data.get("email", "")).strip().lower()
+    if not email:
+        return _error("Informe um e-mail válido.")
+    if not settings.EMAIL_HOST or not settings.DEFAULT_FROM_EMAIL or (settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL):
+        return _error("A redefinição de senha não está disponível: configure o serviço SMTP.", 503)
+    form = PasswordResetForm({"email": email})
+    if not form.is_valid():
+        return _error("Informe um e-mail válido.")
+    try:
+        form.save(
+            request=request,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            subject_template_name="registration/password_reset_subject.txt",
+            email_template_name="registration/password_reset_email.txt",
+            use_https=request.is_secure(),
+        )
+    except (OSError, smtplib.SMTPException, ValueError) as error:
+        return _error(f"Não foi possível enviar as instruções de redefinição: {error}", 503)
+    return JsonResponse({
+        "ok": True,
+        "message": "Se houver uma conta vinculada a este e-mail, as instruções serão enviadas.",
+    })
 
 
 @require_POST
@@ -627,6 +1182,7 @@ def cadastro_api(request):
     culturas = data.get("culturas", [])
     tipo_cultivo = str(data.get("tipo_cultivo", ""))
     irrigacao = str(data.get("irrigacao", ""))
+    funcao = str(data.get("funcao", ""))
     if len(nome.split()) < 2: errors["nome"] = "Informe nome e sobrenome."
     try: validate_email(email)
     except ValidationError: errors["email"] = "Informe um e-mail válido."
@@ -636,6 +1192,7 @@ def cadastro_api(request):
     if not isinstance(culturas, list) or not culturas: errors["culturas"] = "Selecione ao menos uma cultura."
     if tipo_cultivo not in Fazenda.TipoCultivo.values: errors["tipo_cultivo"] = "Selecione um tipo de cultivo válido."
     if irrigacao not in Fazenda.Irrigacao.values: errors["irrigacao"] = "Selecione um sistema de irrigação válido."
+    if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "Selecione sua função na fazenda."
     try:
         area = Decimal(str(data.get("area_hectares", "")))
         if area <= 0: raise InvalidOperation
@@ -657,6 +1214,11 @@ def cadastro_api(request):
             user = User.objects.create_user(username=email, email=email, password=senha, first_name=first_name, last_name=last_name[0] if last_name else "")
             PerfilProdutor.objects.create(usuario=user, nome_completo=nome, telefone=telefone)
             farm = Fazenda.objects.create(produtor=user, nome=nome_fazenda, cep=cep, estado=estado, cidade=cidade, bairro=bairro, endereco=str(data.get("endereco", "")).strip(), area_hectares=area, quantidade_talhoes=talhoes, culturas=culturas, tipo_cultivo=tipo_cultivo, irrigacao=irrigacao)
+            MembroFazenda.objects.create(
+                fazenda=farm,
+                usuario=user,
+                funcao=funcao,
+            )
             Talhao.objects.bulk_create([Talhao(fazenda=farm, nome=f"Talhão {index:02d}") for index in range(1, talhoes + 1)])
     except IntegrityError:
         return _error("Já existe uma conta ou fazenda com estes dados.")

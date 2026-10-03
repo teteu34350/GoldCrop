@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
-  <link rel="stylesheet" href="{% static 'styles.css' %}?v=8" />
+  <link rel="stylesheet" href="{% static 'styles.css' %}?v=9" />
 <link rel="stylesheet" href="{% static 'responsive.css' %}?v=1" />
 </head>
 <body>
@@ -104,10 +104,10 @@
 
       <div class="sidebar-footer">
         <div class="user-profile" id="sidebarUserProfile" title="Abrir menu de perfil">
-          <div class="user-avatar" id="sidebarAvatar">JO</div>
+          <div class="user-avatar" id="sidebarAvatar">—</div>
           <div class="user-info">
-            <span class="user-name" id="sidebarUserName">João Oliveira</span>
-            <span class="user-farm" id="sidebarUserFarm">Fazenda Santa Clara</span>
+            <span class="user-name" id="sidebarUserName">Usuário</span>
+            <span class="user-farm" id="sidebarUserFarm">Sem fazenda cadastrada</span>
           </div>
           <span class="user-menu-btn" id="sidebarUserMenuBtn" title="Menu do perfil">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -132,25 +132,31 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
             <span id="weatherSummary">Carregando clima local...</span>
           </div>
-          <button class="topbar-icon-btn" title="Notificações" id="notifBtn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-            <span class="notif-badge">2</span>
-          </button>
+          <div class="notification-wrapper">
+            <button class="topbar-icon-btn" title="Notificações" id="notifBtn" aria-expanded="false" aria-controls="notificationPanel">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span class="notif-badge" id="notifBadge" hidden>0</span>
+            </button>
+            <section class="notification-panel" id="notificationPanel" hidden aria-label="Notificações da fazenda">
+              <div class="notification-panel-header"><strong>Notificações</strong><span id="notificationCount">0 não lidas</span></div>
+              <div class="notification-list" id="notificationList"><p class="notification-empty">Carregando notificações…</p></div>
+            </section>
+          </div>
           <div class="topbar-user-wrapper" id="topbarUserWrapper">
             <button class="topbar-user-btn" id="topbarUserBtn" title="Menu de Perfil">
-              <div class="user-avatar-sm" id="topbarAvatar">JO</div>
-              <span class="user-name-topbar" id="topbarUserName">João Oliveira</span>
+              <div class="user-avatar-sm" id="topbarAvatar">—</div>
+              <span class="user-name-topbar" id="topbarUserName">Usuário</span>
               <svg class="topbar-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
             </button>
             
             <!-- Profile Dropdown Menu -->
             <div class="profile-dropdown" id="profileDropdown">
               <div class="dropdown-header">
-                <div class="user-avatar-lg" id="dropdownAvatar">JO</div>
+                <div class="user-avatar-lg" id="dropdownAvatar">—</div>
                 <div class="dropdown-user-details">
-                  <span class="dropdown-user-name" id="dropdownUserName">João Oliveira</span>
-                  <span class="dropdown-user-email" id="dropdownUserEmail">joao.oliveira@santaclara.com.br</span>
-                  <span class="dropdown-user-role"><span class="role-badge" id="dropdownUserRole">Produtor / Administrador</span></span>
+                  <span class="dropdown-user-name" id="dropdownUserName">Usuário</span>
+                  <span class="dropdown-user-email" id="dropdownUserEmail">—</span>
+                  <span class="dropdown-user-role"><span class="role-badge" id="dropdownUserRole">—</span></span>
                 </div>
               </div>
               <div class="dropdown-divider"></div>
@@ -263,16 +269,17 @@
     </div>
   </div>
 
-  <!-- MODAL: ADICIONAR PESSOA -->
+  <!-- MODAL: CONVIDAR PESSOA -->
   <div class="modal-overlay" id="modalPessoa" style="display:none">
     <div class="modal modal-md">
-      <div class="modal-header"><h2 class="modal-title">Adicionar pessoa à fazenda</h2><button class="modal-close" onclick="closePessoa()">×</button></div>
+      <div class="modal-header"><h2 class="modal-title">Convidar pessoa para a fazenda</h2><button class="modal-close" onclick="closePessoa()">×</button></div>
       <div class="modal-body">
-        <div class="form-group"><label class="form-label">Nome</label><input class="form-input" id="pessoaNome" placeholder="Nome completo" /></div>
-        <div class="form-row"><div class="form-group"><label class="form-label">E-mail</label><input class="form-input" id="pessoaEmail" type="email" placeholder="nome@exemplo.com" /></div><div class="form-group"><label class="form-label">Telefone</label><input class="form-input" id="pessoaTelefone" placeholder="(00) 00000-0000" /></div></div>
-        <div class="form-row"><div class="form-group"><label class="form-label">Função</label><select class="form-input" id="pessoaFuncao"><option>Proprietário</option><option>Gerente</option><option>Técnico/Agrônomo</option><option>Funcionário</option></select></div><div class="form-group"><label class="form-label">Nível de acesso</label><select class="form-input" id="pessoaAcesso"><option>Acesso completo</option><option>Operacional</option><option>Consulta técnica</option><option>Execução</option></select></div></div>
+        <p>O convite será enviado por e-mail. A pessoa criará uma conta ou entrará na conta correspondente para aceitar.</p>
+        <div class="form-group"><label class="form-label" for="pessoaEmail">E-mail</label><input class="form-input" id="pessoaEmail" type="email" autocomplete="email" required /></div>
+        <div class="form-group"><label class="form-label" for="pessoaFuncao">Função e permissões</label><select class="form-input" id="pessoaFuncao" required><option value="MANAGER">Gerente — pode planejar, registrar e gerenciar talhões</option><option value="TECHNICIAN">Técnico / Agrônomo — pode visualizar, planejar e registrar</option><option value="EMPLOYEE">Funcionário — pode visualizar e registrar aplicações</option></select></div>
+        <p id="invitationError" class="form-error-msg" role="alert" hidden></p>
       </div>
-      <div class="modal-footer"><button class="btn-ghost" onclick="closePessoa()">Cancelar</button><button class="btn-primary" onclick="submitPessoa()">Enviar convite</button></div>
+      <div class="modal-footer"><button class="btn-ghost" type="button" onclick="closePessoa()">Cancelar</button><button class="btn-primary" id="sendInvitationButton" type="button" onclick="submitPessoa()">Enviar convite</button></div>
     </div>
   </div>
 
@@ -285,7 +292,7 @@
         <input type="hidden" id="planTalhaoId" />
         <div class="form-row"><div class="form-group"><label class="form-label">Produto</label><input class="form-input" id="planProduto" /></div><div class="form-group"><label class="form-label">Tipo de insumo</label><input class="form-input" id="planTipo" /></div></div>
         <div class="form-row"><div class="form-group"><label class="form-label">Dose planejada</label><input class="form-input" id="planDose" /></div><div class="form-group"><label class="form-label">Período desejado</label><input class="form-input" id="planPeriodo" /></div></div>
-        <div class="form-row"><div class="form-group"><label class="form-label">Data recomendada</label><input class="form-input" id="planData" type="date" value="2026-08-26" /></div><div class="form-group"><label class="form-label">Planejada por</label><select class="form-input" id="planResponsavel"><option>Carlos Souza</option><option>João Silva</option><option>Ana Oliveira</option></select></div></div>
+        <div class="form-row"><div class="form-group"><label class="form-label">Data recomendada</label><input class="form-input" id="planData" type="date" /></div><div class="form-group"><label class="form-label">Planejada por</label><input class="form-input" id="planResponsavel" /></div></div>
         <div class="form-group"><label class="form-label">Observações</label><textarea class="form-input form-textarea" rows="3" placeholder="Objetivo da aplicação, equipe ou equipamento..."></textarea></div>
       </div>
       <div class="modal-footer"><button class="btn-ghost" onclick="closePlanejar()">Cancelar</button><button class="btn-primary" onclick="submitPlanejar()">Salvar planejamento</button></div>
@@ -330,7 +337,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="novoTalhaoCultura">Cultura</label>
-          <input class="form-input" id="novoTalhaoCultura" type="text" value="Café" required />
+          <input class="form-input" id="novoTalhaoCultura" type="text" required />
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -341,6 +348,11 @@
             <label class="form-label" for="novoTalhaoLongitude">Longitude</label>
             <input class="form-input" id="novoTalhaoLongitude" type="number" step="any" placeholder="Ex.: -46.088306" required />
           </div>
+        </div>
+        <div class="talhao-location-picker-wrap">
+          <p class="form-help">Clique no mapa para marcar a localização específica deste talhão. O ponto representa o centro aproximado, não a divisa da área.</p>
+          <div class="talhao-location-picker" id="novoTalhaoMap" role="application" aria-label="Mapa para selecionar a localização do novo talhão"></div>
+          <small class="talhao-location-picker-status" id="novoTalhaoMapStatus">Selecione no mapa ou informe as coordenadas acima.</small>
         </div>
         <div class="form-group">
           <label class="form-label" for="novoTalhaoRaio">Raio aproximado (metros)</label>
@@ -389,6 +401,11 @@
             <input class="form-input" id="editarTalhaoLongitude" type="number" step="any" required />
           </div>
         </div>
+        <div class="talhao-location-picker-wrap">
+          <p class="form-help">Clique no mapa para ajustar a localização específica deste talhão. Os outros pontos cadastrados aparecem como referência.</p>
+          <div class="talhao-location-picker" id="editarTalhaoMap" role="application" aria-label="Mapa para ajustar a localização do talhão"></div>
+          <small class="talhao-location-picker-status" id="editarTalhaoMapStatus"></small>
+        </div>
         <div class="form-group">
           <label class="form-label" for="editarTalhaoRaio">Raio aproximado (metros)</label>
           <input class="form-input" id="editarTalhaoRaio" type="number" min="10" step="1" required />
@@ -412,49 +429,27 @@
       </div>
       <div class="modal-body">
         <div class="profile-modal-avatar-wrapper">
-          <div class="user-avatar-xl" id="modalAvatarPreview">JO</div>
-          <div class="avatar-edit-actions">
-            <button class="btn-secondary-sm" id="btnChangeAvatar" type="button" onclick="triggerAvatarUpload()">Alterar Iniciais / Foto</button>
-            <span class="avatar-help-text">Insira suas iniciais ou atualize seus dados</span>
-          </div>
+          <div class="user-avatar-xl" id="modalAvatarPreview">—</div>
+          <div class="avatar-edit-actions"><span class="avatar-help-text">As iniciais são geradas a partir do seu nome.</span></div>
         </div>
         
         <form id="profileForm" onsubmit="event.preventDefault(); saveProfileChanges();">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Nome Completo</label>
-              <input class="form-input" type="text" id="profileModalName" value="João Oliveira" required />
+              <input class="form-input" type="text" id="profileModalName" required />
             </div>
-            <div class="form-group">
-              <label class="form-label">Iniciais do Avatar</label>
-              <input class="form-input" type="text" id="profileModalInitials" value="JO" maxlength="3" required />
-            </div>
+            <div class="form-group"><label class="form-label" for="profileModalRole">Função nesta fazenda</label><input class="form-input" type="text" id="profileModalRole" readonly /></div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">E-mail</label>
-              <input class="form-input" type="email" id="profileModalEmail" value="joao.oliveira@santaclara.com.br" required />
+              <input class="form-input" type="email" id="profileModalEmail" required />
             </div>
             <div class="form-group">
               <label class="form-label">Telefone / WhatsApp</label>
-              <input class="form-input" type="tel" id="profileModalPhone" value="(35) 99876-5432" />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Propriedade Principal</label>
-              <input class="form-input" type="text" id="profileModalFarm" value="Fazenda Santa Clara" required />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Cargo / Função</label>
-              <select class="form-input" id="profileModalRole">
-                <option value="Produtor / Administrador" selected>Produtor / Administrador</option>
-                <option value="Engenheiro Agrônomo">Engenheiro Agrônomo</option>
-                <option value="Gerente Operacional">Gerente Operacional</option>
-                <option value="Técnico de Campo">Técnico de Campo</option>
-              </select>
+              <input class="form-input" type="tel" id="profileModalPhone" />
             </div>
           </div>
 
@@ -463,8 +458,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <span>Segurança da Conta</span>
             </div>
-            <p class="security-box-desc">Sua senha foi alterada pela última vez há 30 dias.</p>
-            <button type="button" class="btn-ghost-sm" onclick="showToast('🔐 Instruções de redefinição de senha enviadas ao e-mail.', 'info')">Alterar Senha</button>
+            <p class="security-box-desc">A senha é validada pelo serviço de autenticação do GoldCrop. A redefinição por e-mail ainda não está habilitada.</p>
           </div>
         </form>
       </div>
@@ -489,40 +483,7 @@
       </div>
       <div class="modal-body">
         <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">Selecione a fazenda que você deseja monitorar no sistema:</p>
-        <div class="farms-selection-list">
-          <div class="farm-select-card active" onclick="selectFarm('Fazenda Santa Clara', 84, 8, this)">
-            <div class="farm-card-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </div>
-            <div class="farm-card-info">
-              <div class="farm-card-name">Fazenda Santa Clara</div>
-              <div class="farm-card-meta">Café Arábica · 84 ha · 8 talhões</div>
-            </div>
-            <span class="farm-card-badge">Ativa</span>
-          </div>
-
-          <div class="farm-select-card" onclick="selectFarm('Sítio Boa Vista', 32, 4, this)">
-            <div class="farm-card-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </div>
-            <div class="farm-card-info">
-              <div class="farm-card-name">Sítio Boa Vista</div>
-              <div class="farm-card-meta">Café Conilon / Arábica · 32 ha · 4 talhões</div>
-            </div>
-            <span class="farm-card-badge outline">Selecionar</span>
-          </div>
-
-          <div class="farm-select-card" onclick="selectFarm('Fazenda Monte Alto', 120, 12, this)">
-            <div class="farm-card-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            </div>
-            <div class="farm-card-info">
-              <div class="farm-card-name">Fazenda Monte Alto</div>
-              <div class="farm-card-meta">Café Especial · 120 ha · 12 talhões</div>
-            </div>
-            <span class="farm-card-badge outline">Selecionar</span>
-          </div>
-        </div>
+        <div class="farms-selection-list" id="farmsSelectionList"><p>Carregando fazendas acessíveis…</p></div>
       </div>
       <div class="modal-footer">
         <button class="btn-ghost" onclick="closeTrocarFazendaModal()">Cancelar</button>
@@ -545,29 +506,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </div>
           <h3 style="font-size:1.1rem;font-weight:700;color:var(--gray-900)">Como podemos ajudar você hoje?</h3>
-          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.25rem">Nossa equipe agronômica e técnica está disponível para auxiliar sua lavoura.</p>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:.75rem">
-          <a href="https://wa.me/5535999999999" target="_blank" class="support-channel-card">
-            <div class="support-channel-icon whatsapp">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-            </div>
-            <div>
-              <div style="font-size:.875rem;font-weight:600;color:var(--gray-900)">Atendimento Via WhatsApp</div>
-              <div style="font-size:.78rem;color:var(--gray-500)">Fale diretamente com um agrônomo especialista</div>
-            </div>
-          </a>
-
-          <a href="mailto:suporte@goldcrop.com.br" class="support-channel-card">
-            <div class="support-channel-icon email">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            </div>
-            <div>
-              <div style="font-size:.875rem;font-weight:600;color:var(--gray-900)">Suporte Técnico por E-mail</div>
-              <div style="font-size:.78rem;color:var(--gray-500)">suporte@goldcrop.com.br</div>
-            </div>
-          </a>
+          <p style="font-size:.85rem;color:var(--gray-600);margin-top:.25rem">Os canais de atendimento ainda não foram configurados nesta instalação.</p>
         </div>
       </div>
       <div class="modal-footer">
@@ -578,6 +517,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
-  <script src="{% static 'app.js' %}?v=13"></script>
+  <script src="{% static 'app.js' %}?v=17"></script>
 </body>
 </html>

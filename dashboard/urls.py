@@ -1,4 +1,6 @@
 from django.urls import path
+from django.urls import reverse_lazy
+from django.contrib.auth import views as auth_views
 
 from .views import (
     home, calendario_view, talhoes_view, fazenda_view,
@@ -6,7 +8,9 @@ from .views import (
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
     system_state_api, weather_ingest_api, recommendations_ingest_api,
     application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api,
-    profile_update_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
+    profile_update_api, password_reset_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
+    farms_api, farm_settings_api, farm_team_api, farm_member_api, farm_invitation_api, accept_invitation,
+    notifications_api, notification_read_api,
 )
 
 app_name = 'dashboard'
@@ -24,6 +28,7 @@ urlpatterns = [
     path('login/', login_view, name='login'),
     path('cadastro/', cadastro_view, name='cadastro'),
     path('api/auth/login/', login_api, name='login_api'),
+    path('api/auth/password-reset/', password_reset_api, name='password_reset_api'),
     path('api/auth/cadastro/', cadastro_api, name='cadastro_api'),
     path('logout/', logout_api, name='logout'),
     path('api/state/', system_state_api, name='system_state_api'),
@@ -37,6 +42,22 @@ urlpatterns = [
     path('api/talhoes/<int:talhao_id>/', talhao_update_api, name='talhao_update_api'),
     path('api/talhoes/<int:talhao_id>/delete/', talhao_delete_api, name='talhao_delete_api'),
     path('api/profile/', profile_update_api, name='profile_update_api'),
+    path('api/farms/', farms_api, name='farms_api'),
+    path('api/farms/settings/', farm_settings_api, name='farm_settings_api'),
+    path('api/farms/team/', farm_team_api, name='farm_team_api'),
+    path('api/farms/team/<int:user_id>/', farm_member_api, name='farm_member_api'),
+    path('api/farms/invitations/', farm_invitation_api, name='farm_invitation_api'),
+    path('api/farms/invitations/<int:invitation_id>/', farm_invitation_api, name='farm_invitation_delete_api'),
+    path('api/notifications/', notifications_api, name='notifications_api'),
+    path('api/notifications/<int:notification_id>/read/', notification_read_api, name='notification_read_api'),
+    path('convites/<str:token>/', accept_invitation, name='accept_invitation'),
+    path('conta/redefinir/concluido/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='registration/password_reset_complete.html',
+    ), name='password_reset_complete'),
+    path('conta/redefinir/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='registration/password_reset_confirm.html',
+        success_url=reverse_lazy('dashboard:password_reset_complete'),
+    ), name='password_reset_confirm'),
 
     path('', home, name='home'),
 ]

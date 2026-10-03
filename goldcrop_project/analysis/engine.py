@@ -128,13 +128,3 @@ class GoldCropAnalysisEngine:
             },
             "explanation": explanation,
         }
-
-# Simple demo when run as script
-if __name__ == "__main__":
-    demo = {
-        "soil": {"moisture": 45},
-        "current": {"precipitation": 2.5},
-        "hourly": {"et0": [0.8] * 24, "time": ["2024-01-01T00:00:00Z"] * 24},
-    }
-    eng = GoldCropAnalysisEngine()
-    print(json.dumps(eng.analyze(demo), indent=2))

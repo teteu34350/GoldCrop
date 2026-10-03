@@ -1,10 +1,16 @@
 from datetime import date, datetime, time
+import re
 
+from django.core import mail
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela, Talhao
+from .models import (
+    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
+    Talhao,
+)
 
 
 class CadastroELoginApiTests(TestCase):
@@ -15,6 +21,7 @@ class CadastroELoginApiTests(TestCase):
             "estado": "MG", "cidade": "Varginha", "bairro": "Zona Rural", "endereco": "BR 491 km 10",
             "area_hectares": 120.5, "quantidade_talhoes": 8, "culturas": ["Café Arábica"],
             "tipo_cultivo": "Convencional", "irrigacao": "Gotejamento",
+            "funcao": MembroFazenda.Funcao.PROPRIETARIO,
         }
 
     def test_cadastro_cria_usuario_perfil_e_fazenda_e_autentica(self):
@@ -27,7 +34,22 @@ class CadastroELoginApiTests(TestCase):
         self.assertEqual(fazenda.cep, "37000000")
         self.assertEqual(fazenda.culturas, ["Café Arábica"])
         self.assertEqual(fazenda.talhoes.count(), 8)
+        self.assertEqual(fazenda.membros.get(usuario=user).funcao, MembroFazenda.Funcao.PROPRIETARIO)
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
+
+    def test_cadastro_persiste_a_funcao_escolhida_na_fazenda(self):
+        self.payload["funcao"] = MembroFazenda.Funcao.GERENTE
+        response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(username="maria@example.com")
+        farm = Fazenda.objects.get(produtor=user)
+        self.assertEqual(farm.membros.get(usuario=user).funcao, MembroFazenda.Funcao.GERENTE)
+
+    def test_cadastro_rejeita_funcao_invalida(self):
+        self.payload["funcao"] = "INVALID"
+        response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("funcao", response.json()["field_errors"])
 
     def test_impede_email_duplicado(self):
         self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
@@ -151,6 +173,43 @@ class PersistenciaSistemaTests(TestCase):
             recommendations_by_talhao[first.id],
             recommendations_by_talhao[second.id],
         )
+
+    def test_coleta_usa_a_localizacao_propria_do_talhao(self):
+        first = Talhao.objects.create(
+            fazenda=self.farm, nome="Talhão Leste", latitude=-20.89, longitude=-46.08,
+        )
+        second = Talhao.objects.create(
+            fazenda=self.farm, nome="Talhão Oeste", latitude=-20.91, longitude=-46.11,
+        )
+        payload = {
+            "fetchedAt": "2026-09-01T12:00:00Z",
+            "location": {
+                "latitude": -20.89,
+                "longitude": -46.08,
+                "timezone": "America/Sao_Paulo",
+            },
+            "current": {}, "hourly": {}, "daily": {}, "soil": {},
+        }
+
+        for talhao in (first, second):
+            response = self.client.post(
+                reverse("dashboard:weather_ingest_api"),
+                {**payload, "talhao_id": talhao.id},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 201)
+
+        first_collection = ColetaMeteorologica.objects.get(talhao=first)
+        second_collection = ColetaMeteorologica.objects.get(talhao=second)
+        self.assertEqual(float(first_collection.latitude), -20.89)
+        self.assertEqual(float(first_collection.longitude), -46.08)
+        self.assertEqual(float(second_collection.latitude), -20.91)
+        self.assertEqual(float(second_collection.longitude), -46.11)
+
+        state = self.client.get(reverse("dashboard:system_state_api")).json()
+        talhao_state = {item["id"]: item for item in state["talhoes"]}
+        self.assertEqual(talhao_state[first.id]["weather"]["location"]["latitude"], -20.89)
+        self.assertEqual(talhao_state[second.id]["weather"]["location"]["longitude"], -46.11)
 
     def test_registro_direto_aceita_status_legado_realizada(self):
         talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão Registro", latitude=-20.89, longitude=-46.08)
@@ -301,3 +360,245 @@ class PlanejamentoEIndicadoresTests(TestCase):
         payload = response.json()
         self.assertNotIn(other_talhao.id, [item["id"] for item in payload.get("talhoes", [])])
         self.assertNotIn(other_farm.id, [item["farm_id"] for item in payload.get("talhoes", [])])
+
+
+class MembershipTeamAndNotificationTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="Senha123",
+            first_name="Produtor",
+            last_name="Principal",
+        )
+        self.farm = Fazenda.objects.create(
+            produtor=self.owner,
+            nome="Fazenda Compartilhada",
+            cep="37000000",
+            estado="MG",
+            cidade="Varginha",
+            bairro="Zona Rural",
+            area_hectares=10,
+            quantidade_talhoes=1,
+            culturas=["Café"],
+            tipo_cultivo="Convencional",
+            irrigacao="Gotejamento",
+        )
+        self.talhao = Talhao.objects.create(
+            fazenda=self.farm,
+            nome="Talhão Compartilhado",
+            area_hectares=4,
+            cultura="Café",
+            latitude=-20.89,
+            longitude=-46.08,
+        )
+        MembroFazenda.objects.create(
+            fazenda=self.farm,
+            usuario=self.owner,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
+        )
+        self.client.force_login(self.owner)
+
+    def test_selecao_de_fazenda_e_persistida_na_sessao_e_isolada_por_membro(self):
+        another_owner = User.objects.create_user(
+            username="second@example.com",
+            email="second@example.com",
+            password="Senha123",
+        )
+        another_farm = Fazenda.objects.create(
+            produtor=another_owner,
+            nome="Outra fazenda",
+            cep="37000001",
+            estado="MG",
+            cidade="Varginha",
+            bairro="Zona Rural",
+            area_hectares=20,
+            quantidade_talhoes=1,
+            culturas=["Milho"],
+            tipo_cultivo="Convencional",
+            irrigacao="Gotejamento",
+        )
+        MembroFazenda.objects.create(
+            fazenda=another_farm,
+            usuario=self.owner,
+            funcao=MembroFazenda.Funcao.TECNICO,
+        )
+        list_response = self.client.get(reverse("dashboard:farms_api"))
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(len(list_response.json()["farms"]), 2)
+        switch_response = self.client.post(
+            reverse("dashboard:farms_api"),
+            {"farm_id": another_farm.id},
+            content_type="application/json",
+        )
+        self.assertEqual(switch_response.status_code, 200)
+        state = self.client.get(reverse("dashboard:system_state_api")).json()
+        self.assertEqual(state["farm"]["id"], another_farm.id)
+        self.assertEqual(state["farm"]["role"], MembroFazenda.Funcao.TECNICO)
+        denied = self.client.post(
+            reverse("dashboard:farms_api"),
+            {"farm_id": 999999},
+            content_type="application/json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_permissoes_sao_aplicadas_no_servidor(self):
+        employee = User.objects.create_user(
+            username="employee@example.com",
+            email="employee@example.com",
+            password="Senha123",
+            first_name="Funcionário",
+        )
+        MembroFazenda.objects.create(
+            fazenda=self.farm,
+            usuario=employee,
+            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+        )
+        self.client.force_login(employee)
+        planning_response = self.client.post(
+            reverse("dashboard:planejamento_create_api"),
+            {
+                "talhao_id": self.talhao.id,
+                "produto": "Ureia",
+                "data_planejada": "2026-09-02",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(planning_response.status_code, 403)
+        talhao_response = self.client.post(
+            reverse("dashboard:talhao_create_api"),
+            {"nome": "Talhão proibido", "area": 2, "cultura": "Café", "latitude": -20.9, "longitude": -46.1},
+            content_type="application/json",
+        )
+        self.assertEqual(talhao_response.status_code, 403)
+        application_response = self.client.post(
+            reverse("dashboard:application_create_api"),
+            {
+                "talhao_id": self.talhao.id,
+                "produto": "Fertilizante",
+                "data": "2026-09-02",
+                "status": "REALIZADA",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(application_response.status_code, 201)
+
+    def test_notificacoes_operacionais_sao_persistidas_por_usuario_e_podem_ser_lidas(self):
+        member = User.objects.create_user(
+            username="member@example.com",
+            email="member@example.com",
+            password="Senha123",
+            first_name="Membro",
+        )
+        MembroFazenda.objects.create(
+            fazenda=self.farm,
+            usuario=member,
+            funcao=MembroFazenda.Funcao.TECNICO,
+        )
+        create_response = self.client.post(
+            reverse("dashboard:planejamento_create_api"),
+            {
+                "talhao_id": self.talhao.id,
+                "produto": "Ureia",
+                "data_planejada": "2026-09-02",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+        self.assertEqual(
+            NotificacaoFazenda.objects.filter(fazenda=self.farm, tipo=NotificacaoFazenda.Tipo.PLANEJAMENTO).count(),
+            2,
+        )
+        self.client.force_login(member)
+        notifications = self.client.get(reverse("dashboard:notifications_api")).json()
+        self.assertEqual(notifications["unread_count"], 1)
+        notification_id = notifications["notifications"][0]["id"]
+        read_response = self.client.post(reverse("dashboard:notification_read_api", args=[notification_id]))
+        self.assertEqual(read_response.status_code, 200)
+        self.assertEqual(self.client.get(reverse("dashboard:notifications_api")).json()["unread_count"], 0)
+
+    @override_settings(EMAIL_HOST="", DEFAULT_FROM_EMAIL="")
+    def test_convite_nao_finge_envio_quando_smtp_nao_esta_configurado(self):
+        response = self.client.post(
+            reverse("dashboard:farm_invitation_api"),
+            {"email": "novo@example.com", "role": MembroFazenda.Funcao.FUNCIONARIO},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(ConviteFazenda.objects.exists())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST="smtp.example.test",
+        DEFAULT_FROM_EMAIL="convites@goldcrop.test",
+    )
+    def test_convite_email_e_aceite_criam_membro_persistido(self):
+        response = self.client.post(
+            reverse("dashboard:farm_invitation_api"),
+            {"email": "novo@example.com", "role": MembroFazenda.Funcao.FUNCIONARIO},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(len(mail.outbox), 1)
+        token_match = re.search(r"/convites/([\w-]+)/", mail.outbox[0].body)
+        self.assertIsNotNone(token_match)
+        token = token_match.group(1)
+        self.client.logout()
+        accept_url = reverse("dashboard:accept_invitation", args=[token])
+        self.assertEqual(self.client.get(accept_url).status_code, 200)
+        accepted = self.client.post(
+            accept_url,
+            {"name": "Novo Membro", "password": "senhaNova123"},
+        )
+        self.assertEqual(accepted.status_code, 302)
+        new_user = User.objects.get(email="novo@example.com")
+        membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=new_user)
+        self.assertEqual(membership.funcao, MembroFazenda.Funcao.FUNCIONARIO)
+        self.assertEqual(ConviteFazenda.objects.get(email="novo@example.com").status, ConviteFazenda.Status.ACEITO)
+
+    def test_proprietario_pode_remover_membro_mas_membro_nao_pode_remover_proprietario(self):
+        member = User.objects.create_user(username="remove@example.com", email="remove@example.com", password="Senha123")
+        MembroFazenda.objects.create(fazenda=self.farm, usuario=member, funcao=MembroFazenda.Funcao.GERENTE)
+        response = self.client.delete(reverse("dashboard:farm_member_api", args=[member.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(MembroFazenda.objects.filter(fazenda=self.farm, usuario=member).exists())
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        EMAIL_HOST="smtp.example.test",
+        DEFAULT_FROM_EMAIL="conta@goldcrop.test",
+    )
+    def test_redefinicao_de_senha_envia_link_real_e_atualiza_credencial(self):
+        response = self.client.post(
+            reverse("dashboard:password_reset_api"),
+            {"email": self.owner.email},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        reset_match = re.search(r"/conta/redefinir/([^/]+)/([^/\s]+)/", mail.outbox[0].body)
+        self.assertIsNotNone(reset_match)
+        reset_path = reverse(
+            "dashboard:password_reset_confirm",
+            args=[reset_match.group(1), reset_match.group(2)],
+        )
+        confirm_page = self.client.get(reset_path, follow=True)
+        self.assertEqual(confirm_page.status_code, 200)
+        reset_path = confirm_page.request["PATH_INFO"]
+        changed = self.client.post(
+            reset_path,
+            {"new_password1": "SenhaNova123", "new_password2": "SenhaNova123"},
+        )
+        self.assertRedirects(changed, reverse("dashboard:password_reset_complete"))
+        self.owner.refresh_from_db()
+        self.assertTrue(self.owner.check_password("SenhaNova123"))
+
+    @override_settings(EMAIL_HOST="", DEFAULT_FROM_EMAIL="")
+    def test_redefinicao_de_senha_nao_simula_envio_sem_smtp(self):
+        response = self.client.post(
+            reverse("dashboard:password_reset_api"),
+            {"email": self.owner.email},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(len(mail.outbox), 0)

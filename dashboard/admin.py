@@ -1,6 +1,9 @@
 from django.contrib import admin
 
-from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, LeituraSensorIoT, PerfilProdutor, RecomendacaoJanela, SensorIoT, Talhao
+from .models import (
+    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
+    MembroFazenda, NotificacaoFazenda, PerfilProdutor, RecomendacaoJanela, SensorIoT, Talhao,
+)
 
 
 @admin.register(PerfilProdutor)
@@ -14,6 +17,27 @@ class FazendaAdmin(admin.ModelAdmin):
     list_display = ("nome", "produtor", "cidade", "estado", "area_hectares", "criada_em")
     list_filter = ("estado", "tipo_cultivo", "irrigacao")
     search_fields = ("nome", "produtor__email", "cidade")
+
+
+@admin.register(MembroFazenda)
+class MembroFazendaAdmin(admin.ModelAdmin):
+    list_display = ("fazenda", "usuario", "funcao", "criado_em")
+    list_filter = ("funcao",)
+    search_fields = ("fazenda__nome", "usuario__email")
+
+
+@admin.register(ConviteFazenda)
+class ConviteFazendaAdmin(admin.ModelAdmin):
+    list_display = ("fazenda", "email", "funcao", "status", "expira_em")
+    list_filter = ("status", "funcao")
+    search_fields = ("fazenda__nome", "email")
+
+
+@admin.register(NotificacaoFazenda)
+class NotificacaoFazendaAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "fazenda", "destinatario", "tipo", "lida_em", "criada_em")
+    list_filter = ("tipo", "lida_em")
+    search_fields = ("titulo", "mensagem", "destinatario__email")
 
 
 @admin.register(Talhao)

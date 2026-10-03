@@ -51,27 +51,27 @@
           O GoldCrop cruza dados meteorológicos avançados e algoritmos agronômicos para maximizar o rendimento dos seus insumos na lavoura.
         </p>
 
-        <!-- Metric Ticker Cards -->
+        <!-- Produto e indicadores calculados a partir dos dados cadastrados -->
         <div class="auth-hero-metrics">
           <div class="metric-card">
-            <div class="metric-card-val">+84%</div>
-            <div class="metric-card-label">Eficiência IEA</div>
+            <div class="metric-card-val">IEA</div>
+            <div class="metric-card-label">Índice por recomendação</div>
           </div>
           <div class="metric-card">
-            <div class="metric-card-val">54</div>
-            <div class="metric-card-label">Variáveis de Clima</div>
+            <div class="metric-card-val">Clima</div>
+            <div class="metric-card-label">Dados por talhão</div>
           </div>
         </div>
       </div>
 
       <div class="auth-hero-footer">
         <div class="hero-testimonial">
-          <div class="testimonial-avatar">JO</div>
+          <div class="testimonial-avatar">GC</div>
           <div>
             <p class="testimonial-text">
-              "Com o GoldCrop conseguimos reduzir em 28% o desperdício em pulverizações na nossa safra de café."
+              Organize os talhões, acompanhe condições meteorológicas e registre aplicações com dados associados à fazenda.
             </p>
-            <span class="testimonial-author">João Oliveira — Fazenda Santa Clara</span>
+            <span class="testimonial-author">Ferramentas de gestão agrícola</span>
           </div>
         </div>
       </div>
@@ -179,14 +179,14 @@
 
       <div class="auth-form-header" style="margin-bottom: 1.25rem;">
         <h3 class="auth-form-title" style="font-size: 1.4rem;">Recuperar Senha</h3>
-        <p class="auth-form-subtitle" style="font-size: 0.88rem;">Digite seu e-mail cadastrado para receber as instruções de redefinição.</p>
+        <p class="auth-form-subtitle" style="font-size: 0.88rem;">Se houver uma conta vinculada ao endereço, enviaremos um link de redefinição.</p>
       </div>
 
       <div id="forgot-alert" class="auth-alert">
         <span class="alert-msg"></span>
       </div>
 
-      <form id="forgot-form" novalidate>
+      <form id="forgot-form" data-api-url="{% url 'dashboard:password_reset_api' %}" novalidate>
         {% csrf_token %}
         <div class="form-group">
           <label class="form-label" for="reset_email">E-mail Cadastrado</label>

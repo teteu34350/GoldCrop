@@ -5,77 +5,13 @@
 'use strict';
 
 // =====================================================
-// MOCK DATA
-// =====================================================
-
-const FARM = {
-  name: 'Fazenda Santa Clara',
-  owner: 'João Oliveira',
-  culture: 'Café',
-  area: 84,
-  talhoes: 8,
-  lastUpdate: '10:42',
-};
-
+const FARM = { name: '', owner: '', culture: '', area: 0, talhoes: 0, sensors: 0 };
 const TEAM_DATA = [];
 const ACTIVITY_DATA = [];
-
-const TALHOES_DATA = [
-  { id: 1, name: 'Talhão 01', area: 6.2, culture: 'Café Arábica', variety: 'Catuaí 144', age: '5 anos', soil: 'Franco-argiloso', sensor: 'S02', moisture: 22, temp: 22.5, lastReading: '10:38', iea: 84, status: 'favorable', window: '25/08 · 09:00–11:00', product: 'NPK 20-05-20', inputType: 'Adubo mineral', dose: '300 kg/ha', period: '25/08 — 30/08', rain: 9, futureMoisture: 29, mapX: 6, mapY: 10, mapW: 25, mapH: 27, shape: 'north' },
-  { id: 2, name: 'Talhão 02', area: 9.1, culture: 'Café Arábica', variety: 'Mundo Novo', age: '8 anos', soil: 'Argiloso', sensor: 'S03', moisture: 35, temp: 22.1, lastReading: '10:40', iea: 76, status: 'moderate', window: '27/08 · 09:00–12:00', product: 'Ureia', inputType: 'Adubo nitrogenado', dose: '180 kg/ha', period: '25/08 — 30/08', rain: 12, futureMoisture: 38, mapX: 36, mapY: 7, mapW: 22, mapH: 30, shape: 'east' },
-  { id: 3, name: 'Talhão 03', area: 8.4, culture: 'Café Arábica', variety: 'Catuaí 99', age: '6 anos', soil: 'Argiloso', sensor: 'S04', moisture: 28, temp: 22.8, lastReading: '10:42', iea: 91, status: 'favorable', window: '26/08 · 08:00–11:30', product: 'NPK 20-05-20', inputType: 'Adubo nitrogenado', dose: '320 kg/ha', period: '25/08 — 30/08', rain: 12, futureMoisture: 34, latitude: -20.896861, longitude: -46.088306, radius: 80, mapX: 64, mapY: 9, mapW: 28, mapH: 27, shape: 'south' },
-  { id: 4, name: 'Talhão 04', area: 12.5, culture: 'Café Arábica', variety: 'Bourbon', age: '10 anos', soil: 'Arenoso', sensor: 'S05', moisture: 63, temp: 24.2, lastReading: '10:39', iea: 47, status: 'unfavorable', window: 'Reavaliar após chuva', product: 'Ureia', inputType: 'Adubo nitrogenado', dose: '200 kg/ha', period: '28/08 — 31/08', rain: 24, futureMoisture: 68, mapX: 9, mapY: 48, mapW: 29, mapH: 35, shape: 'west' },
-  { id: 5, name: 'Talhão 05', area: 10.8, culture: 'Café Arábica', variety: 'Catucaí', age: '4 anos', soil: 'Franco-arenoso', sensor: 'S06', moisture: 26, temp: 21.8, lastReading: '10:41', iea: 82, status: 'favorable', window: '26/08 · 07:30–11:00', product: 'Foliar Ca/Mg', inputType: 'Fertilizante foliar', dose: '2 L/ha', period: '26/08 — 29/08', rain: 6, futureMoisture: 31, mapX: 43, mapY: 48, mapW: 22, mapH: 22, shape: 'center' },
-  { id: 6, name: 'Talhão 06', area: 10, culture: 'Café Arábica', variety: 'Acaiá', age: '7 anos', soil: 'Argiloso', sensor: 'S07', moisture: 31, temp: 22.9, lastReading: '10:35', iea: 74, status: 'moderate', window: '27/08 · 09:30–12:30', product: 'Fungicida sistêmico', inputType: 'Defensivo', dose: '1.5 L/ha', period: '27/08 — 30/08', rain: 14, futureMoisture: 35, mapX: 70, mapY: 48, mapW: 20, mapH: 32, shape: 'long' },
-  { id: 7, name: 'Talhão 07', area: 7.3, culture: 'Café Arábica', variety: 'Catuaí 144', age: '3 anos', soil: 'Franco-arenoso', sensor: 'S08', moisture: 19, temp: 25.1, lastReading: '10:37', iea: 58, status: 'unfavorable', window: 'Aguardar reposição hídrica', product: 'Micronutrientes', inputType: 'Fertilizante foliar', dose: '3 L/ha', period: '29/08 — 31/08', rain: 2, futureMoisture: 23, mapX: 10, mapY: 88, mapW: 31, mapH: 14, shape: 'north' },
-  { id: 8, name: 'Talhão 08', area: 8.7, culture: 'Café Arábica', variety: 'Mundo Novo', age: '9 anos', soil: 'Argiloso', sensor: 'S09', moisture: 30, temp: 22.3, lastReading: '10:42', iea: 85, status: 'favorable', window: '26/08 · 08:00–10:30', product: 'NPK 04-14-08', inputType: 'Adubo mineral', dose: '280 kg/ha', period: '26/08 — 30/08', rain: 8, futureMoisture: 34, mapX: 50, mapY: 84, mapW: 39, mapH: 16, shape: 'east' },
-];
-
-const HISTORICO_DATA = [
-  { date: '25/08/2026', talhao: 'Talhão 03', product: 'NPK 20-05-20', qty: '320 kg/ha', ieaPrev: 91, cond: 'Favorável', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-  { date: '20/08/2026', talhao: 'Talhão 02', product: 'Ureia 45%', qty: '180 kg/ha', ieaPrev: 78, cond: 'Favorável', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-  { date: '15/08/2026', talhao: 'Talhão 04', product: 'Nitrogenado Líq.', qty: '95 L/ha', ieaPrev: 32, cond: 'Desfavorável', result: 'Não realizado', condClass: 'unfavorable', resultClass: 'skipped' },
-  { date: '10/08/2026', talhao: 'Talhão 01', product: 'Foliar Ca/Mg', qty: '2 L/ha', ieaPrev: 85, cond: 'Favorável', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-  { date: '05/08/2026', talhao: 'Talhão 05', product: 'Fungicida sistêmico', qty: '1.5 L/ha', ieaPrev: 88, cond: 'Favorável', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-  { date: '28/07/2026', talhao: 'Talhão 06', product: 'NPK 04-14-08', qty: '280 kg/ha', ieaPrev: 71, cond: 'Moderada', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-  { date: '22/07/2026', talhao: 'Talhão 07', product: 'Calcário', qty: '2 t/ha', ieaPrev: 18, cond: 'Desfavorável', result: 'Não realizado', condClass: 'unfavorable', resultClass: 'skipped' },
-  { date: '15/07/2026', talhao: 'Talhão 08', product: 'Micronutrientes', qty: '3 L/ha', ieaPrev: 93, cond: 'Favorável', result: 'Realizado', condClass: 'favorable', resultClass: 'done' },
-];
-
-// Calendar day data for August 2026
-const CAL_DATA = {
-  '2026-08-01': { iea: 72, type: 'past', rain: 5, temp: 21, app: false },
-  '2026-08-02': { iea: 68, type: 'past', rain: 0, temp: 23, app: false },
-  '2026-08-03': { iea: 55, type: 'past', rain: 18, temp: 19, app: false },
-  '2026-08-04': { iea: 42, type: 'past', rain: 24, temp: 18, app: false },
-  '2026-08-05': { iea: 88, type: 'past', rain: 2, temp: 24, app: true },
-  '2026-08-06': { iea: 81, type: 'past', rain: 0, temp: 25, app: false },
-  '2026-08-07': { iea: 76, type: 'past', rain: 3, temp: 23, app: false },
-  '2026-08-08': { iea: 79, type: 'past', rain: 1, temp: 22, app: false },
-  '2026-08-09': { iea: 84, type: 'past', rain: 0, temp: 24, app: false },
-  '2026-08-10': { iea: 85, type: 'past', rain: 0, temp: 25, app: true },
-  '2026-08-11': { iea: 62, type: 'past', rain: 8, temp: 21, app: false },
-  '2026-08-12': { iea: 47, type: 'past', rain: 20, temp: 19, app: false },
-  '2026-08-13': { iea: 33, type: 'past', rain: 30, temp: 18, app: false },
-  '2026-08-14': { iea: 58, type: 'past', rain: 10, temp: 20, app: false },
-  '2026-08-15': { iea: 32, type: 'past', rain: 35, temp: 17, app: false },
-  '2026-08-16': { iea: 61, type: 'past', rain: 6, temp: 21, app: false },
-  '2026-08-17': { iea: 74, type: 'past', rain: 2, temp: 22, app: false },
-  '2026-08-18': { iea: 83, type: 'past', rain: 0, temp: 24, app: false },
-  '2026-08-19': { iea: 80, type: 'past', rain: 1, temp: 23, app: false },
-  '2026-08-20': { iea: 78, type: 'past', rain: 2, temp: 22, app: true },
-  '2026-08-21': { iea: 87, type: 'today', rain: 4, temp: 22.8, app: false },
-  '2026-08-22': { iea: 78, type: 'future', rain: 8, temp: 22, app: false },
-  '2026-08-23': { iea: 64, type: 'future', rain: 15, temp: 21, app: false },
-  '2026-08-24': { iea: 82, type: 'future', rain: 6, temp: 23, app: false },
-  '2026-08-25': { iea: 82, type: 'future', rain: 12, temp: 23, app: false, planned: 'Talhão 03 · NPK 20-05-20' },
-  '2026-08-26': { iea: 91, type: 'future', rain: 5, temp: 24, app: false, planned: 'Talhão 03 · NPK 20-05-20' },
-  '2026-08-27': { iea: 73, type: 'future', rain: 9, temp: 22, app: false, planned: 'Talhão 03 · NPK 20-05-20' },
-  '2026-08-28': { iea: 65, type: 'future', rain: 14, temp: 21, app: false },
-  '2026-08-29': { iea: 58, type: 'future', rain: 20, temp: 20, app: false },
-  '2026-08-30': { iea: 77, type: 'future', rain: 7, temp: 22, app: false },
-  '2026-08-31': { iea: 80, type: 'future', rain: 4, temp: 23, app: false },
-};
+const INVITATIONS_DATA = [];
+const TALHOES_DATA = [];
+const HISTORICO_DATA = [];
+const CAL_DATA = {};
 
 function csrfToken() {
   return document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -86,9 +22,88 @@ async function apiRequest(url, options = {}) {
   return fetch(url, { credentials: 'same-origin', ...options, headers });
 }
 
-let DATA_SOURCE = 'demo';
+async function loadFarmTeamData() {
+  const response = await apiRequest('/api/farms/team/');
+  if (!response.ok) throw new Error(`Team request failed: ${response.status}`);
+  const data = await response.json();
+  TEAM_DATA.splice(0, TEAM_DATA.length, ...(data.members || []));
+  INVITATIONS_DATA.splice(0, INVITATIONS_DATA.length, ...(data.invitations || []));
+}
+
+async function loadNotifications() {
+  const response = await apiRequest('/api/notifications/');
+  if (!response.ok) throw new Error(`Notifications request failed: ${response.status}`);
+  const data = await response.json();
+  ACTIVITY_DATA.splice(0, ACTIVITY_DATA.length, ...(data.notifications || []));
+  renderNotifications(data.notifications || [], data.unread_count || 0);
+}
+
+function renderNotifications(notifications, unreadCount) {
+  const badge = document.getElementById('notifBadge');
+  const count = document.getElementById('notificationCount');
+  const list = document.getElementById('notificationList');
+  if (badge) {
+    badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+    badge.hidden = unreadCount === 0;
+  }
+  const dashboardCount = document.getElementById('dashboardNotifCount');
+  if (dashboardCount) dashboardCount.textContent = String(unreadCount);
+  if (count) count.textContent = `${unreadCount} não lida${unreadCount === 1 ? '' : 's'}`;
+  if (!list) return;
+  list.innerHTML = notifications.length
+    ? notifications.map(item => `
+      <article class="notification-item${item.read ? '' : ' unread'}">
+        <div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p>
+        <small>${escapeHtml(item.actor || '')} · ${new Date(item.created_at).toLocaleString('pt-BR')}</small></div>
+        ${item.read ? '' : `<button type="button" aria-label="Marcar ${escapeHtml(item.title)} como lida" onclick="markNotificationRead(${Number(item.id)})">Marcar como lida</button>`}
+      </article>`).join('')
+    : '<p class="notification-empty">Nenhuma notificação registrada para esta fazenda.</p>';
+}
+
+async function toggleNotifications(event) {
+  event?.stopPropagation();
+  const panel = document.getElementById('notificationPanel');
+  const button = document.getElementById('notifBtn');
+  if (!panel) return;
+  panel.hidden = !panel.hidden;
+  button?.setAttribute('aria-expanded', String(!panel.hidden));
+  if (panel.hidden) return;
+  try {
+    await loadNotifications();
+  } catch (error) {
+    console.error('Falha ao atualizar notificações:', error);
+    const list = document.getElementById('notificationList');
+    if (list) list.innerHTML = '<p class="notification-empty">Não foi possível carregar as notificações. Tente novamente.</p>';
+  }
+}
+
+async function refreshLiveData() {
+  try {
+    await Promise.all([loadFarmTeamData(), loadNotifications()]);
+  } catch (error) {
+    console.error('Falha ao carregar equipe e notificações:', error);
+    const list = document.getElementById('notificationList');
+    if (list) list.innerHTML = '<p class="notification-empty">Não foi possível carregar as informações. Tente novamente.</p>';
+    showToast('Não foi possível carregar equipe e notificações do servidor.', 'error');
+  }
+}
+
+async function markNotificationRead(notificationId) {
+  try {
+    const response = await apiRequest(`/api/notifications/${notificationId}/read/`, { method: 'POST', body: '{}' });
+    if (!response.ok) throw new Error(`Notification update failed: ${response.status}`);
+    await loadNotifications();
+  } catch (error) {
+    console.error('Falha ao marcar notificação como lida:', error);
+    showToast('Não foi possível atualizar a notificação.', 'error');
+  }
+}
+
+let DATA_SOURCE = 'empty';
 let APPLICATIONS_FROM_DB = [];
 let PLANNINGS_FROM_DB = [];
+const talhaoLocationPickers = new Map();
+let weatherRequestId = 0;
 
 function clearCalendarData() {
   Object.keys(CAL_DATA).forEach(date => delete CAL_DATA[date]);
@@ -96,28 +111,33 @@ function clearCalendarData() {
 
 async function loadDatabaseState() {
   try {
-    if (!selectedTalhaoRefId) {
-      const storedTalhaoId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
-      selectedTalhaoRefId = TALHOES_DATA.some(item => item.id === storedTalhaoId) ? storedTalhaoId : null;
-    }
-    const query = selectedTalhaoRefId ? `?talhao_id=${encodeURIComponent(selectedTalhaoRefId)}` : '';
-    const response = await apiRequest(`/api/state/${query}`);
+    const response = await apiRequest('/api/state/');
     if (!response.ok) throw new Error(`Database state request failed: ${response.status}`);
     const state = await response.json();
     if (!state.farm) {
       DATA_SOURCE = 'empty';
-      Object.assign(FARM, { name: '', area: 0, talhoes: 0, culture: '' });
+      Object.assign(FARM, { name: '', owner: '', area: 0, talhoes: 0, culture: '', sensors: 0 });
+      FARM.permissions = {};
+      USER_DATA.farm = 'Sem fazenda cadastrada';
+      USER_DATA.role = '';
       TALHOES_DATA.splice(0, TALHOES_DATA.length);
       HISTORICO_DATA.splice(0, HISTORICO_DATA.length);
       APPLICATIONS_FROM_DB = [];
       PLANNINGS_FROM_DB = [];
       clearCalendarData();
       selectedTalhaoRefId = null;
+      localStorage.removeItem('goldcrop.selectedTalhaoId');
+      window.GOLDCROP_WEATHER = null;
       window.GOLDCROP_RECOMMENDATIONS = { recommendations: [], bestRecommendation: null };
       return;
     }
+    if (!Array.isArray(state.talhoes) || !Array.isArray(state.applications) || !Array.isArray(state.planejamentos)) {
+      throw new Error('The database state response is incomplete.');
+    }
     DATA_SOURCE = 'database';
     Object.assign(FARM, state.farm, { talhoes: state.talhoes.length });
+    USER_DATA.farm = FARM.name;
+    USER_DATA.role = state.farm.role_label || '';
     clearCalendarData();
     TALHOES_DATA.splice(0, TALHOES_DATA.length, ...state.talhoes.map(item => {
       const recommendations = (item.recommendations || [])
@@ -151,15 +171,16 @@ async function loadDatabaseState() {
         mapH: 22,
       };
     }));
+    const storedTalhaoId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
     if (!TALHOES_DATA.some(item => item.id === Number(selectedTalhaoRefId))) {
-      const storedId = Number(localStorage.getItem('goldcrop.selectedTalhaoId'));
-      selectedTalhaoRefId = TALHOES_DATA.some(item => item.id === storedId)
-        ? storedId
+      selectedTalhaoRefId = TALHOES_DATA.some(item => item.id === storedTalhaoId)
+        ? storedTalhaoId
         : TALHOES_DATA[0]?.id ?? null;
     }
-    localStorage.setItem('goldcrop.selectedTalhaoId', String(selectedTalhaoRefId));
-    APPLICATIONS_FROM_DB = state.applications || [];
-    PLANNINGS_FROM_DB = state.planejamentos || [];
+    if (selectedTalhaoRefId === null) localStorage.removeItem('goldcrop.selectedTalhaoId');
+    else localStorage.setItem('goldcrop.selectedTalhaoId', String(selectedTalhaoRefId));
+    APPLICATIONS_FROM_DB = state.applications;
+    PLANNINGS_FROM_DB = state.planejamentos;
     HISTORICO_DATA.splice(0, HISTORICO_DATA.length, ...state.applications.map(item => ({
       ...item,
       resultClass: item.status === 'done' ? 'done' : 'skipped',
@@ -177,15 +198,26 @@ async function loadDatabaseState() {
     if (selectedTalhao) {
       selectedTalhao.analysis = window.GOLDCROP_RECOMMENDATIONS;
     }
-    syncTalhaoSelectors();
+    syncCalendarTalhaoSelector();
     updateSystemFromAnalysis();
   } catch (error) {
     console.warn('Dados do banco indisponíveis:', error);
-    DATA_SOURCE = 'demo';
+    DATA_SOURCE = 'error';
+    Object.assign(FARM, { name: '', owner: '', area: 0, talhoes: 0, culture: '', sensors: 0 });
+    FARM.permissions = {};
+    USER_DATA.farm = 'Sem fazenda cadastrada';
+    USER_DATA.role = '';
+    TALHOES_DATA.splice(0, TALHOES_DATA.length);
+    HISTORICO_DATA.splice(0, HISTORICO_DATA.length);
     APPLICATIONS_FROM_DB = [];
     PLANNINGS_FROM_DB = [];
-    Object.assign(FARM, { name: 'Modo demonstração', area: 84, talhoes: TALHOES_DATA.length, culture: 'Café' });
-    window.GOLDCROP_RECOMMENDATIONS = window.GOLDCROP_RECOMMENDATIONS || { recommendations: [], bestRecommendation: null };
+    clearCalendarData();
+    selectedTalhaoRefId = null;
+    localStorage.removeItem('goldcrop.selectedTalhaoId');
+    window.GOLDCROP_WEATHER = null;
+    window.GOLDCROP_RECOMMENDATIONS = { recommendations: [], bestRecommendation: null };
+    syncCalendarTalhaoSelector();
+    showToast('Não foi possível carregar os dados da fazenda. Atualize a página ou tente novamente.', 'error');
   }
 }
 
@@ -203,8 +235,8 @@ async function renderDashboard() {
   const selectedTalhao = getSelectedReferenceTalhao();
   const subtitle = document.getElementById('dashboardSubtitle');
   if (subtitle) {
-    subtitle.textContent = DATA_SOURCE === 'demo'
-      ? 'Modo demonstração · os dados exibidos são fictícios'
+    subtitle.textContent = DATA_SOURCE === 'error'
+      ? 'Não foi possível carregar os dados da fazenda'
       : selectedTalhao
         ? `Análise individual do ${selectedTalhao.name}`
         : 'Cadastre um talhão para iniciar a análise';
@@ -288,8 +320,6 @@ async function renderDashboard() {
   const successRate = HISTORICO_DATA.length > 0 ? ((executed / HISTORICO_DATA.length) * 100).toFixed(0) : '—';
   document.getElementById('appSuccessRate').textContent = successRate + '%';
 
-  // Notifications
-  document.getElementById('dashboardNotifCount').textContent = '0';
 }
 
 function renderDashboardTalhoes() {
@@ -340,17 +370,20 @@ function renderDashboardTalhoes() {
 async function syncAllViewsFromServer() {
   await loadDatabaseState();
   syncCalendarTalhaoSelector();
+  const reference = getSelectedReferenceTalhao();
+  if (reference) {
+    await loadLocalWeather(reference.id);
+  }
+  await refreshLiveData();
+  syncCalendarTalhaoSelector();
   if (document.getElementById('calGrid')) renderCalendar();
   if (document.getElementById('mapContainer')) renderTalhoes();
   if (document.getElementById('fazendaContent')) renderFazenda();
   if (document.getElementById('historicoTable')) renderHistorico();
   if (document.getElementById('aplicacoesContent')) renderAplicacoes();
-  if (document.getElementById('page-dashboard')) renderDashboard();
+  if (document.getElementById('page-dashboard')) await renderDashboard();
+  if (document.getElementById('settingsContent')) renderSettings();
   updateProfileDOM();
-  const reference = getSelectedReferenceTalhao();
-  if (reference) {
-    await loadLocalWeather(reference.id);
-  }
 }
 
 // =====================================================
@@ -364,6 +397,8 @@ calMonth.setDate(1);
 let chartsInitialized = {};
 let sidebarOpen = false;
 let talhoesMap = null;
+let talhaoMapLayers = new Map();
+let focusedTalhaoMapId = null;
 let selectedTalhaoRefId = null;
 let activeTalhaoFilter = 'all';
 
@@ -403,8 +438,18 @@ function syncCalendarTalhaoSelector() {
   });
   const summary = document.getElementById('talhoesFarmSummary');
   if (summary) {
-    const sourceLabel = DATA_SOURCE === 'database' ? 'Dados da fazenda' : DATA_SOURCE === 'demo' ? 'Modo demonstração (dados fictícios)' : 'Nenhum dado cadastrado';
-    summary.textContent = `${FARM.name || 'Sem fazenda'} · ${FARM.area ? `${FARM.area} ha` : 'área não informada'} · ${TALHOES_DATA.length} talhões · ${sourceLabel}`;
+    const sourceLabel = DATA_SOURCE === 'database'
+      ? 'Dados cadastrados'
+      : DATA_SOURCE === 'error'
+        ? 'Falha ao carregar dados'
+        : 'Nenhum dado cadastrado';
+    const fullSummary = document.createElement('span');
+    fullSummary.className = 'talhoes-summary-desktop';
+    fullSummary.textContent = `${FARM.name || 'Sem fazenda'} · ${FARM.area ? `${FARM.area} ha` : 'área não informada'} · ${TALHOES_DATA.length} talhões · ${sourceLabel}`;
+    const compactSummary = document.createElement('span');
+    compactSummary.className = 'talhoes-summary-mobile';
+    compactSummary.textContent = `${TALHOES_DATA.length} ${TALHOES_DATA.length === 1 ? 'talhão' : 'talhões'} na fazenda`;
+    summary.replaceChildren(fullSummary, compactSummary);
   }
   const state = document.getElementById('talhaoAnalysisState');
   if (state) {
@@ -618,6 +663,7 @@ function applyWeatherToCalendar(weather) {
       et0: finiteWeatherValue(values.et0_fao_evapotranspiration?.[index]),
     };
   });
+  return analysis;
 }
 
 function formatRecommendationDate(date) {
@@ -747,6 +793,7 @@ function updateSystemFromAnalysis() {
 }
 
 async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
+  const requestId = ++weatherRequestId;
   const reference = TALHOES_DATA.find(t => t.id === Number(referenceTalhaoId)) || getSelectedReferenceTalhao();
   if (!reference) {
     window.GOLDCROP_RECOMMENDATIONS = { recommendations: [], bestRecommendation: null };
@@ -795,9 +842,10 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
     if (!response.ok) throw new Error('Weather API unavailable');
     const data = await response.json();
+    if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
     const normalized = normalizeOpenMeteoWeather(data, reference);
     window.GOLDCROP_WEATHER = normalized;
-    applyWeatherToCalendar(normalized);
+    const analysis = applyWeatherToCalendar(normalized);
     const collectionResponse = await apiRequest('/api/weather/ingest/', {
       method: 'POST',
       body: JSON.stringify({ ...normalized, talhao_id: reference.id }),
@@ -805,19 +853,21 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     if (!collectionResponse.ok) throw new Error(`Weather persistence failed: ${collectionResponse.status}`);
     const recommendationResponse = await apiRequest('/api/recommendations/ingest/', {
       method: 'POST',
-      body: JSON.stringify({ ...window.GOLDCROP_RECOMMENDATIONS, talhao_id: reference.id }),
+      body: JSON.stringify({ ...analysis, talhao_id: reference.id }),
     });
     if (!recommendationResponse.ok) throw new Error(`Recommendation persistence failed: ${recommendationResponse.status}`);
     const savedRecommendations = await recommendationResponse.json();
     reference.recommendations = savedRecommendations.recommendations || [];
     reference.analysis = {
-      ...window.GOLDCROP_RECOMMENDATIONS,
+      ...analysis,
       recommendations: reference.recommendations,
       bestRecommendation: reference.recommendations.reduce(
         (best, item) => !best || item.adequacyIndex > best.adequacyIndex ? item : best,
         null
       ),
     };
+    if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
+    window.GOLDCROP_RECOMMENDATIONS = reference.analysis;
     updateSystemFromAnalysis();
     const current = normalized.current.values;
     const rain = finiteWeatherValue(normalized.daily.values.precipitation_sum?.[0]);
@@ -851,6 +901,7 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     if (document.getElementById('mapContainer')) renderTalhoes();
     if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
   } catch (error) {
+    if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
     console.warn('Previsão local indisponível:', error);
     const weatherSummary = document.getElementById('weatherSummary');
     if (reference.weather?.hourly?.timestamps?.length) {
@@ -1134,7 +1185,7 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
 // =====================================================
 
 function talhaoStatusPresentation(talhao) {
-  if (!talhao.analysis?.bestRecommendation && DATA_SOURCE !== 'demo') {
+  if (!talhao.analysis?.bestRecommendation) {
     const hasCoordinates = Number.isFinite(talhao.latitude) && Number.isFinite(talhao.longitude);
     return {
       label: !hasCoordinates || talhao.weather ? 'Dados insuficientes' : 'Aguardando dados',
@@ -1147,10 +1198,79 @@ function talhaoStatusPresentation(talhao) {
   return { label: 'Desfavorável', color: '#ef4444', chip: 'red' };
 }
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function renderSelectedTalhaoMapInfo(talhao) {
+  const container = document.getElementById('selectedTalhaoMapInfo');
+  const summary = document.getElementById('selectedTalhaoSummary');
+  if (!talhao) {
+    if (container) container.innerHTML = '';
+    if (summary) summary.innerHTML = '';
+    return;
+  }
+
+  if (summary) {
+    const status = talhaoStatusPresentation(talhao);
+    const area = finiteWeatherValue(talhao.area);
+    const iea = Number.isFinite(talhao.iea) ? `${talhao.iea}%` : '—';
+    summary.innerHTML = `
+      <div class="selected-talhao-summary-main">
+        <div class="selected-talhao-summary-copy">
+          <h2>${escapeHtml(talhao.name || `Talhão ${String(talhao.id).padStart(2, '0')}`)}</h2>
+          <p>${escapeHtml(talhao.culture || 'Cultura não informada')} · ${area === null ? 'Área não informada' : `${formatMetricValue(area, ' ha')}`}</p>
+        </div>
+        <span class="talhao-status-label ${status.chip}">${escapeHtml(status.label)}</span>
+      </div>
+      <div class="selected-talhao-summary-metrics">
+        <div><span>Janela</span><strong>${escapeHtml(talhao.window || 'Sem janela recomendada')}</strong></div>
+        <div><span>IEA</span><strong>${iea}</strong></div>
+      </div>
+      <button class="selected-talhao-details-link" type="button" aria-controls="selectedTalhaoMapInfo" onclick="scrollToTalhaoDetails()">
+        Ver detalhes <span aria-hidden="true">↓</span>
+      </button>
+    `;
+  }
+
+  if (container) {
+    container.innerHTML = `
+      <h2 class="selected-talhao-details-title">Detalhes completos <span>${escapeHtml(talhao.name || '')}</span></h2>
+      <div class="selected-talhao-details">${getTalhaoDetailsMarkup(talhao, { inline: true })}</div>
+    `;
+  }
+}
+
+function scrollToTalhaoDetails() {
+  document.getElementById('selectedTalhaoMapInfo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function focusTalhaoOnMap(talhaoId) {
+  const talhao = TALHOES_DATA.find(item => Number(item.id) === Number(talhaoId));
+  const layers = talhaoMapLayers.get(Number(talhaoId));
+  renderSelectedTalhaoMapInfo(talhao);
+  if (!talhao || !layers || !talhoesMap) return;
+
+  focusedTalhaoMapId = Number(talhaoId);
+  talhoesMap.flyTo([talhao.latitude, talhao.longitude], Math.max(talhoesMap.getZoom(), 16), {
+    animate: true,
+    duration: 0.6,
+  });
+  layers.marker.openPopup();
+}
+
 function renderTalhoes() {
   const container = document.getElementById('mapContainer');
   const list = document.getElementById('talhoesList');
   if (!container || !list) return;
+  const createButton = document.getElementById('btnCadastrarTalhao');
+  if (createButton) createButton.hidden = !FARM.permissions?.manage;
   const visibleTalhoes = TALHOES_DATA.filter(t => activeTalhaoFilter === 'all'
     || (activeTalhaoFilter === 'favorable' && t.status === 'favorable')
     || (activeTalhaoFilter === 'alert' && ['moderate', 'unfavorable', 'insufficient'].includes(t.status)));
@@ -1159,6 +1279,7 @@ function renderTalhoes() {
     talhoesMap.remove();
     talhoesMap = null;
   }
+  talhaoMapLayers = new Map();
   container.innerHTML = '';
   container.classList.add('leaflet-map-container');
 
@@ -1180,8 +1301,15 @@ function renderTalhoes() {
     locatedTalhoes.forEach(t => {
       const status = talhaoStatusPresentation(t);
       const color = status.color;
-      const iea = Number.isFinite(t.iea) ? `IEA ${t.iea}%` : 'Aguardando análise individual';
-      const popup = `<strong>${t.name}</strong><br>${status.label}<br>${iea}`;
+      const iea = Number.isFinite(t.iea) ? `${t.iea}%` : 'Indisponível';
+      const popup = `
+        <div class="talhao-map-popup">
+          <strong>${escapeHtml(t.name)}</strong>
+          <span>${escapeHtml(t.culture || 'Cultura não informada')} · ${finiteWeatherValue(t.area) == null ? 'Área não informada' : `${formatMetricValue(t.area, ' ha')}`}</span>
+          <span>Status: ${escapeHtml(status.label)} · IEA: ${escapeHtml(iea)}</span>
+          <span>Localização: ${t.latitude.toFixed(6)}, ${t.longitude.toFixed(6)}</span>
+          <span>Janela: ${escapeHtml(t.window || 'Sem recomendação')}</span>
+        </div>`;
       const marker = L.circleMarker([t.latitude, t.longitude], {
         radius: 7,
         color: '#fff',
@@ -1199,11 +1327,22 @@ function renderTalhoes() {
 
       marker.bindPopup(popup);
       perimeter.bindPopup(popup);
-      marker.on('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
-      perimeter.on('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
+      marker.on('click', () => {
+        selectTalhao(t.id);
+        focusTalhaoOnMap(t.id);
+      });
+      perimeter.on('click', () => {
+        selectTalhao(t.id);
+        focusTalhaoOnMap(t.id);
+      });
+      talhaoMapLayers.set(Number(t.id), { marker, perimeter });
     });
 
-    if (locatedTalhoes.length > 1) {
+    const focusedTalhao = locatedTalhoes.find(item => Number(item.id) === Number(focusedTalhaoMapId));
+    if (focusedTalhao) {
+      talhoesMap.setView([focusedTalhao.latitude, focusedTalhao.longitude], 16);
+      talhaoMapLayers.get(Number(focusedTalhao.id))?.marker.openPopup();
+    } else if (locatedTalhoes.length > 1) {
       const bounds = L.latLngBounds(locatedTalhoes.map(t => [t.latitude, t.longitude]));
       talhoesMap.fitBounds(bounds.pad(0.15), { maxZoom: 16 });
     }
@@ -1224,52 +1363,171 @@ function renderTalhoes() {
     const status = talhaoStatusPresentation(t);
     const el = document.createElement('div');
     el.className = `talhao-list-card talhao-status-${t.status} ${t.id === selectedTalhaoRefId ? 'selected' : ''}`;
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.setAttribute('aria-pressed', String(t.id === selectedTalhaoRefId));
     el.innerHTML = `
       <div class="talhao-card-top">
-        <div class="talhao-num">${String(t.id).padStart(2,'0')}</div>
+        <div class="talhao-card-identity">
+          <div class="talhao-num">${String(t.id).padStart(2,'0')}</div>
+          <div class="talhao-info">
+            <div class="talhao-name">${escapeHtml(t.name || 'Talhão')}</div>
+            <div class="talhao-meta">${escapeHtml(t.culture || 'Cultura não informada')} · ${Number(t.area) ? `${Number(t.area).toFixed(1)} ha` : 'Área não informada'}</div>
+          </div>
+        </div>
         <span class="talhao-status-label ${status.chip}">${status.label}</span>
       </div>
-      <div class="talhao-info">
-        <div class="talhao-name">${t.name}</div>
-        <div class="talhao-meta">${Number(t.area) ? `${Number(t.area).toFixed(1)} ha` : 'Área não informada'} · ${t.culture || 'Cultura não informada'}</div>
-      </div>
       <div class="talhao-card-bottom">
-        <span>${t.window || 'Sem janela recomendada'}</span>
-        <strong class="talhao-iea-chip ${status.chip}">${Number.isFinite(t.iea) ? `${t.iea}%` : '—'}</strong>
+        <span class="talhao-card-window">${escapeHtml(t.window || 'Sem janela recomendada')}</span>
+        <strong class="talhao-iea-chip ${status.chip}">IEA ${Number.isFinite(t.iea) ? `${t.iea}%` : '—'}</strong>
       </div>
     `;
-    el.addEventListener('click', () => { selectTalhao(t.id); openTalhaoModal(t); });
+    el.addEventListener('click', () => {
+      selectTalhao(t.id);
+      focusTalhaoOnMap(t.id);
+    });
+    el.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        el.click();
+      }
+    });
     list.appendChild(el);
   });
+  renderSelectedTalhaoMapInfo(TALHOES_DATA.find(item => item.id === selectedTalhaoRefId));
 }
 
 function openCadastrarTalhaoModal() {
+  if (!FARM.permissions?.manage) {
+    showToast('Seu perfil não pode cadastrar talhões nesta fazenda.', 'error');
+    return;
+  }
   document.getElementById('cadastroTalhaoForm')?.reset();
-  document.getElementById('novoTalhaoCultura').value = 'Café';
+  document.getElementById('novoTalhaoCultura').value = FARM.culture || '';
   document.getElementById('modalCadastrarTalhao').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window.setTimeout(() => {
+    renderTalhaoLocationPicker('novoTalhaoMap', 'novoTalhaoLatitude', 'novoTalhaoLongitude');
+  }, 0);
 }
 
 function closeCadastrarTalhaoModal() {
+  destroyTalhaoLocationPicker('novoTalhaoMap');
   document.getElementById('modalCadastrarTalhao').style.display = 'none';
   document.body.style.overflow = '';
 }
 
 function openEditarTalhaoModal(talhaoId) {
+  if (!FARM.permissions?.manage) {
+    showToast('Seu perfil não pode alterar talhões nesta fazenda.', 'error');
+    return;
+  }
   const t = TALHOES_DATA.find(item => item.id === talhaoId);
   if (!t) return;
   document.getElementById('editarTalhaoId').value = t.id;
   document.getElementById('editarTalhaoNome').value = t.name;
   document.getElementById('editarTalhaoArea').value = t.area ?? '';
-  document.getElementById('editarTalhaoCultura').value = t.culture || 'Café';
+  document.getElementById('editarTalhaoCultura').value = t.culture || '';
   document.getElementById('editarTalhaoLatitude').value = t.latitude ?? '';
   document.getElementById('editarTalhaoLongitude').value = t.longitude ?? '';
   document.getElementById('editarTalhaoRaio').value = t.radius || 80;
   document.getElementById('modalEditarTalhao').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  window.setTimeout(() => {
+    renderTalhaoLocationPicker('editarTalhaoMap', 'editarTalhaoLatitude', 'editarTalhaoLongitude', t.id);
+  }, 0);
+}
+
+function destroyTalhaoLocationPicker(mapId) {
+  const picker = talhaoLocationPickers.get(mapId);
+  if (!picker) return;
+  picker.controller.abort();
+  picker.map.remove();
+  talhaoLocationPickers.delete(mapId);
+}
+
+function renderTalhaoLocationPicker(mapId, latitudeInputId, longitudeInputId, selectedTalhaoId = null) {
+  const container = document.getElementById(mapId);
+  const latitudeInput = document.getElementById(latitudeInputId);
+  const longitudeInput = document.getElementById(longitudeInputId);
+  const status = document.getElementById(`${mapId}Status`);
+  if (!container || !latitudeInput || !longitudeInput) return;
+  if (typeof L === 'undefined') {
+    container.innerHTML = '<div class="map-loading-message">Mapa indisponível. Informe latitude e longitude nos campos.</div>';
+    return;
+  }
+
+  destroyTalhaoLocationPicker(mapId);
+  const selectedLatitude = finiteWeatherValue(latitudeInput.value);
+  const selectedLongitude = finiteWeatherValue(longitudeInput.value);
+  const otherTalhoes = TALHOES_DATA.filter(item =>
+    item.id !== selectedTalhaoId
+    && Number.isFinite(item.latitude)
+    && Number.isFinite(item.longitude)
+  );
+  const center = selectedLatitude != null && selectedLongitude != null
+    ? [selectedLatitude, selectedLongitude]
+    : otherTalhoes.length
+      ? [otherTalhoes[0].latitude, otherTalhoes[0].longitude]
+      : [-14.235, -51.9253];
+  const zoom = selectedLatitude != null && selectedLongitude != null ? 16 : otherTalhoes.length ? 14 : 4;
+  const map = L.map(container).setView(center, zoom);
+  const controller = new AbortController();
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  otherTalhoes.forEach(item => {
+    L.circleMarker([item.latitude, item.longitude], {
+      radius: 6,
+      color: '#fff',
+      weight: 2,
+      fillColor: '#64748b',
+      fillOpacity: 0.9,
+    }).bindTooltip(`${item.name} · localização cadastrada`).addTo(map);
+  });
+
+  let marker = null;
+  const updateStatus = () => {
+    if (!status) return;
+    const latitude = finiteWeatherValue(latitudeInput.value);
+    const longitude = finiteWeatherValue(longitudeInput.value);
+    if (latitude == null || longitude == null) {
+      status.textContent = 'Selecione o ponto deste talhão no mapa ou informe as coordenadas.';
+      return;
+    }
+    if (marker) marker.setLatLng([latitude, longitude]);
+    else marker = L.marker([latitude, longitude], { draggable: true }).addTo(map);
+    map.panTo([latitude, longitude]);
+    marker.off('dragend');
+    marker.on('dragend', event => {
+      const point = event.target.getLatLng();
+      setPoint(point.lat, point.lng);
+    });
+    const duplicate = otherTalhoes.find(item =>
+      Math.abs(item.latitude - latitude) < 0.000001
+      && Math.abs(item.longitude - longitude) < 0.000001
+    );
+    status.textContent = duplicate
+      ? `Ponto igual ao ${duplicate.name}. Escolha o centro específico deste talhão se as áreas forem diferentes.`
+      : `Localização deste talhão: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  };
+  const setPoint = (latitude, longitude) => {
+    latitudeInput.value = latitude.toFixed(6);
+    longitudeInput.value = longitude.toFixed(6);
+    updateStatus();
+  };
+  map.on('click', event => setPoint(event.latlng.lat, event.latlng.lng));
+  latitudeInput.addEventListener('input', updateStatus, { signal: controller.signal });
+  longitudeInput.addEventListener('input', updateStatus, { signal: controller.signal });
+  talhaoLocationPickers.set(mapId, { map, controller });
+  updateStatus();
+  window.setTimeout(() => map.invalidateSize(), 50);
 }
 
 function closeEditarTalhaoModal() {
+  destroyTalhaoLocationPicker('editarTalhaoMap');
   document.getElementById('modalEditarTalhao').style.display = 'none';
   document.body.style.overflow = '';
 }
@@ -1279,7 +1537,7 @@ async function cadastrarTalhao(e) {
   try {
     const name = document.getElementById('novoTalhaoNome').value.trim();
     const area = Number(document.getElementById('novoTalhaoArea').value);
-    const culture = document.getElementById('novoTalhaoCultura').value.trim() || 'Café';
+    const culture = document.getElementById('novoTalhaoCultura').value.trim();
     const latitude = Number(document.getElementById('novoTalhaoLatitude').value);
     const longitude = Number(document.getElementById('novoTalhaoLongitude').value);
     const radius = Number(document.getElementById('novoTalhaoRaio').value) || 80;
@@ -1317,7 +1575,7 @@ async function atualizarTalhao(e) {
     const payload = {
       nome: document.getElementById('editarTalhaoNome').value.trim(),
       area: Number(document.getElementById('editarTalhaoArea').value),
-      cultura: document.getElementById('editarTalhaoCultura').value.trim() || 'Café',
+      cultura: document.getElementById('editarTalhaoCultura').value.trim(),
       latitude: Number(document.getElementById('editarTalhaoLatitude').value),
       longitude: Number(document.getElementById('editarTalhaoLongitude').value),
       raio: Number(document.getElementById('editarTalhaoRaio').value) || 80,
@@ -1385,9 +1643,15 @@ function openTalhaoModal(t) {
   const title = document.getElementById('talhaoModalTitle');
   if (!body || !title) return;
 
+  title.textContent = t.name || 'Talhão';
+  body.innerHTML = getTalhaoDetailsMarkup(t);
+  document.getElementById('modalTalhao').style.display = 'flex';
+}
+
+function getTalhaoDetailsMarkup(t, { inline = false } = {}) {
   const safeName = t.name || 'Talhão';
   const safeArea = finiteWeatherValue(t.area);
-  const safeCulture = t.culture || (DATA_SOURCE === 'demo' ? 'Café' : 'Não informada');
+  const safeCulture = t.culture || 'Não informada';
   const safeAge = t.age || '—';
   const safeVariety = t.variety || '—';
   const safeSoil = t.soil || 'Não informado';
@@ -1409,17 +1673,24 @@ function openTalhaoModal(t) {
   const safeLongitude = finiteWeatherValue(t.longitude);
   const safeRadius = finiteWeatherValue(t.radius) ?? 80;
   const statusColor = t.status === 'favorable' ? '#3a8554' : t.status === 'moderate' ? '#d97706' : t.status === 'unfavorable' ? '#ef4444' : '#6b7280';
-  const previous = HISTORICO_DATA.filter(h => h.talhao_id != null
-    ? Number(h.talhao_id) === Number(t.id)
-    : DATA_SOURCE === 'demo' && h.talhao === safeName).slice(0, 3);
+  const previous = HISTORICO_DATA.filter(h =>
+    h.talhao_id != null && Number(h.talhao_id) === Number(t.id)
+  ).slice(0, 3);
   const coordsText = safeLatitude !== null && safeLongitude !== null
     ? `${safeLatitude.toFixed(6)}, ${safeLongitude.toFixed(6)}`
     : 'Coordenadas não cadastradas';
-  const canManageTalhoes = true;
+  const status = talhaoStatusPresentation(t);
+  const canManageFarm = Boolean(FARM.permissions?.manage);
+  const canRecordApplication = Boolean(FARM.permissions?.record);
+  const actions = [
+    inline ? '' : '<button class="btn-ghost" type="button" onclick="closeTalhaoModal()">Fechar</button>',
+    canManageFarm ? `<button class="btn-ghost" type="button" onclick="openEditarTalhaoModal(${Number(t.id)})">Editar localização</button>` : '',
+    canManageFarm ? `<button class="btn-ghost" type="button" onclick="excluirTalhao(${Number(t.id)})" style="border-color:#ef4444;color:#ef4444">Excluir talhão</button>` : '',
+    canRecordApplication ? `<button class="btn-primary" type="button" onclick="${inline ? '' : 'closeTalhaoModal();'}openRegistrar(${Number(t.id)})">Registrar aplicação</button>` : '',
+  ].filter(Boolean).join('');
 
-  title.textContent = safeName;
-  body.innerHTML = `
-    <div class="talhao-detail-head"><div><strong>${safeArea === null ? 'Área não informada' : `${formatMetricValue(safeArea, ' ha')}`} · ${safeCulture} · ${safeAge}</strong><span>${safeVariety} · Solo ${safeSoil}</span></div><span class="monitoring-status">${talhaoStatusPresentation(t).label}</span></div>
+  return `
+    <div class="talhao-detail-head"><div><strong>${safeArea === null ? 'Área não informada' : `${formatMetricValue(safeArea, ' ha')}`} · ${safeCulture} · ${safeAge}</strong><span>${safeVariety} · Solo ${safeSoil}</span></div><span class="monitoring-status">${status.label}</span></div>
     <div class="detail-section-title">Condição e telemetria <small>Sensor: ${safeSensor}</small></div>
     <div class="talhao-modal-grid">
       <div class="talhao-modal-metric"><div class="talhao-modal-metric-label">Umidade do sensor</div><div class="talhao-modal-metric-value sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</div></div>
@@ -1437,23 +1708,14 @@ function openTalhaoModal(t) {
     </div>
 
     <div class="detail-section-title">Próxima aplicação planejada</div>
-    <div class="planned-application"><div><strong>${safeProduct}</strong><span>${[safeInputType, safeDose, safePeriod].filter(Boolean).join(' · ')}</span></div><button class="btn-ghost" type="button" onclick="openPlanejar(${t.id})">Planejar aplicação</button></div>
-    <section class="gold-window-detail" style="--iea-color:${statusColor}"><div class="gold-window-heading"><div><span>Janela de Ouro · ${safeName}</span><strong>${t.window || 'Aguardando dados'}</strong><small>${safeIea === null ? 'Sem recomendação calculada para este talhão' : `IEA de ${safeIea}% para análise deste talhão`}</small></div><b>${safeIea === null ? '—' : `${safeIea}%`}<small>IEA</small></b></div><div class="window-factors"><span>Chuva prevista <b>${safeRain === null ? '—' : formatMetricValue(safeRain, ' mm')}</b></span><span>Umidade do sensor <b class="sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</b></span><span>Vento previsto <b>${safeWind === null ? '—' : formatMetricValue(safeWind, ' km/h')}</b></span></div><p>A análise meteorológica é calculada para este talhão quando há coordenadas. Leituras de sensor não estão disponíveis e não são estimadas como telemetria real.</p></section>
+    <div class="planned-application"><div><strong>${safeProduct}</strong><span>${[safeInputType, safeDose, safePeriod].filter(Boolean).join(' · ')}</span></div>${FARM.permissions?.plan ? `<button class="btn-ghost" type="button" onclick="openPlanejar(${t.id})">Planejar aplicação</button>` : ''}</div>
+    <section class="gold-window-detail" style="--iea-color:${statusColor}"><div class="gold-window-heading"><div><span>Janela de Ouro · ${safeName}</span><strong>${t.window || 'Aguardando dados'}</strong><small>${safeIea === null ? 'Sem recomendação calculada para este talhão' : `IEA de ${safeIea}% para análise deste talhão`}</small></div><b>${safeIea === null ? '—' : `${safeIea}%`}<small>IEA</small></b></div><div class="window-factors"><span>Chuva prevista <b>${safeRain === null ? '—' : formatMetricValue(safeRain, ' mm')}</b></span><span>Umidade do sensor <b class="sensor-locked-value">${SENSOR_HUMIDITY_LOCKED}</b></span><span>Vento previsto <b>${safeWind === null ? '—' : formatMetricValue(safeWind, ' km/h')}</b></span><span>IEA <b>${safeIea === null ? '—' : `${safeIea}%`}</b></span></div><p>A análise meteorológica é calculada para este talhão quando há coordenadas. Leituras de sensor não estão disponíveis e não são estimadas como telemetria real.</p></section>
     <div class="detail-section-title">Evolução estimada da umidade <small>Disponível após disponibilizar um sensor</small></div>
     <div class="moisture-chart moisture-chart-locked"><div class="sensor-locked-message">Módulo de umidade bloqueado<br><small>Disponibilize um sensor para habilitar as leituras.</small></div></div>
     <div class="detail-section-title">Histórico do talhão</div>
-    <div class="detail-history">${previous.length ? previous.map(h => `<div><span>${h.date}</span><strong>${h.product} · ${h.qty}</strong><em>${h.ieaPrev == null ? 'IEA indisponível' : `IEA ${h.ieaPrev}%`} · ${h.result}</em></div>`).join('') : '<p>Nenhuma aplicação registrada neste talhão.</p>'}</div>
-    <div class="detail-actions">
-      <button class="btn-ghost" type="button" onclick="closeTalhaoModal()">Fechar</button>
-      ${canManageTalhoes ? `
-        <button class="btn-ghost" type="button" onclick="openEditarTalhaoModal(${t.id})">Editar</button>
-        <button class="btn-ghost" type="button" onclick="excluirTalhao(${t.id})" style="border-color:#ef4444;color:#ef4444">Excluir</button>
-      ` : ''}
-      <button class="btn-primary" type="button" onclick="closeTalhaoModal();openRegistrar(${t.id})">Registrar aplicação</button>
-    </div>
+    <div class="detail-history">${previous.length ? previous.map(h => `<div><span>${escapeHtml(h.date)}</span><strong>Produto: ${escapeHtml(h.product)} · Quantidade: ${escapeHtml(h.qty)}</strong><em>${h.ieaPrev == null ? 'IEA indisponível' : `IEA ${escapeHtml(h.ieaPrev)}%`} · Resultado: ${escapeHtml(h.result)}</em></div>`).join('') : '<p>Nenhuma aplicação registrada neste talhão.</p>'}</div>
+    <div class="detail-actions">${actions}</div>
   `;
-
-  document.getElementById('modalTalhao').style.display = 'flex';
 }
 
 function closeTalhaoModal() {
@@ -1467,63 +1729,107 @@ function closeTalhaoModal() {
 function renderFazenda() {
   const container = document.getElementById('fazendaContent');
   if (!container) return;
-  const owner = FARM.owner || USER_DATA.name || 'Proprietário';
-  const ownerInitials = owner.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
-  const teamData = [{ name: owner, role: 'Proprietário', permission: 'Acesso completo', status: 'online', activity: 'Agora', initials: ownerInitials }, ...TEAM_DATA];
-  const activityData = [...ACTIVITY_DATA, ...HISTORICO_DATA.slice(0, 4).map(item => ({
-    initials: ownerInitials, name: owner,
-    action: item.resultClass === 'done' ? 'registrou aplicação no' : 'planejou aplicação no',
-    target: `${item.talhao} · ${item.product}`, time: item.date,
-  }))];
+  if (!FARM.name) {
+    container.innerHTML = '<p class="farm-section-sub">Nenhuma fazenda cadastrada ou compartilhada com esta conta.</p>';
+    return;
+  }
+  const teamData = TEAM_DATA;
+  const activityData = ACTIVITY_DATA;
   const best = getSelectedReferenceTalhao()?.analysis?.bestRecommendation;
   const selected = getSelectedReferenceTalhao();
-  const nextPlanning = PLANNINGS_FROM_DB.find(item =>
-    item.talhao_id === selected?.id && ['PLANEJADA', 'CONFIRMADA'].includes(item.status)
-  );
-  const latestApplication = APPLICATIONS_FROM_DB.find(item => item.talhao_id === selected?.id);
-  const notifications = [];
-  if (nextPlanning) notifications.push(`Aplicação planejada em ${nextPlanning.talhao} · ${nextPlanning.data_planejada}`);
-  if (best) notifications.push(`Janela analisada para ${selected.name} · IEA ${best.adequacyIndex}%`);
-  if (latestApplication) notifications.push(`Registro mais recente de ${selected.name}: ${latestApplication.product} · ${latestApplication.date}`);
-  const notificationText = notifications.length
-    ? notifications.join(' · ')
-    : 'Nenhuma notificação operacional para o talhão selecionado.';
   const nextDate = best ? formatRecommendationDate(best.date) : 'Aguardando análise';
   const nextTime = best ? formatRecommendationTime(best) : '—';
   const nextIea = best?.adequacyIndex;
   const plannedCount = Object.values(CAL_DATA).filter(day => day.planned).length;
   const teamCards = teamData.map(person => `
     <article class="team-member-card">
-      <div class="team-avatar">${person.initials}<i class="presence ${person.status}"></i></div>
-      <div class="team-member-main"><strong>${person.name}</strong><span>${person.role}</span><small><i class="presence-dot ${person.status}"></i>${person.status === 'online' ? 'Online' : 'Offline'} · Atividade: ${person.activity}</small></div>
-      <span class="permission-badge">${person.permission}</span>
+      <div class="team-avatar">${escapeHtml(initialsFromName(person.name))}</div>
+      <div class="team-member-main"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role_label)}</span><small>${escapeHtml(person.email)}</small></div>
+      ${FARM.permissions?.team && person.role !== 'OWNER' ? `<button type="button" class="btn-ghost-sm" onclick="removeFarmMember(${Number(person.id)})">Remover</button>` : ''}
     </article>`).join('');
-  const activities = activityData.length ? activityData.map(item => `<div class="farm-activity"><div class="activity-avatar">${item.initials}</div><div><strong>${item.name}</strong> ${item.action} <b>${item.target}</b><span>${item.time}</span></div></div>`).join('') : '<p class="farm-section-sub">Nenhuma atividade registrada.</p>';
+  const invitations = INVITATIONS_DATA.map(invitation => `
+    <article class="team-member-card pending-invitation">
+      <div class="team-avatar">${escapeHtml(invitation.email.slice(0, 1).toUpperCase())}</div>
+      <div class="team-member-main"><strong>${escapeHtml(invitation.email)}</strong><span>Convite pendente · ${escapeHtml(invitation.role_label)}</span><small>Expira em ${new Date(invitation.expires_at).toLocaleDateString('pt-BR')}</small></div>
+      ${FARM.permissions?.team ? `<button type="button" class="btn-ghost-sm" onclick="revokeInvitation(${Number(invitation.id)})">Revogar</button>` : ''}
+    </article>`).join('');
+  const activities = activityData.length ? activityData.slice(0, 8).map(item => `
+    <div class="farm-activity"><div class="activity-avatar">${escapeHtml(initialsFromName(item.actor || ''))}</div>
+      <div><strong>${escapeHtml(item.actor || 'GoldCrop')}</strong> · ${escapeHtml(item.title)}<b>${escapeHtml(item.message)}</b>
+        <span>${new Date(item.created_at).toLocaleString('pt-BR')}</span></div></div>`).join('') : '<p class="farm-section-sub">Nenhuma atividade registrada.</p>';
   const location = [FARM.city, FARM.state].filter(Boolean).join(', ') || 'Localização não informada';
   const sensors = FARM.sensors || 0;
   container.innerHTML = `
     <header class="farm-hero">
-      <div class="farm-hero-mark">✦</div><div class="farm-hero-copy"><span>Ambiente colaborativo</span><h1>${FARM.name}</h1><p>${location} · ${FARM.culture || 'Cultivo não informado'}</p></div>
-      <div class="farm-hero-stats"><div><b>${FARM.area}</b><span>hectares</span></div><div><b>${FARM.talhoes}</b><span>talhões</span></div><div><b>${sensors}</b><span>sensores ativos</span></div><div><b>${teamData.length}</b><span>pessoas</span></div></div>
-      <button class="btn-primary" onclick="openPessoa()">+ Adicionar pessoa</button>
+      <div class="farm-hero-mark">✦</div><div class="farm-hero-copy"><span>Dados compartilhados</span><h1>${escapeHtml(FARM.name)}</h1><p>${escapeHtml(location)} · ${escapeHtml(FARM.culture || 'Cultivo não informado')}</p></div>
+      <div class="farm-hero-stats"><div><b>${FARM.area || '—'}</b><span>hectares</span></div><div><b>${FARM.talhoes}</b><span>talhões</span></div><div><b>${sensors}</b><span>sensores ativos</span></div><div><b>${teamData.length}</b><span>pessoas</span></div></div>
+      ${FARM.permissions?.team ? '<button class="btn-primary" onclick="openPessoa()">+ Convidar pessoa</button>' : ''}
     </header>
-    <div class="farm-shared-note"><span>◉</span><div><strong>Dados compartilhados da fazenda</strong><p>Todos os membros autorizados visualizam os mesmos dados da fazenda de acordo com suas permissões.</p></div></div>
-    <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${getSelectedReferenceTalhao()?.name || 'Sem talhão'}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
-    <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">A equipe que opera no mesmo ambiente de dados.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Operações registradas pela equipe.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
-    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Permissões da equipe</h2><p class="farm-section-sub">Cada perfil vê e opera a fazenda dentro da sua responsabilidade.</p></div></div><div class="permission-table-wrap"><table class="permission-table"><thead><tr><th>Perfil</th><th>Visualizar</th><th>Planejar</th><th>Registrar</th><th>Gerenciar equipe</th></tr></thead><tbody><tr><td><b>Proprietário</b></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr><tr><td><b>Gerente</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Técnico / Agrônomo</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Funcionário</b></td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr></tbody></table></div></section>
-    <section class="farm-section farm-notifications"><div><span>Resumo operacional · ${selected?.name || 'Nenhum talhão selecionado'}</span><p>${notificationText}</p></div><button class="btn-ghost" onclick="navigateTo('calendar')">Ver calendário compartilhado</button></section>`;
+    <div class="farm-shared-note"><span>◉</span><div><strong>Equipe com acesso a esta fazenda</strong><p>Talhões e operações são carregados do banco e compartilhados conforme a função de cada membro.</p></div></div>
+    <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${escapeHtml(selected?.name || 'Sem talhão')}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
+    <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">Membros e convites persistidos.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}${invitations}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Eventos operacionais registrados no sistema.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
+    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Permissões da equipe</h2><p class="farm-section-sub">Permissões aplicadas no servidor em todas as operações.</p></div></div><div class="permission-table-wrap"><table class="permission-table"><thead><tr><th>Perfil</th><th>Visualizar</th><th>Planejar</th><th>Registrar</th><th>Gerenciar talhões/equipe</th></tr></thead><tbody><tr><td><b>Proprietário</b></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr><tr><td><b>Gerente</b></td><td>✓</td><td>✓</td><td>✓</td><td>Talhões</td></tr><tr><td><b>Técnico / Agrônomo</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Funcionário</b></td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr></tbody></table></div></section>`;
 }
 
-function openPessoa() { document.getElementById('pessoaNome').value = ''; document.getElementById('pessoaEmail').value = ''; document.getElementById('pessoaTelefone').value = ''; document.getElementById('modalPessoa').style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+function initialsFromName(name) { return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '—'; }
+
+function openPessoa() {
+  document.getElementById('pessoaEmail').value = '';
+  document.getElementById('invitationError').hidden = true;
+  document.getElementById('modalPessoa').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
 function closePessoa() { document.getElementById('modalPessoa').style.display = 'none'; document.body.style.overflow = ''; }
-function submitPessoa() {
-  const name = document.getElementById('pessoaNome').value.trim();
+async function submitPessoa() {
   const email = document.getElementById('pessoaEmail').value.trim();
-  if (!name || !email) { showToast('Informe nome e e-mail da pessoa.', 'error'); return; }
-  const role = document.getElementById('pessoaFuncao').value;
-  TEAM_DATA.push({ name, role, permission: document.getElementById('pessoaAcesso').value, status: 'offline', activity: 'Convite enviado agora', initials: name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase() });
-  ACTIVITY_DATA.unshift({ initials: 'JS', name: 'João Silva', action: 'enviou convite para', target: name, time: 'Agora' });
-  closePessoa(); renderFazenda(); showToast('Convite enviado com sucesso.', 'success');
+  const errorElement = document.getElementById('invitationError');
+  const button = document.getElementById('sendInvitationButton');
+  if (!email) { errorElement.textContent = 'Informe o e-mail da pessoa.'; errorElement.hidden = false; return; }
+  button.disabled = true;
+  try {
+    const response = await apiRequest('/api/farms/invitations/', {
+      method: 'POST',
+      body: JSON.stringify({ email, role: document.getElementById('pessoaFuncao').value }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível enviar o convite.');
+    await loadFarmTeamData();
+    closePessoa();
+    renderFazenda();
+    showToast('Convite enviado por e-mail e registrado no sistema.', 'success');
+  } catch (error) {
+    errorElement.textContent = error.message || 'Falha ao enviar o convite.';
+    errorElement.hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function revokeInvitation(invitationId) {
+  try {
+    const response = await apiRequest(`/api/farms/invitations/${invitationId}/`, { method: 'DELETE', body: '{}' });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível revogar o convite.');
+    await loadFarmTeamData();
+    renderFazenda();
+    showToast('Convite revogado.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível revogar o convite.', 'error');
+  }
+}
+
+async function removeFarmMember(userId) {
+  if (!window.confirm('Remover este membro da fazenda? O acesso será encerrado imediatamente.')) return;
+  try {
+    const response = await apiRequest(`/api/farms/team/${userId}/`, { method: 'DELETE', body: '{}' });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível remover o membro.');
+    await loadFarmTeamData();
+    renderFazenda();
+    showToast('Acesso do membro removido.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível remover o membro.', 'error');
+  }
 }
 
 // =====================================================
@@ -1650,60 +1956,73 @@ function renderAplicacoes() {
 function renderSettings() {
   const container = document.getElementById('settingsContent');
   if (!container) return;
-
+  const canManage = Boolean(FARM.permissions?.manage);
+  const talhao = getSelectedReferenceTalhao();
+  const weather = talhao?.weather;
+  const forecastDays = weather?.daily?.time?.length;
+  const fetchedAt = weather?.fetchedAt ? new Date(weather.fetchedAt).toLocaleString('pt-BR') : 'Nenhuma coleta salva';
   container.innerHTML = `
     <div class="settings-grid">
       <div class="settings-card">
         <div class="settings-card-title">Propriedade</div>
-        <div class="form-group" style="margin-bottom:.75rem">
-          <label class="form-label">Nome da fazenda</label>
-          <input class="form-input" value="Fazenda Santa Clara" />
-        </div>
-        <div class="form-group" style="margin-bottom:.75rem">
-          <label class="form-label">Cultura principal</label>
-          <input class="form-input" value="Café Arábica" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">Área total (ha)</label>
-          <input class="form-input" type="number" value="84" />
-        </div>
-        <button class="btn-primary" style="margin-top:1rem;width:100%;justify-content:center">Salvar alterações</button>
+        <form id="farmSettingsForm" onsubmit="event.preventDefault(); saveFarmSettings()">
+          <div class="form-group" style="margin-bottom:.75rem">
+            <label class="form-label" for="farmSettingName">Nome da fazenda</label>
+            <input class="form-input" id="farmSettingName" maxlength="150" value="${escapeHtml(FARM.name)}" required ${canManage ? '' : 'readonly'} />
+          </div>
+          <div class="form-group" style="margin-bottom:.75rem">
+            <label class="form-label" for="farmSettingCulture">Cultura principal</label>
+            <input class="form-input" id="farmSettingCulture" value="${escapeHtml(FARM.culture || '')}" ${canManage ? '' : 'readonly'} />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="farmSettingArea">Área total (ha)</label>
+            <input class="form-input" id="farmSettingArea" type="number" min="0.01" step="0.01" value="${FARM.area || ''}" required ${canManage ? '' : 'readonly'} />
+          </div>
+          ${canManage ? '<button class="btn-primary" style="margin-top:1rem;width:100%;justify-content:center" type="submit">Salvar dados da fazenda</button>' : '<p class="settings-label">Somente proprietário ou gerente pode alterar esses dados.</p>'}
+        </form>
       </div>
 
       <div class="settings-card">
         <div class="settings-card-title">Notificações</div>
-        <div class="settings-row"><span class="settings-label">Janela identificada</span><button class="toggle on"></button></div>
-        <div class="settings-row"><span class="settings-label">Resumo diário (7h)</span><button class="toggle on"></button></div>
-        <div class="settings-row"><span class="settings-label">Relatório semanal</span><button class="toggle"></button></div>
-        <div class="settings-row"><span class="settings-label">Notificações por e-mail</span><button class="toggle on"></button></div>
+        <p class="sensor-module-message">Alertas no sino são gerados e salvos quando o sistema registra uma nova recomendação, um planejamento ou uma aplicação. O estado de leitura é individual por usuário.</p>
       </div>
 
       <div class="settings-card sensor-module-card">
-        <div class="settings-card-title">Módulo de sensor de umidade <span class="locked-badge">Bloqueado</span></div>
-        <div class="sensor-module-icon">[ bloqueado ]</div>
-        <p class="sensor-module-message">Disponibilize um sensor de umidade para habilitar as leituras de umidade do solo e o histórico por talhão.</p>
-        <button class="btn-primary sensor-module-button" disabled>Sensor não disponível</button>
+        <div class="settings-card-title">Sensores IoT</div>
+        <div class="settings-row"><span class="settings-label">Sensores ativos cadastrados</span><strong>${Number(FARM.sensors || 0)}</strong></div>
+        <p class="sensor-module-message">${FARM.sensors ? 'A telemetria depende das leituras recebidas e salvas para cada sensor.' : 'Nenhum sensor IoT ativo está cadastrado nesta fazenda; leituras de umidade não serão estimadas.'}</p>
       </div>
 
       <div class="settings-card">
-        <div class="settings-card-title">Modelo de IA</div>
-        <div class="settings-row"><span class="settings-label">Modelo ativo</span><span style="font-weight:600;font-size:.875rem;color:#3a8554">GoldCrop AI v2.1</span></div>
-        <div class="settings-row"><span class="settings-label">Horizonte de previsão</span><span style="font-weight:600;font-size:.875rem">7 dias</span></div>
-        <div class="settings-row"><span class="settings-label">Fonte meteorológica</span><span style="font-weight:600;font-size:.875rem">INMET + MAPA</span></div>
-        <div class="settings-row"><span class="settings-label">Atualização automática</span><button class="toggle on"></button></div>
-        <div style="margin-top:1rem;background:#f0f8f3;border:1px solid #b8d9c4;border-radius:8px;padding:.75rem;font-size:.78rem;color:#245537">
-          ✅ Modelo atualizado em 21/08/2026 às 06:00
-        </div>
+        <div class="settings-card-title">Dados de análise</div>
+        <div class="settings-row"><span class="settings-label">Motor</span><strong>${escapeHtml(window.GOLDCROP_RECOMMENDATIONS?.engine || 'GoldCropAnalysisEngine')}</strong></div>
+        <div class="settings-row"><span class="settings-label">Dias de previsão retornados</span><strong>${Number.isInteger(forecastDays) ? forecastDays : '—'}</strong></div>
+        <div class="settings-row"><span class="settings-label">Fonte meteorológica</span><strong>${weather ? 'Open-Meteo' : 'Sem coleta disponível'}</strong></div>
+        <div class="settings-row"><span class="settings-label">Última coleta salva</span><strong>${escapeHtml(fetchedAt)}</strong></div>
       </div>
     </div>
   `;
+}
 
-  // Toggle functionality
-  container.querySelectorAll('.toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.classList.toggle('on');
+async function saveFarmSettings() {
+  try {
+    const response = await apiRequest('/api/farms/settings/', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: document.getElementById('farmSettingName').value.trim(),
+        culture: document.getElementById('farmSettingCulture').value.trim(),
+        area: document.getElementById('farmSettingArea').value,
+      }),
     });
-  });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível salvar a fazenda.');
+    Object.assign(FARM, result.farm);
+    USER_DATA.farm = FARM.name;
+    updateProfileDOM();
+    showToast('Dados da fazenda atualizados no banco.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Falha ao salvar os dados da fazenda.', 'error');
+  }
 }
 
 // =====================================================
@@ -1711,6 +2030,10 @@ function renderSettings() {
 // =====================================================
 
 function openRegistrar(talhaoId, planejamentoId = null) {
+  if (!FARM.permissions?.record) {
+    showToast('Seu perfil não pode registrar aplicações nesta fazenda.', 'error');
+    return;
+  }
   const select = document.getElementById('formTalhao');
   const selectedId = Number(talhaoId || selectedTalhaoRefId);
   select.innerHTML = TALHOES_DATA.map(t => `<option value="${t.id}" ${t.id === selectedId ? 'selected' : ''}>${t.name}</option>`).join('');
@@ -1731,6 +2054,10 @@ function openRegistrar(talhaoId, planejamentoId = null) {
 }
 
 function openPlanejar(talhaoId, plannedDate = null) {
+  if (!FARM.permissions?.plan) {
+    showToast('Seu perfil não pode planejar aplicações nesta fazenda.', 'error');
+    return;
+  }
   const t = TALHOES_DATA.find(item => item.id === talhaoId);
   if (!t) return;
   document.getElementById('planTalhao').value = t.name;
@@ -1741,6 +2068,7 @@ function openPlanejar(talhaoId, plannedDate = null) {
   document.getElementById('planPeriodo').value = '';
   const best = t.analysis?.bestRecommendation;
   document.getElementById('planData').value = plannedDate || best?.date || new Date().toISOString().slice(0, 10);
+  document.getElementById('planResponsavel').value = USER_DATA.name;
   document.getElementById('modalPlanejar').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
@@ -1753,7 +2081,7 @@ function closePlanejar() {
 async function submitPlanejar() {
   const t = TALHOES_DATA.find(item => item.id === Number(document.getElementById('planTalhaoId').value));
   const date = document.getElementById('planData').value;
-  const plannedBy = document.getElementById('planResponsavel').value;
+  const plannedBy = document.getElementById('planResponsavel').value.trim() || USER_DATA.name;
   if (!t) {
     showToast('Talhão não encontrado para o planejamento.', 'error');
     return;
@@ -1801,8 +2129,6 @@ async function submitPlanejar() {
     const calendarData = CAL_DATA[date] || { iea: recommendation?.adequacyIndex, type: 'future', rain: t.rain, temp: t.temp, app: false };
     CAL_DATA[date] = { ...calendarData, planned: `${t.name} · ${product}`, plannedBy, planejamentoId: planejamento?.id };
 
-    const initials = plannedBy.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
-    ACTIVITY_DATA.unshift({ initials, name: plannedBy, action: 'planejou aplicação no', target: `${t.name} · ${product} · ${t.dose}`, time: 'Agora' });
     closePlanejar();
     await syncAllViewsFromServer();
     showToast('Aplicação planejada e integrada ao calendário.', 'success');
@@ -1875,9 +2201,6 @@ async function submitRegistrar() {
       doneBy: savedApplication.created_by || USER_DATA.name,
     });
 
-    const userInitials = USER_DATA.name.split(' ').map(part => part[0]).slice(0, 2).join('').toUpperCase();
-    ACTIVITY_DATA.unshift({ initials: userInitials, name: USER_DATA.name, action: 'registrou aplicação realizada no', target: `${talhaoEntity.name} · ${produto} · ${horario || ''}`, time: 'Agora' });
-
     closeRegistrar();
     await syncAllViewsFromServer();
     showToast(`✅ Aplicação registrada: ${talhaoEntity.name} · ${produto}`, 'success');
@@ -1904,12 +2227,12 @@ function showToast(msg, type = 'success') {
 
 const storedAuthUser = document.getElementById('auth-user-data');
 const USER_DATA = storedAuthUser ? JSON.parse(storedAuthUser.textContent) : {
-  name: 'João Oliveira',
-  initials: 'JO',
-  email: 'joao.oliveira@santaclara.com.br',
-  phone: '(35) 99876-5432',
-  role: 'Produtor / Administrador',
-  farm: 'Fazenda Santa Clara',
+  name: 'Usuário',
+  initials: '',
+  email: '',
+  phone: '',
+  role: '',
+  farm: '',
 };
 
 function toggleProfileDropdown(e) {
@@ -1942,10 +2265,8 @@ function openPerfilModal() {
   closeAllDropdowns();
   
   document.getElementById('profileModalName').value = USER_DATA.name;
-  document.getElementById('profileModalInitials').value = USER_DATA.initials;
   document.getElementById('profileModalEmail').value = USER_DATA.email;
   document.getElementById('profileModalPhone').value = USER_DATA.phone;
-  document.getElementById('profileModalFarm').value = USER_DATA.farm;
   document.getElementById('profileModalRole').value = USER_DATA.role;
   document.getElementById('modalAvatarPreview').textContent = USER_DATA.initials;
 
@@ -1958,49 +2279,34 @@ function closePerfilModal() {
   document.body.style.overflow = '';
 }
 
-function triggerAvatarUpload() {
-  const newInitials = prompt('Digite as novas iniciais do avatar (ex: JO):', USER_DATA.initials);
-  if (newInitials && newInitials.trim()) {
-    const cleanInitials = newInitials.trim().substring(0, 3).toUpperCase();
-    document.getElementById('profileModalInitials').value = cleanInitials;
-    document.getElementById('modalAvatarPreview').textContent = cleanInitials;
-  }
-}
-
 async function saveProfileChanges() {
   const name = document.getElementById('profileModalName').value.trim();
-  const initials = document.getElementById('profileModalInitials').value.trim().toUpperCase() || 'JO';
   const email = document.getElementById('profileModalEmail').value.trim();
   const phone = document.getElementById('profileModalPhone').value.trim();
-  const farm = document.getElementById('profileModalFarm').value.trim();
-  const role = document.getElementById('profileModalRole').value;
 
   if (!name || !email) {
     showToast('Preencha os campos obrigatórios (Nome e E-mail).', 'error');
     return;
   }
 
-  const response = await apiRequest('/api/profile/', { method: 'POST', body: JSON.stringify({ name, initials, email, phone, farm, role }) });
-  if (!response.ok) {
-    showToast('Não foi possível salvar o perfil no banco.', 'error');
-    return;
+  try {
+    const response = await apiRequest('/api/profile/', { method: 'POST', body: JSON.stringify({ name, email, phone }) });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível salvar o perfil no banco.');
+    USER_DATA.name = result.name;
+    USER_DATA.initials = initialsFromName(result.name);
+    USER_DATA.email = result.email;
+    USER_DATA.phone = result.phone;
+    updateProfileDOM();
+    closePerfilModal();
+    showToast('Perfil atualizado no banco.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível salvar o perfil no banco.', 'error');
   }
-
-  USER_DATA.name = name;
-  USER_DATA.initials = initials;
-  USER_DATA.email = email;
-  USER_DATA.phone = phone;
-  USER_DATA.farm = farm;
-  USER_DATA.role = role;
-  FARM.owner = name;
-  FARM.name = farm;
-
-  updateProfileDOM();
-  closePerfilModal();
-  showToast('✅ Perfil atualizado com sucesso!');
 }
 
 function updateProfileDOM() {
+  USER_DATA.initials = initialsFromName(USER_DATA.name);
   // Sidebar elements
   const sidebarAvatar = document.getElementById('sidebarAvatar');
   const sidebarUserName = document.getElementById('sidebarUserName');
@@ -2039,8 +2345,23 @@ function updateProfileDOM() {
 
 function openTrocarFazendaModal() {
   closeAllDropdowns();
+  const list = document.getElementById('farmsSelectionList');
+  list.innerHTML = '<p>Carregando fazendas acessíveis…</p>';
   document.getElementById('modalTrocarFazenda').style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  apiRequest('/api/farms/').then(async response => {
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível carregar as fazendas.');
+    list.innerHTML = result.farms.length ? result.farms.map(farm => `
+      <button type="button" class="farm-select-card${farm.id === result.selected_farm_id ? ' active' : ''}" onclick="selectFarm(${Number(farm.id)})">
+        <span class="farm-card-icon" aria-hidden="true">⌂</span>
+        <span class="farm-card-info"><span class="farm-card-name">${escapeHtml(farm.name)}</span>
+          <span class="farm-card-meta">${escapeHtml(farm.culture || 'Cultura não informada')} · ${Number(farm.area).toLocaleString('pt-BR')} ha · ${Number(farm.talhoes)} talhões · ${escapeHtml(farm.role)}</span></span>
+        <span class="farm-card-badge">${farm.id === result.selected_farm_id ? 'Ativa' : 'Selecionar'}</span>
+      </button>`).join('') : '<p>Nenhuma fazenda está vinculada a esta conta.</p>';
+  }).catch(error => {
+    list.innerHTML = `<p role="alert">${escapeHtml(error.message || 'Falha ao carregar fazendas.')}</p>`;
+  });
 }
 
 function closeTrocarFazendaModal() {
@@ -2048,33 +2369,18 @@ function closeTrocarFazendaModal() {
   document.body.style.overflow = '';
 }
 
-function selectFarm(farmName, area, talhoes, cardEl) {
-  USER_DATA.farm = farmName;
-  FARM.name = farmName;
-  FARM.area = area;
-  FARM.talhoes = talhoes;
-
-  document.querySelectorAll('.farm-select-card').forEach(card => {
-    card.classList.remove('active');
-    const badge = card.querySelector('.farm-card-badge');
-    if (badge) {
-      badge.textContent = 'Selecionar';
-      badge.classList.add('outline');
-    }
-  });
-
-  if (cardEl) {
-    cardEl.classList.add('active');
-    const badge = cardEl.querySelector('.farm-card-badge');
-    if (badge) {
-      badge.textContent = 'Ativa';
-      badge.classList.remove('outline');
-    }
+async function selectFarm(farmId) {
+  try {
+    const response = await apiRequest('/api/farms/', {
+      method: 'POST',
+      body: JSON.stringify({ farm_id: Number(farmId) }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível selecionar a fazenda.');
+    window.location.reload();
+  } catch (error) {
+    showToast(error.message || 'Não foi possível selecionar a fazenda.', 'error');
   }
-
-  updateProfileDOM();
-  closeTrocarFazendaModal();
-  showToast(`🚜 Fazenda alterada para: ${farmName}`);
 }
 
 function openSuporteModal() {
@@ -2122,6 +2428,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDatabaseState();
   syncCalendarTalhaoSelector();
   await loadLocalWeather(getSelectedReferenceTalhao()?.id);
+  updateProfileDOM();
+  await refreshLiveData();
 
   // Close dropdown on outside click or ESC
   document.addEventListener('click', (e) => {
@@ -2220,9 +2528,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Notification button
-  document.getElementById('notifBtn')?.addEventListener('click', () => {
-    showToast('📋 1 notificação: Janela identificada para amanhã');
+  document.getElementById('notifBtn')?.addEventListener('click', toggleNotifications);
+  document.getElementById('dashboardNotifBtn')?.addEventListener('click', toggleNotifications);
+  document.addEventListener('click', event => {
+    const panel = document.getElementById('notificationPanel');
+    const wrapper = document.querySelector('.notification-wrapper');
+    if (panel && !panel.hidden && !wrapper?.contains(event.target)) {
+      panel.hidden = true;
+      document.getElementById('notifBtn')?.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      const panel = document.getElementById('notificationPanel');
+      if (panel) panel.hidden = true;
+      document.getElementById('notifBtn')?.setAttribute('aria-expanded', 'false');
+    }
   });
 
   // Init charts

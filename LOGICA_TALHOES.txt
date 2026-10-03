@@ -56,8 +56,12 @@ O modelo Talhao no banco contem:
 - ativo: indica se deve aparecer nas consultas normais;
 - criado_em e atualizado_em: datas de criacao e atualizacao.
 
-O formulario de cadastro atualmente pede nome, area, cultura, latitude,
-longitude e raio. A edicao permite alterar esses mesmos campos. Variedade,
+O formulario de cadastro pede nome, area, cultura, latitude, longitude e raio.
+Latitude/longitude pertencem ao registro do talhao; nao sao copiadas de outro.
+No mapa embutido do cadastro/edicao, clique ou arraste o marcador para escolher
+o centro aproximado daquele talhao. Os outros talhoes geolocalizados aparecem
+como referencia e o formulario avisa se o ponto escolhido coincide com outro.
+A edicao permite alterar esses mesmos campos. Variedade,
 idade, tipo de solo e codigo do sensor existem no modelo e aparecem em partes
 do modal de detalhes, mas nao sao preenchidos pelos formularios atuais de
 cadastro/edicao.
@@ -90,10 +94,13 @@ O botao "Cadastrar Talhao" envia os dados para POST /api/talhoes/. O backend
 associa o novo registro a primeira fazenda encontrada para o usuario autenticado
 e grava nome, area, cultura, latitude, longitude e raio.
 
-O formulario exige coordenadas, entao o cadastro pela tela ja permite colocar
-o ponto no mapa. O backend aceita coordenadas decimais e tambem reconhece
-alguns formatos compactados de graus/minutos/segundos; coordenadas fora dos
-limites geograficos sao rejeitadas.
+O formulario exige coordenadas: elas podem ser digitadas ou definidas clicando
+no mapa de localizacao do formulario. Esse mapa atualiza latitude e longitude
+somente para o talhao que esta sendo cadastrado. Ele mostra os pontos dos outros
+talhoes para ajudar a escolher um local proprio e alerta sobre coordenadas
+iguais, sem inventar uma localizacao. O backend aceita coordenadas decimais e
+tambem reconhece alguns formatos compactados de graus/minutos/segundos;
+coordenadas fora dos limites geograficos sao rejeitadas.
 
 O nome duplicado dentro da mesma fazenda e impedido pela restricao unica do
 banco.
@@ -136,7 +143,11 @@ Mapa:
 - so desenha talhoes com latitude e longitude numericas validas;
 - mostra um marcador no centro e um circulo com o raio cadastrado;
 - ajusta o enquadramento para incluir todos os talhoes georreferenciados;
-- clicar no marcador, no circulo ou no cartao da lista abre os detalhes;
+- clicar no cartao, marcador ou circulo seleciona o talhao, centraliza/aproxima
+  o mapa no ponto e abre um popup com informacoes rapidas;
+- o painel abaixo do mapa exibe os mesmos detalhes do antigo modal: cadastro,
+  sensor/telemetria, coordenadas, planejamento, IEA/janela, previsao e historico;
+  clicar na lista ou nos marcadores nao abre o modal "Janela de Ouro";
 - talhao sem coordenadas continua na lista, mas nao pode ser exibido no mapa;
 - se nao houver coordenadas, aparece uma mensagem pedindo para cadastra-las.
 
@@ -176,6 +187,10 @@ Os atributos cadastrais (area, cultura, variedade, idade, solo e coordenadas)
 vem do registro do talhao. IEA, janela e indicadores meteorologicos pertencem
 a analise do talhao e a sua previsao; nao sao atributos compartilhados da
 fazenda. O historico e filtrado pelo ID do talhao, nao apenas pelo nome.
+Na pagina Talhoes, clicar em um cartao ou marcador nao abre esse modal: o mapa
+foca o ponto e os dados aparecem no popup e no painel abaixo do mapa. Esse painel
+preserva todas as secoes de detalhe descritas acima. O modal continua disponivel
+por outros atalhos que solicitam detalhes/operacoes.
 
 O modulo de umidade esta marcado como bloqueado. A tela nao deve ser entendida
 como leitura ao vivo de sensor, mesmo quando o modal apresenta textos como
@@ -278,8 +293,10 @@ apresentados nao devem ser confundidos com alteracoes de cada registro Talhao.
 8.8. Cadastro inicial
 
 Cria a Fazenda e os talhoes numerados, mas nao coleta a localizacao de cada
-talhao. Para usar mapa e previsao local, abra a tela Talhoes, edite cada
-registro e informe suas coordenadas.
+talhao. Para usar mapa e previsao local, abra a tela Talhoes, edite cada registro e
+escolha sua localizacao especifica clicando no mapa ou informando latitude e
+longitude. O sistema nao consegue deduzir limites ou centros reais sem essa
+informacao do usuario.
 
 
 9. APLICACOES E PLANEJAMENTOS: DIFERENCA IMPORTANTE

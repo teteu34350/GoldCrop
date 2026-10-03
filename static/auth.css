@@ -21,6 +21,24 @@
   min-height: 100vh;
 }
 
+.auth-simple-page { align-items: center; justify-content: center; padding: 1.25rem; }
+.auth-simple-card {
+  width: min(100%, 440px);
+  padding: clamp(1.25rem, 5vw, 2rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 14px 36px rgb(22 45 31 / 12%);
+}
+.auth-simple-card h1 { margin: 0 0 .75rem; color: var(--text-primary); font-family: 'Outfit', sans-serif; font-size: 1.5rem; }
+.auth-simple-card p { margin: 0 0 1rem; color: var(--text-secondary); font-size: .9rem; line-height: 1.5; }
+.auth-simple-card form { display: grid; gap: .6rem; }
+.auth-simple-card label { margin-top: .5rem; font-size: .82rem; font-weight: 600; }
+.auth-simple-card input { width: 100%; min-height: 42px; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: var(--radius-md); font: inherit; }
+.auth-simple-card button { min-height: 44px; margin-top: .5rem; border: 0; border-radius: var(--radius-md); background: var(--green-700); color: #fff; cursor: pointer; font: inherit; font-weight: 700; }
+.auth-simple-card a { display: inline-block; margin-top: 1rem; color: var(--green-700); }
+.auth-simple-card ul.errorlist { margin: 0; color: var(--red-600); font-size: .78rem; }
+
 /* ===================================================
    HERO PANEL (LEFT SIDE)
    =================================================== */

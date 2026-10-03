@@ -127,12 +127,14 @@ Arquivo: templates/cadastro.html
 Funcionalidades:
 - etapa 1: dados do produtor
 - etapa 2: dados da fazenda e endereço
-- etapa 3: área, cultura, quantidade de talhões e irrigação
+- etapa 3: função na fazenda, área, cultura, quantidade de talhões e irrigação
 - validação de campos obrigatórios
 - validação de senha e e-mail
 - máscara de telefone e CEP
 - busca automática via ViaCEP no navegador
 - criação de usuário, perfil e fazenda no backend
+- escolha obrigatória da função do novo membro: Proprietário, Gerente,
+  Técnico/Agrônomo ou Funcionário; as permissões são aplicadas pelo backend
 - criação automática de talhões em quantidade definida
 
 5.3. Dashboard
@@ -179,8 +181,10 @@ Funcionalidades:
 - filtro por status visual
 - seleção do talhão ativo entre as telas
 - status e IEA somente quando houver análise daquele talhão
+- clique no cartão ou marcador centraliza e aproxima o mapa no talhão
+- popup rápido no marcador e detalhes completos abaixo do mapa, sem abrir modal
 - cadastro de novo talhão
-- modal com detalhes do talhão
+- modal de detalhes disponível por outros atalhos
 - visualização de latitude, longitude, raio e coordenadas
 - edição de talhão
 - exclusão de talhão
@@ -298,6 +302,12 @@ Se um talhão tiver latitude e longitude válidas, ele entra no mapa. Se não
 tiver, permanece na listagem, mas não aparece no mapa e mostra que faltam
 coordenadas para análise meteorológica.
 
+No cadastro e edição, cada formulário possui um mapa próprio: clicar ou
+arrastar o marcador preenche latitude e longitude somente daquele talhão. A
+posição de outro talhão serve apenas como referência e nunca é aplicada
+automaticamente. Talhões iniciais sem coordenadas precisam ser ajustados pelo
+usuário; o sistema não inventa a localização nem o limite físico da área.
+
 O mapa:
 - é renderizado com Leaflet
 - usa tiles do OpenStreetMap
@@ -368,9 +378,16 @@ O formulário de cadastro inclui:
 - latitude
 - longitude
 - raio aproximado em metros
+- mapa para selecionar o centro aproximado de cada talhão individualmente
+- marcadores dos outros talhões e aviso caso o ponto coincida com outro
 
-Na UI, ao clicar em qualquer talhão na listagem ou no mapa, abre-se o modal do
-Talhão, onde o usuário pode visualizar:
+Na tela Talhões, clicar no cartão ou marcador seleciona o registro, aproxima o
+mapa da sua localização, abre um popup no marcador e atualiza o painel de
+detalhes completo sob o mapa. O painel mantém as mesmas informações que antes
+apareciam no modal: dados cadastrais, telemetria, localização, planejamento,
+janela/IEA, clima, estado do sensor e histórico. Essa ação não abre o modal
+"Janela de Ouro"; o modal continua acessível por outros atalhos. Nele, o
+usuário pode visualizar:
 - nome
 - cultura
 - idade
@@ -394,19 +411,30 @@ Campos suportados:
 - nome completo
 - e-mail
 - telefone
-- fazenda principal
-- papel/função
 
-Também é possível:
-- alternar entre fazendas
-- visualizar dados da equipe
-- adicionar nova pessoa à fazenda
-- ver permissões por perfil
+O papel do usuário não é editável no perfil: ele vem do vínculo persistido com
+cada fazenda. A seleção da fazenda ativa é armazenada na sessão autenticada.
+
+Equipe e acesso:
+- MembroFazenda armazena usuário, fazenda e função.
+- Proprietário pode convidar por e-mail, revogar convites pendentes e remover
+  membros.
+- ConviteFazenda guarda o convite, função, estado, prazo e somente o hash do
+  token; o link é enviado por SMTP e expira em sete dias.
+- A pessoa convidada pode criar conta ou entrar na conta do e-mail convidado.
+- NotificacaoFazenda persiste alertas operacionais e a leitura individual.
+
+Funções autorizadas no servidor:
+- Proprietário: visualizar, planejar, registrar, gerenciar talhões e equipe.
+- Gerente: visualizar, planejar, registrar e gerenciar talhões.
+- Técnico/Agrônomo: visualizar, planejar e registrar.
+- Funcionário: visualizar e registrar.
 
 Os dados do perfil são persistidos em:
 - User do Django
 - PerfilProdutor
-- Fazenda
+
+Os dados da fazenda são alterados pela rota autenticada POST /api/farms/settings/.
 
 
 11. COMO FUNCIONA A PERSISTÊNCIA DOS DADOS
@@ -416,6 +444,9 @@ O backend Django persiste:
 - usuários
 - perfis
 - fazendas
+- membros e funções por fazenda
+- convites de equipe
+- notificações operacionais
 - talhões
 - aplicações
 - coletas meteorológicas
@@ -429,6 +460,10 @@ Os endpoints principais são:
 - /api/applications/
 - /api/talhoes/
 - /api/profile/
+- /api/farms/ e /api/farms/settings/
+- /api/farms/team/ e /api/farms/invitations/
+- /api/notifications/
+- /api/auth/password-reset/
 
 Esses endpoints permitem que o frontend seja alimentado com dados reais e não
 apenas com dados em memória. O projeto usa o ORM do Django para garantir
@@ -456,8 +491,11 @@ Um fluxo típico de uso é:
 13. ESTADO ATUAL DO PROJETO
 ---------------------------
 
-O GoldCrop está em etapa funcional de protótipo com foco em operação e
-demonstração da solução. Ele já possui:
+O GoldCrop está em etapa funcional de protótipo com foco em operação. Os dados
+operacionais mostrados nas páginas autenticadas são carregados do banco e não
+há fazendas, talhões, equipe, histórico ou notificações de demonstração como
+fallback. Se o servidor falhar, a interface mostra estado vazio/erro em vez de
+substituir a resposta por registros inventados. Ele já possui:
 - autenticação real em Django
 - páginas protegidas
 - cadastro de usuário e fazenda
@@ -467,13 +505,16 @@ demonstração da solução. Ele já possui:
 - painel dashboard
 - painel de aplicações e histórico
 - controle de perfil e dados da fazenda
+- seleção de fazendas vinculadas à conta e permissões por membro
+- convites de equipe e notificações persistidos
+- recuperação de senha com token Django e envio por e-mail
 
 Ainda há pontos a evoluir, como:
 - integração completa entre todos os módulos operacionais em tempo real
 - definição de regras finais para cálculo do IEA por cultura e talhão
 - sincronização mais detalhada entre recomendação meteorológica e execução
 - expansão para sensores reais e rastreio em tempo real
-- refinamento de permissões por papel e fluxo de aprovação
+- integração de sensores IoT reais e rastreio de telemetria em tempo real
 
 
 14. COMANDOS ÚTEIS DE DESENVOLVIMENTO
@@ -490,6 +531,17 @@ python manage.py test
 
 Criar superusuário:
 python manage.py createsuperuser
+
+Configurar convites e recuperação de senha por SMTP:
+- EMAIL_HOST
+- EMAIL_PORT (padrão 587)
+- EMAIL_HOST_USER
+- EMAIL_HOST_PASSWORD
+- EMAIL_USE_TLS (padrão true) ou EMAIL_USE_SSL (padrão false)
+- DEFAULT_FROM_EMAIL
+
+Sem EMAIL_HOST ou DEFAULT_FROM_EMAIL, o backend retorna erro explícito para
+envio de convites e redefinição de senha; não registra sucesso fictício.
 
 
 15. RESUMO

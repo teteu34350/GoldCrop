@@ -63,6 +63,78 @@ class Fazenda(models.Model):
         return self.nome
 
 
+class MembroFazenda(models.Model):
+    class Funcao(models.TextChoices):
+        PROPRIETARIO = "OWNER", "Proprietário"
+        GERENTE = "MANAGER", "Gerente"
+        TECNICO = "TECHNICIAN", "Técnico / Agrônomo"
+        FUNCIONARIO = "EMPLOYEE", "Funcionário"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="membros")
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="membros_fazenda")
+    funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.FUNCIONARIO)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["criado_em", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["fazenda", "usuario"], name="membro_unico_por_fazenda"),
+        ]
+
+    def __str__(self):
+        return f"{self.usuario} — {self.fazenda} ({self.get_funcao_display()})"
+
+
+class ConviteFazenda(models.Model):
+    class Status(models.TextChoices):
+        PENDENTE = "PENDING", "Pendente"
+        ACEITO = "ACCEPTED", "Aceito"
+        REVOGADO = "REVOKED", "Revogado"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="convites")
+    email = models.EmailField()
+    funcao = models.CharField(
+        max_length=20,
+        choices=[choice for choice in MembroFazenda.Funcao.choices if choice[0] != MembroFazenda.Funcao.PROPRIETARIO],
+    )
+    token_digest = models.CharField(max_length=64, unique=True)
+    convidado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="convites_enviados")
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDENTE)
+    expira_em = models.DateTimeField()
+    criado_em = models.DateTimeField(auto_now_add=True)
+    aceito_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+
+    def __str__(self):
+        return f"{self.email} — {self.fazenda} ({self.get_status_display()})"
+
+
+class NotificacaoFazenda(models.Model):
+    class Tipo(models.TextChoices):
+        RECOMENDACAO = "RECOMMENDATION", "Nova recomendação"
+        PLANEJAMENTO = "PLANNING", "Novo planejamento"
+        APLICACAO = "APPLICATION", "Aplicação registrada"
+        MEMBRO = "MEMBER", "Membro adicionado"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="notificacoes")
+    destinatario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notificacoes_fazenda")
+    ator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="eventos_fazenda")
+    tipo = models.CharField(max_length=24, choices=Tipo.choices)
+    titulo = models.CharField(max_length=150)
+    mensagem = models.CharField(max_length=500)
+    lida_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criada_em", "-id"]
+        indexes = [models.Index(fields=["destinatario", "fazenda", "lida_em"])]
+
+    def __str__(self):
+        return self.titulo
+
+
 class Talhao(models.Model):
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="talhoes")
     nome = models.CharField(max_length=100)

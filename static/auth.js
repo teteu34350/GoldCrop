@@ -369,6 +369,7 @@ function validateStep(step) {
   }
 
   if (step === 3) {
+    const funcao = document.getElementById('funcao')?.value;
     const area = Number(document.getElementById('area_hectares')?.value);
     const talhoes = Number(document.getElementById('quantidade_talhoes')?.value);
     const culturas = document.querySelectorAll('.culture-chip.selected').length;
@@ -386,6 +387,12 @@ function validateStep(step) {
     }
     if (!culturas) {
       isValid = false;
+    }
+    if (!funcao) {
+      showFieldError('funcao', 'Selecione sua função na fazenda.');
+      isValid = false;
+    } else {
+      clearFieldError('funcao');
     }
   }
 
@@ -411,7 +418,7 @@ function prevWizardStep() {
 }
 
 // ===================================================
-// API BACKEND INTEGRATION SERVICES (Mock + Prepared)
+// API backend services
 // ===================================================
 
 const AuthService = {
@@ -432,21 +439,22 @@ const AuthService = {
   },
 
   async login(email, password, rememberMe) {
-    console.log('🔗 Sending POST request to /api/auth/login:', { email, rememberMe });
     const form = document.getElementById('login-form');
     return this.post(form.dataset.apiUrl, { email, password, remember_me: rememberMe }, form.querySelector('[name=csrfmiddlewaretoken]').value);
   },
 
   async register(formData) {
-    console.log('🔗 Sending POST request to /api/auth/register with payload:', formData);
     const form = document.getElementById('cadastro-form');
     return this.post(form.dataset.apiUrl, formData, form.querySelector('[name=csrfmiddlewaretoken]').value);
   },
 
   async requestPasswordReset(email) {
-    console.log('🔗 Sending POST request to /api/auth/forgot-password:', { email });
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return { status: 'success', message: 'Instruções de recuperação enviadas para o seu e-mail.' };
+    const form = document.getElementById('forgot-form');
+    return this.post(
+      form.dataset.apiUrl,
+      { email },
+      form.querySelector('[name=csrfmiddlewaretoken]').value
+    );
   }
 };
 
@@ -540,15 +548,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.classList.add('btn-loading');
 
         try {
-          await AuthService.requestPasswordReset(resetEmail);
-          showAlert('forgot-alert', 'Instruções enviadas para ' + resetEmail, 'success');
+          const result = await AuthService.requestPasswordReset(resetEmail);
+          showAlert('forgot-alert', result.message, 'success');
           setTimeout(() => {
             modalOverlay.classList.remove('active');
             btn.disabled = false;
             btn.classList.remove('btn-loading');
           }, 2000);
         } catch (err) {
-          showAlert('forgot-alert', 'Erro ao enviar. Verifique o e-mail.', 'error');
+          showAlert('forgot-alert', err.message || 'Não foi possível enviar as instruções de redefinição.', 'error');
           btn.disabled = false;
           btn.classList.remove('btn-loading');
         }
@@ -588,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateCities(e.target.value);
       });
     }
+    document.getElementById('funcao')?.addEventListener('change', () => clearFieldError('funcao'));
 
     // Password strength listener
     const passwordInput = document.getElementById('senha');
@@ -689,7 +698,8 @@ document.addEventListener('DOMContentLoaded', () => {
         quantidade_talhoes: parseInt(document.getElementById('quantidade_talhoes').value, 10) || 1,
         culturas: selectedCulturas,
         tipo_cultivo: tipoCultivo,
-        irrigacao: irrigacao
+        irrigacao: irrigacao,
+        funcao: document.getElementById('funcao').value
       };
 
       const btnSubmit = document.getElementById('btn-register-submit');
