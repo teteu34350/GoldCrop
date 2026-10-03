@@ -6,11 +6,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-goldcrop-local-development'
 DEBUG = True
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
-    if host.strip()
+    'gold-crop.vercel.app',
+    'localhost',
+    '127.0.0.1',
 ]
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
