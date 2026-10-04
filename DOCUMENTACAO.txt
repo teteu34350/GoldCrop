@@ -543,6 +543,17 @@ Configurar convites e recuperação de senha por SMTP:
 Sem EMAIL_HOST ou DEFAULT_FROM_EMAIL, o backend retorna erro explícito para
 envio de convites e redefinição de senha; não registra sucesso fictício.
 
+Banco de dados em produção (Vercel):
+- SQLite é usado apenas no desenvolvimento local; o filesystem da Vercel não é
+  persistente nem gravável para armazenar o banco.
+- Configure um PostgreSQL gerenciado e defina DATABASE_URL na Vercel (ou
+  POSTGRES_URL, se esse for o nome fornecido pela integração).
+- Defina também SECRET_KEY como variável secreta na Vercel. DEBUG fica desativado
+  por padrão nesse ambiente.
+- Antes de liberar a aplicação, execute `python manage.py migrate` usando a mesma
+  DATABASE_URL configurada na Vercel. A base PostgreSQL será nova e não receberá
+  automaticamente dados do arquivo SQLite local.
+
 
 15. RESUMO
 ----------

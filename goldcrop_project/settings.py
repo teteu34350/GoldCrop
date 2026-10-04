@@ -1,10 +1,23 @@
 from pathlib import Path
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-goldcrop-local-development'
-DEBUG = True
+IS_VERCEL = os.environ.get('VERCEL') == '1'
+
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    if IS_VERCEL:
+        raise ImproperlyConfigured('Configure SECRET_KEY in the Vercel environment.')
+    SECRET_KEY = 'django-insecure-goldcrop-local-development'
+
+DEBUG = os.environ.get('DEBUG', 'false' if IS_VERCEL else 'true').lower() in {
+    '1',
+    'true',
+    'yes',
+}
 ALLOWED_HOSTS = [
     'gold-crop.vercel.app',
     'localhost',
@@ -49,12 +62,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'goldcrop_project.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+database_url = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
+if database_url:
+    import dj_database_url
+
+    DATABASES = {
+        'default': dj_database_url.parse(
+            database_url,
+            conn_max_age=0 if IS_VERCEL else 600,
+            ssl_require=IS_VERCEL,
+        )
     }
-}
+elif IS_VERCEL:
+    raise ImproperlyConfigured(
+        'Configure DATABASE_URL with a persistent PostgreSQL database in Vercel.'
+    )
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = []
 LOGIN_URL = 'dashboard:login'
