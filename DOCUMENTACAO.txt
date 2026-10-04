@@ -546,13 +546,14 @@ envio de convites e redefinição de senha; não registra sucesso fictício.
 Banco de dados em produção (Vercel):
 - SQLite é usado apenas no desenvolvimento local; o filesystem da Vercel não é
   persistente nem gravável para armazenar o banco.
-- Configure um PostgreSQL gerenciado e defina DATABASE_URL na Vercel (ou
-  POSTGRES_URL, se esse for o nome fornecido pela integração).
-- Defina também SECRET_KEY como variável secreta na Vercel. DEBUG fica desativado
-  por padrão nesse ambiente.
-- Antes de liberar a aplicação, execute `python manage.py migrate` usando a mesma
-  DATABASE_URL configurada na Vercel. A base PostgreSQL será nova e não receberá
-  automaticamente dados do arquivo SQLite local.
+- Conecte um PostgreSQL gerenciado ao projeto Vercel. A integração Neon pode
+  fornecer DATABASE_URL/POSTGRES_URL automaticamente; o projeto reconhece ambas.
+- Defina SECRET_KEY como variável de ambiente secreta na Vercel. DEBUG fica
+  desativado por padrão nesse ambiente.
+- As migrações Django são executadas automaticamente durante cada build da Vercel
+  pela configuração `[tool.vercel.scripts]` em pyproject.toml.
+- A base PostgreSQL será nova e não receberá automaticamente os dados do arquivo
+  SQLite local; exporte/import seus dados separadamente se precisar deles.
 
 
 15. RESUMO
