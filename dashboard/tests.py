@@ -80,7 +80,10 @@ class PersistenciaSistemaTests(TestCase):
         self.assertEqual(response.status_code, 201)
         state = self.client.get(reverse("dashboard:system_state_api"))
         self.assertEqual(state.status_code, 200)
-        self.assertEqual(state.json()["talhoes"][0]["name"], "Talhão 01")
+        talhao_state = state.json()["talhoes"][0]
+        self.assertEqual(talhao_state["name"], "Talhão 01")
+        self.assertEqual(talhao_state["latitude"], -20.89)
+        self.assertEqual(talhao_state["longitude"], -46.08)
 
     def test_talhao_converte_coordenadas_compactadas(self):
         response = self.client.post(reverse("dashboard:talhao_create_api"), {"nome": "Talhão GPS", "area": 5, "cultura": "Café", "latitude": "205823", "longitude": "460704"}, content_type="application/json")

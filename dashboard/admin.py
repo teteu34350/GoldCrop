@@ -42,7 +42,7 @@ class NotificacaoFazendaAdmin(admin.ModelAdmin):
 
 @admin.register(Talhao)
 class TalhaoAdmin(admin.ModelAdmin):
-    list_display = ("nome", "fazenda", "cultura", "area_hectares", "ativo")
+    list_display = ("nome", "fazenda", "cultura", "area_hectares", "latitude", "longitude", "ativo")
     list_filter = ("ativo", "cultura")
     search_fields = ("nome", "fazenda__nome", "fazenda__produtor__email")
 
