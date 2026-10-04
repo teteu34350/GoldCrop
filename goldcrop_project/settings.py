@@ -1,11 +1,18 @@
 from pathlib import Path
 import os
+from urllib.parse import urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 IS_VERCEL = os.environ.get('VERCEL') == '1'
+
+vercel_hosts = {
+    urlsplit(f'//{os.environ[name]}').hostname
+    for name in ('VERCEL_URL', 'VERCEL_PROJECT_PRODUCTION_URL')
+    if os.environ.get(name)
+}
 
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
@@ -22,7 +29,7 @@ ALLOWED_HOSTS = [
     'gold-crop.vercel.app',
     'localhost',
     '127.0.0.1',
-]
+] + sorted(host for host in vercel_hosts if host)
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
