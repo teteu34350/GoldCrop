@@ -1184,6 +1184,14 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
 // TALHÕES MAP
 // =====================================================
 
+function addBaseMapTiles(map) {
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(map);
+}
+
 function talhaoStatusPresentation(talhao) {
   if (!talhao.analysis?.bestRecommendation) {
     const hasCoordinates = Number.isFinite(talhao.latitude) && Number.isFinite(talhao.longitude);
@@ -1293,10 +1301,7 @@ function renderTalhoes() {
   } else {
     const firstTalhao = locatedTalhoes[0];
     talhoesMap = L.map(container).setView([firstTalhao.latitude, firstTalhao.longitude], 16);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(talhoesMap);
+    addBaseMapTiles(talhoesMap);
 
     locatedTalhoes.forEach(t => {
       const status = talhaoStatusPresentation(t);
@@ -1473,10 +1478,7 @@ function renderTalhaoLocationPicker(mapId, latitudeInputId, longitudeInputId, se
   const zoom = selectedLatitude != null && selectedLongitude != null ? 16 : otherTalhoes.length ? 14 : 4;
   const map = L.map(container).setView(center, zoom);
   const controller = new AbortController();
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-  }).addTo(map);
+  addBaseMapTiles(map);
 
   otherTalhoes.forEach(item => {
     L.circleMarker([item.latitude, item.longitude], {
