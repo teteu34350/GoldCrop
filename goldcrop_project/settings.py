@@ -62,7 +62,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'goldcrop_project.wsgi.application'
 
-database_url = os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')
+database_url = (
+    os.environ.get('DATABASE_URL')
+    or os.environ.get('POSTGRES_URL')
+    or os.environ.get('STORAGE_URL')
+)
 if database_url:
     import dj_database_url
 
@@ -75,7 +79,8 @@ if database_url:
     }
 elif IS_VERCEL:
     raise ImproperlyConfigured(
-        'Configure DATABASE_URL with a persistent PostgreSQL database in Vercel.'
+        'Configure DATABASE_URL, POSTGRES_URL, or STORAGE_URL with a persistent '
+        'PostgreSQL database in Vercel.'
     )
 else:
     DATABASES = {
