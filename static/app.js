@@ -1000,6 +1000,8 @@ function renderCalendar() {
 
   const year = calMonth.getFullYear();
   const month = calMonth.getMonth();
+  const today = new Date();
+  grid.classList.toggle('current-month', year === today.getFullYear() && month === today.getMonth());
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 

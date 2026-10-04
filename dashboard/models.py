@@ -304,3 +304,47 @@ class LeituraSensorIoT(models.Model):
     class Meta:
         ordering = ["-lida_em"]
         indexes = [models.Index(fields=["sensor", "lida_em"])]
+
+
+class Produto(models.Model):
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="produtos_estoque")
+    nome = models.CharField(max_length=150)
+    categoria = models.CharField(max_length=80)
+    unidade = models.CharField(max_length=30)
+    estoque_minimo = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    local_armazenamento = models.CharField(max_length=150, blank=True)
+    observacao = models.TextField(blank=True)
+    quantidade_atual = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["nome"]
+
+    def __str__(self):
+        return f"{self.nome} ({self.quantidade_atual} {self.unidade})"
+
+
+class MovimentacaoEstoque(models.Model):
+    class Tipo(models.TextChoices):
+        ENTRADA = "ENTRADA", "Entrada"
+        SAIDA = "SAIDA", "Saída"
+
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE, related_name="movimentacoes")
+    tipo = models.CharField(max_length=10, choices=Tipo.choices)
+    quantidade = models.DecimalField(max_digits=12, decimal_places=2)
+    motivo = models.CharField(max_length=80)
+    data = models.DateField()
+    talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentacoes_estoque")
+    fornecedor = models.CharField(max_length=150, blank=True)
+    valor = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    observacao = models.TextField(blank=True)
+    criado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="movimentacoes_estoque_criadas")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-data", "-criado_em"]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} - {self.produto.nome} ({self.quantidade})"

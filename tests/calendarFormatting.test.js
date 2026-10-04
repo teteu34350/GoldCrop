@@ -37,6 +37,22 @@ assert.strictEqual(vm.runInContext('calMonth.getMonth()', context), new Date().g
 const elements = {};
 const maps = [];
 context.document.getElementById = id => elements[id] || null;
+const currentMonthClasses = new Set();
+elements.calGrid = {
+  innerHTML: '',
+  classList: {
+    toggle(name, force) {
+      if (force) currentMonthClasses.add(name);
+      else currentMonthClasses.delete(name);
+    },
+  },
+  appendChild() {},
+};
+elements.calMonthLabel = { textContent: '' };
+vm.runInContext('renderCalendar()', context);
+assert(currentMonthClasses.has('current-month'), 'current month should be marked for mobile calendar layout');
+vm.runInContext('calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCalendar()', context);
+assert(!currentMonthClasses.has('current-month'), 'other months should not receive the current-month mobile layout');
 context.AbortController = AbortController;
 context.L = {
   map: () => {

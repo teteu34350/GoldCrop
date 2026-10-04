@@ -11,6 +11,7 @@ from .views import (
     profile_update_api, password_reset_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
     farms_api, farm_settings_api, farm_team_api, farm_member_api, farm_invitation_api, accept_invitation,
     notifications_api, notification_read_api,
+    estoque_view, estoque_produtos_api, estoque_movimentacoes_api,
 )
 
 app_name = 'dashboard'
@@ -58,6 +59,10 @@ urlpatterns = [
         template_name='registration/password_reset_confirm.html',
         success_url=reverse_lazy('dashboard:password_reset_complete'),
     ), name='password_reset_confirm'),
+
+    path('estoque/', estoque_view, name='estoque'),
+    path('api/estoque/produtos/', estoque_produtos_api, name='estoque_produtos_api'),
+    path('api/estoque/movimentacoes/', estoque_movimentacoes_api, name='estoque_movimentacoes_api'),
 
     path('', home, name='home'),
 ]

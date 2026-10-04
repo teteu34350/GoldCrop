@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block breadcrumb %}Estoque{% endblock %}
+
+{% block content %}
+<div class="dashboard-container" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+  
+  <div class="estoque-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 1.5rem; font-weight: 700; color: var(--gray-900);">Estoque</h1>
+      <p style="color: var(--gray-600); font-size: 0.875rem;">Gerencie os insumos armazenados na propriedade.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem;">
+      <button class="btn-primary" onclick="abrirModalNovoProduto()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Novo Produto
+      </button>
+      <button class="btn-ghost" onclick="abrirModalRelatorio()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        Gerar PDF
+      </button>
+    </div>
+  </div>
+
+  <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+    <div class="kpi-card" style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--gray-200);">
+      <div style="color: var(--gray-500); font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Total de Produtos</div>
+      <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-900);" id="kpiTotalProdutos">0</div>
+    </div>
+    <div class="kpi-card" style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--gray-200);">
+      <div style="color: var(--gray-500); font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Estoque Baixo</div>
+      <div style="font-size: 1.75rem; font-weight: 700; color: var(--amber-600);" id="kpiEstoqueBaixo">0</div>
+    </div>
+    <div class="kpi-card" style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--gray-200);">
+      <div style="color: var(--gray-500); font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Sem Estoque</div>
+      <div style="font-size: 1.75rem; font-weight: 700; color: var(--red-600);" id="kpiSemEstoque">0</div>
+    </div>
+  </div>
+
+  <div class="estoque-filters" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: 1rem; flex-wrap: wrap;">
+    <div class="tabs" style="display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 4px;">
+      <button class="tab-btn active" data-categoria="Todos">Todos</button>
+      <button class="tab-btn" data-categoria="Fertilizante">Fertilizantes</button>
+      <button class="tab-btn" data-categoria="Defensivo">Defensivos</button>
+      <button class="tab-btn" data-categoria="Semente">Sementes</button>
+      <button class="tab-btn" data-categoria="Corretivo">Corretivos</button>
+      <button class="tab-btn" data-categoria="Outros">Outros</button>
+    </div>
+    <div style="position: relative; flex-grow: 1; max-width: 300px;">
+      <svg style="position: absolute; left: 10px; top: 10px; color: var(--gray-400);" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" id="buscaProduto" class="form-input" placeholder="Buscar produto..." style="padding-left: 36px; margin: 0;">
+    </div>
+  </div>
+
+  <div class="estoque-list" id="listaProdutos" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">
+    <!-- Cards de produtos preenchidos via JS -->
+    <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--gray-500);">Carregando produtos...</div>
+  </div>
+
+  <div style="margin-top: 3rem;">
+    <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1rem;">Histórico Recente</h2>
+    <div style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--gray-200); background: var(--gray-50);">
+            <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Data</th>
+            <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Produto</th>
+            <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Tipo</th>
+            <th style="padding: 1rem; text-align: right; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Qtd</th>
+            <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Motivo</th>
+            <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Talhão</th>
+          </tr>
+        </thead>
+        <tbody id="listaMovimentacoes">
+          <tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--gray-500);">Carregando histórico...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: NOVO PRODUTO -->
+<div class="modal-overlay" id="modalNovoProduto" style="display:none">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2 class="modal-title">Cadastrar Produto</h2>
+      <button class="modal-close" onclick="fecharModalNovoProduto()">×</button>
+    </div>
+    <form class="modal-body" id="formNovoProduto">
+      <div class="form-group">
+        <label class="form-label">Nome do Produto</label>
+        <input class="form-input" id="npNome" type="text" placeholder="Ex: Ureia 45%" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-input" id="npCategoria" required>
+            <option value="Fertilizante">Fertilizante</option>
+            <option value="Defensivo">Defensivo</option>
+            <option value="Semente">Semente</option>
+            <option value="Corretivo">Corretivo</option>
+            <option value="Insumo">Insumo</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unidade</label>
+          <select class="form-input" id="npUnidade" required>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="L">L</option>
+            <option value="mL">mL</option>
+            <option value="unidade">unidade</option>
+            <option value="saco">saco</option>
+            <option value="caixa">caixa</option>
+            <option value="outra">outra</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Estoque Inicial</label>
+          <input class="form-input" id="npInicial" type="number" step="0.01" min="0" value="0" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estoque Mínimo</label>
+          <input class="form-input" id="npMinimo" type="number" step="0.01" min="0" value="0" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Local de Armazenamento</label>
+        <input class="form-input" id="npLocal" type="text" placeholder="Ex: Galpão Principal (opcional)" />
+      </div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="fecharModalNovoProduto()">Cancelar</button>
+      <button class="btn-primary" onclick="salvarNovoProduto()">Cadastrar Produto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ENTRADA -->
+<div class="modal-overlay" id="modalEntrada" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Entrada de Estoque</h2>
+      <button class="modal-close" onclick="fecharModalEntrada()">×</button>
+    </div>
+    <form class="modal-body" id="formEntrada">
+      <input type="hidden" id="entProdutoId" />
+      <div class="form-group">
+        <label class="form-label">Produto</label>
+        <input class="form-input" id="entProdutoNome" type="text" readonly />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantidade</label>
+          <input class="form-input" id="entQtd" type="number" step="0.01" min="0.01" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motivo</label>
+          <select class="form-input" id="entMotivo" required>
+            <option value="Compra">Compra</option>
+            <option value="Devolução">Devolução</option>
+            <option value="Transferência">Transferência</option>
+            <option value="Produção">Produção</option>
+            <option value="Ajuste">Ajuste</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data</label>
+        <input class="form-input" id="entData" type="date" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação</label>
+        <input class="form-input" id="entObs" type="text" placeholder="(Opcional)" />
+      </div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="fecharModalEntrada()">Cancelar</button>
+      <button class="btn-primary" style="background: var(--green-600); border-color: var(--green-600);" onclick="salvarEntrada()">Confirmar Entrada</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SAÍDA -->
+<div class="modal-overlay" id="modalSaida" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Saída de Estoque</h2>
+      <button class="modal-close" onclick="fecharModalSaida()">×</button>
+    </div>
+    <form class="modal-body" id="formSaida">
+      <input type="hidden" id="saiProdutoId" />
+      <div class="form-group">
+        <label class="form-label">Produto</label>
+        <input class="form-input" id="saiProdutoNome" type="text" readonly />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantidade</label>
+          <input class="form-input" id="saiQtd" type="number" step="0.01" min="0.01" required />
+          <small id="saiQtdMax" style="color:var(--gray-500);font-size:0.75rem"></small>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Motivo</label>
+          <select class="form-input" id="saiMotivo" onchange="toggleTalhaoSelect()" required>
+            <option value="Aplicação">Aplicação no Talhão</option>
+            <option value="Venda">Venda</option>
+            <option value="Perda">Perda</option>
+            <option value="Vencimento">Vencimento</option>
+            <option value="Transferência">Transferência</option>
+            <option value="Uso interno">Uso interno</option>
+            <option value="Ajuste">Ajuste</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" id="saiTalhaoContainer">
+        <label class="form-label">Talhão</label>
+        <select class="form-input" id="saiTalhao">
+          <!-- preenchido via js -->
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data</label>
+        <input class="form-input" id="saiData" type="date" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observação</label>
+        <input class="form-input" id="saiObs" type="text" placeholder="(Opcional)" />
+      </div>
+    </form>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="fecharModalSaida()">Cancelar</button>
+      <button class="btn-primary" style="background: var(--red-600); border-color: var(--red-600);" onclick="salvarSaida()">Confirmar Saída</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RELATÓRIO -->
+<div class="modal-overlay" id="modalRelatorio" style="display:none">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2 class="modal-title">Gerar Relatório PDF</h2>
+      <button class="modal-close" onclick="fecharModalRelatorio()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom: 1rem; color: var(--gray-600); font-size: 0.875rem;">Selecione o tipo de relatório que deseja visualizar e imprimir/salvar em PDF.</p>
+      
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <button class="btn-ghost" style="justify-content: flex-start;" onclick="imprimirRelatorio('atual')">📄 Estoque Atual</button>
+        <button class="btn-ghost" style="justify-content: flex-start;" onclick="imprimirRelatorio('baixo')">📄 Produtos com Estoque Baixo</button>
+        <button class="btn-ghost" style="justify-content: flex-start;" onclick="imprimirRelatorio('movimentacoes')">📄 Histórico de Movimentações</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="fecharModalRelatorio()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'estoque.js' %}?v=1"></script>
+<style>
+  .tab-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    background: transparent;
+    color: var(--gray-500);
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+  .tab-btn.active {
+    color: var(--green-600);
+    border-bottom-color: var(--green-600);
+  }
+  .produto-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .produto-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .produto-nome {
+    font-weight: 600;
+    color: var(--gray-900);
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+  }
+  .produto-categoria {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .produto-qtd {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+  .produto-unidade {
+    font-size: 1rem;
+    color: var(--gray-500);
+    font-weight: 400;
+  }
+  .status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+  .status-success { background: var(--green-50); color: var(--green-700); }
+  .status-warning { background: var(--amber-50); color: var(--amber-700); }
+  .status-danger { background: var(--red-50); color: var(--red-700); }
+  
+  .produto-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid var(--gray-100);
+  }
+  
+  @media print {
+    body * { visibility: hidden; }
+    .print-area, .print-area * { visibility: visible; }
+    .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
+    .sidebar, .topbar, .estoque-header, .kpi-grid, .estoque-filters, .produto-actions, .modal-overlay { display: none !important; }
+  }
+</style>
+{% endblock %}

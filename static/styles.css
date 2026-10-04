@@ -1461,6 +1461,27 @@ body {
 
 .day-panel-empty p { font-size: .875rem; }
 
+@media (max-width: 640px) {
+  .cal-grid.current-month {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+  }
+
+  .cal-grid.current-month .cal-day {
+    min-width: 0;
+    padding: .4rem .1rem;
+  }
+
+  .cal-grid.current-month .cal-day-iea {
+    padding-right: 2px;
+    padding-left: 2px;
+  }
+
+  .cal-grid.current-month .cal-day-window {
+    display: none;
+  }
+}
+
 /* ===================================================
    TALHÕES MAP
    =================================================== */

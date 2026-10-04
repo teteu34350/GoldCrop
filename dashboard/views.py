@@ -25,7 +25,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from .models import (
     ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
-    SensorIoT, Talhao,
+    SensorIoT, Talhao, Produto, MovimentacaoEstoque
 )
 
 
@@ -68,6 +68,7 @@ def sensores_view(request): return _protected_page(request, "sensores.html")
 def aplicacoes_view(request): return _protected_page(request, "aplicacoes.html")
 def historico_view(request): return _protected_page(request, "historico.html")
 def configuracoes_view(request): return _protected_page(request, "configuracoes.html")
+def estoque_view(request): return _protected_page(request, "estoque.html")
 
 
 def login_view(request):
@@ -1224,3 +1225,208 @@ def cadastro_api(request):
         return _error("Já existe uma conta ou fazenda com estes dados.")
     login(request, user)
     return JsonResponse({"ok": True, "redirect_url": "/dashboard/"}, status=201)
+
+
+@require_http_methods(["GET", "POST"])
+def estoque_produtos_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    if not _has_farm_permission(farm, request.user, "view"):
+        return _error("Acesso negado.", 403)
+
+    if request.method == "POST":
+        if not _has_farm_permission(farm, request.user, "manage"):
+            return _error("Acesso negado para gerenciar estoque.", 403)
+        data = _json_body(request)
+        if not data:
+            return _error("Dados inválidos.")
+            
+        nome = str(data.get("nome", "")).strip()
+        categoria = str(data.get("categoria", "")).strip()
+        unidade = str(data.get("unidade", "")).strip()
+        
+        if not nome or not categoria or not unidade:
+            return _error("Nome, categoria e unidade são obrigatórios.")
+            
+        try:
+            estoque_minimo = Decimal(str(data.get("estoque_minimo", 0)))
+        except (ValueError, TypeError, InvalidOperation):
+            estoque_minimo = Decimal("0")
+            
+        produto = Produto.objects.create(
+            fazenda=farm,
+            nome=nome,
+            categoria=categoria,
+            unidade=unidade,
+            estoque_minimo=estoque_minimo,
+            local_armazenamento=str(data.get("local_armazenamento", "")).strip(),
+            observacao=str(data.get("observacao", "")).strip(),
+            quantidade_atual=Decimal("0")
+        )
+        
+        # Opcional: Estoque inicial
+        try:
+            estoque_inicial = Decimal(str(data.get("estoque_inicial", 0)))
+            if estoque_inicial > 0:
+                with transaction.atomic():
+                    MovimentacaoEstoque.objects.create(
+                        produto=produto,
+                        tipo=MovimentacaoEstoque.Tipo.ENTRADA,
+                        quantidade=estoque_inicial,
+                        motivo="Cadastro / Saldo Inicial",
+                        data=timezone.now().date(),
+                        observacao="Estoque inicial no momento do cadastro.",
+                        criado_por=request.user
+                    )
+                    produto.quantidade_atual = estoque_inicial
+                    produto.save()
+        except (ValueError, TypeError, InvalidOperation):
+            pass
+
+        return JsonResponse({"ok": True, "produto_id": produto.id})
+
+    # GET
+    produtos = Produto.objects.filter(fazenda=farm, ativo=True).order_by("nome")
+    return JsonResponse({
+        "ok": True,
+        "produtos": [{
+            "id": p.id,
+            "nome": p.nome,
+            "categoria": p.categoria,
+            "unidade": p.unidade,
+            "estoque_minimo": float(p.estoque_minimo),
+            "quantidade_atual": float(p.quantidade_atual),
+            "local_armazenamento": p.local_armazenamento,
+            "observacao": p.observacao,
+            "status": "danger" if p.quantidade_atual == 0 else ("warning" if p.quantidade_atual <= p.estoque_minimo else "success")
+        } for p in produtos]
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def estoque_movimentacoes_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+
+    if request.method == "POST":
+        if not _has_farm_permission(farm, request.user, "record"):
+            return _error("Acesso negado para registrar movimentações.", 403)
+        data = _json_body(request)
+        if not data:
+            return _error("Dados inválidos.")
+            
+        try:
+            produto_id = int(data.get("produto_id"))
+            produto = Produto.objects.get(id=produto_id, fazenda=farm, ativo=True)
+        except (ValueError, TypeError, Produto.DoesNotExist):
+            return _error("Produto não encontrado.")
+            
+        tipo = data.get("tipo")
+        if tipo not in ["ENTRADA", "SAIDA"]:
+            return _error("Tipo de movimentação inválido.")
+            
+        try:
+            quantidade = Decimal(str(data.get("quantidade", 0)))
+            if quantidade <= 0:
+                return _error("Quantidade deve ser maior que zero.")
+        except (ValueError, TypeError, InvalidOperation):
+            return _error("Quantidade inválida.")
+            
+        motivo = str(data.get("motivo", "")).strip()
+        if not motivo:
+            return _error("Motivo é obrigatório.")
+            
+        try:
+            data_mov = datetime.strptime(data.get("data", ""), "%Y-%m-%d").date()
+        except ValueError:
+            data_mov = timezone.now().date()
+            
+        talhao_id = data.get("talhao_id")
+        talhao_obj = None
+        if motivo == "Aplicação" and talhao_id:
+            try:
+                talhao_obj = Talhao.objects.get(id=int(talhao_id), fazenda=farm)
+            except (ValueError, TypeError, Talhao.DoesNotExist):
+                return _error("Talhão não encontrado.")
+                
+        try:
+            with transaction.atomic():
+                produto = Produto.objects.select_for_update().get(id=produto_id)
+                
+                if tipo == "SAIDA" and produto.quantidade_atual < quantidade:
+                    return _error(f"Quantidade insuficiente. Estoque atual: {produto.quantidade_atual} {produto.unidade}")
+                
+                if tipo == "ENTRADA":
+                    produto.quantidade_atual += quantidade
+                else:
+                    produto.quantidade_atual -= quantidade
+                    
+                produto.save()
+                
+                valor_str = data.get("valor", "")
+                valor = None
+                if valor_str:
+                    try:
+                        valor = Decimal(str(valor_str))
+                    except (ValueError, TypeError, InvalidOperation):
+                        pass
+                
+                mov = MovimentacaoEstoque.objects.create(
+                    produto=produto,
+                    tipo=tipo,
+                    quantidade=quantidade,
+                    motivo=motivo,
+                    data=data_mov,
+                    talhao=talhao_obj,
+                    fornecedor=str(data.get("fornecedor", "")).strip(),
+                    valor=valor,
+                    observacao=str(data.get("observacao", "")).strip(),
+                    criado_por=request.user
+                )
+                
+                # Opcional: Se for aplicação e tiver talhão, registrar também em ExecucaoAplicacao para o histórico de aplicações
+                if tipo == "SAIDA" and motivo == "Aplicação" and talhao_obj:
+                    ExecucaoAplicacao.objects.create(
+                        fazenda=farm,
+                        talhao=talhao_obj,
+                        status="done",
+                        produto=produto.nome,
+                        tipo_insumo=produto.categoria,
+                        quantidade_realizada=quantidade,
+                        data_aplicacao=data_mov,
+                        observacoes=f"Registrado via módulo de Estoque. Movimentação #{mov.id}",
+                        criado_por=request.user
+                    )
+                    
+            return JsonResponse({"ok": True, "movimentacao_id": mov.id, "novo_estoque": float(produto.quantidade_atual)})
+        except Exception as e:
+            return _error("Erro ao registrar movimentação: " + str(e))
+
+    # GET - Listar movimentações
+    if not _has_farm_permission(farm, request.user, "view"):
+        return _error("Acesso negado.", 403)
+        
+    movimentacoes = MovimentacaoEstoque.objects.filter(produto__fazenda=farm).select_related('produto', 'talhao', 'criado_por').order_by('-data', '-criado_em')[:100]
+    
+    return JsonResponse({
+        "ok": True,
+        "movimentacoes": [{
+            "id": m.id,
+            "produto_nome": m.produto.nome,
+            "produto_unidade": m.produto.unidade,
+            "produto_categoria": m.produto.categoria,
+            "tipo": m.tipo,
+            "quantidade": float(m.quantidade),
+            "motivo": m.motivo,
+            "data": m.data.isoformat(),
+            "talhao_nome": m.talhao.nome if m.talhao else None,
+            "observacao": m.observacao,
+            "usuario": m.criado_por.get_full_name() or m.criado_por.username if m.criado_por else ""
+        } for m in movimentacoes]
+    })
