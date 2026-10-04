@@ -1,2 +1,12 @@
+[project]
+name = "goldcrop"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.2,<7.0",
+    "dj-database-url>=2.2,<4.0",
+    "psycopg[binary]>=3.2,<4.0",
+]
+
 [tool.vercel.scripts]
 build = "python manage.py migrate --noinput"
