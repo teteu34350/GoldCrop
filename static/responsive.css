@@ -47,3 +47,180 @@
 body.sidebar-open {
   overflow: hidden;
 }
+
+@media (max-width: 768px) {
+  .estoque-page {
+    width: 100%;
+    padding: 1rem !important;
+  }
+
+  .estoque-page .estoque-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .75rem !important;
+  }
+
+  .estoque-page .estoque-kpis > .kpi-card {
+    display: block !important;
+    min-width: 0;
+    padding: 1rem !important;
+  }
+
+  .estoque-page .estoque-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)) !important;
+  }
+
+  .estoque-page .estoque-history {
+    margin-top: 2rem !important;
+  }
+
+  .estoque-page .estoque-table-wrap {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 640px) {
+  .estoque-page {
+    padding: .85rem !important;
+  }
+
+  .estoque-page .estoque-header {
+    align-items: stretch !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .estoque-page .estoque-header > div:last-child {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: .5rem !important;
+  }
+
+  .estoque-page .estoque-header > div:last-child button {
+    min-width: 0;
+    min-height: 44px;
+    justify-content: center;
+    padding: .55rem .4rem;
+    font-size: .75rem;
+  }
+
+  .estoque-page .estoque-kpis {
+    grid-template-columns: minmax(0, 1fr) !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .estoque-page .estoque-kpis > .kpi-card {
+    display: block !important;
+  }
+
+  .estoque-page .estoque-filters {
+    align-items: stretch !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .estoque-page .estoque-filters .tabs {
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: .5rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .estoque-page .tab-btn {
+    flex: 0 0 auto;
+    min-height: 42px;
+  }
+
+  .estoque-page .estoque-search {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .estoque-page .estoque-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: .75rem !important;
+  }
+
+  .estoque-page .produto-card {
+    min-width: 0;
+    padding: 1rem;
+  }
+
+  .estoque-page .produto-header {
+    gap: .5rem;
+  }
+
+  .estoque-page .produto-nome {
+    overflow-wrap: anywhere;
+    font-size: 1rem;
+  }
+
+  .estoque-page .produto-actions {
+    flex-direction: row;
+  }
+
+  .estoque-page .produto-actions button {
+    min-width: 0;
+    min-height: 44px;
+    padding-right: .35rem !important;
+    padding-left: .35rem !important;
+    font-size: .75rem;
+  }
+
+  .estoque-page .estoque-history h2 {
+    font-size: 1.1rem !important;
+  }
+
+  .estoque-page .estoque-table th,
+  .estoque-page .estoque-table td {
+    padding: .75rem .65rem !important;
+    white-space: nowrap;
+  }
+
+  .notification-panel {
+    position: fixed;
+    top: calc(var(--topbar-height) + .5rem);
+    right: .75rem;
+    left: auto;
+    width: min(370px, calc(100vw - 1.5rem));
+    max-height: min(70vh, calc(100vh - var(--topbar-height) - 1.25rem));
+    max-height: min(70dvh, calc(100dvh - var(--topbar-height) - 1.25rem));
+  }
+
+  .notification-item {
+    min-width: 0;
+    gap: .5rem;
+  }
+
+  .notification-item > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .notification-item button {
+    min-height: 40px;
+    white-space: normal;
+    text-align: right;
+  }
+}
+
+@media (max-width: 380px) {
+  .estoque-page .estoque-header > div:last-child {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .estoque-page .produto-actions {
+    flex-direction: column;
+  }
+
+  .notification-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notification-item button {
+    align-self: flex-start;
+    text-align: left;
+  }
+}

@@ -4,7 +4,7 @@
 {% block breadcrumb %}Estoque{% endblock %}
 
 {% block content %}
-<div class="dashboard-container" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+<div class="dashboard-container estoque-page" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
   
   <div class="estoque-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
     <div>
@@ -23,7 +23,7 @@
     </div>
   </div>
 
-  <div class="kpi-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+  <div class="kpi-grid estoque-kpis" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
     <div class="kpi-card" style="background: white; padding: 1.5rem; border-radius: 12px; border: 1px solid var(--gray-200);">
       <div style="color: var(--gray-500); font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem;">Total de Produtos</div>
       <div style="font-size: 1.75rem; font-weight: 700; color: var(--gray-900);" id="kpiTotalProdutos">0</div>
@@ -47,7 +47,7 @@
       <button class="tab-btn" data-categoria="Corretivo">Corretivos</button>
       <button class="tab-btn" data-categoria="Outros">Outros</button>
     </div>
-    <div style="position: relative; flex-grow: 1; max-width: 300px;">
+    <div class="estoque-search" style="position: relative; flex-grow: 1; max-width: 300px;">
       <svg style="position: absolute; left: 10px; top: 10px; color: var(--gray-400);" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       <input type="text" id="buscaProduto" class="form-input" placeholder="Buscar produto..." style="padding-left: 36px; margin: 0;">
     </div>
@@ -58,10 +58,10 @@
     <div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--gray-500);">Carregando produtos...</div>
   </div>
 
-  <div style="margin-top: 3rem;">
+  <div class="estoque-history" style="margin-top: 3rem;">
     <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1rem;">Histórico Recente</h2>
-    <div style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse; min-width: 600px;">
+    <div class="estoque-table-wrap" role="region" aria-label="Histórico de movimentações" tabindex="0" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
+      <table class="estoque-table" style="width: 100%; border-collapse: collapse; min-width: 600px;">
         <thead>
           <tr style="border-bottom: 1px solid var(--gray-200); background: var(--gray-50);">
             <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Data</th>
@@ -337,50 +337,6 @@
     border-top: 1px solid var(--gray-100);
   }
   
-  /* RESPONSIVIDADE PARA O MÓDULO DE ESTOQUE */
-  @media (max-width: 640px) {
-    .dashboard-container {
-      padding: 1rem !important;
-    }
-    .estoque-header {
-      flex-direction: column;
-      align-items: flex-start !important;
-      gap: 1rem;
-    }
-    .estoque-header > div:last-child {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-    .estoque-header > div:last-child button {
-      width: 100%;
-      justify-content: center;
-    }
-    .kpi-grid {
-      grid-template-columns: 1fr !important;
-    }
-    .estoque-filters {
-      flex-direction: column;
-      align-items: stretch !important;
-    }
-    .estoque-filters > div:last-child {
-      max-width: 100% !important;
-    }
-    .tabs {
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      padding-bottom: 0.5rem;
-      -webkit-overflow-scrolling: touch;
-    }
-    .estoque-list {
-      grid-template-columns: 1fr !important;
-    }
-    .produto-actions {
-      flex-direction: column;
-    }
-  }
-
   @media print {
     body * { visibility: hidden; }
     .print-area, .print-area * { visibility: visible; }
