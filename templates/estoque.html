@@ -337,6 +337,50 @@
     border-top: 1px solid var(--gray-100);
   }
   
+  /* RESPONSIVIDADE PARA O MÓDULO DE ESTOQUE */
+  @media (max-width: 640px) {
+    .dashboard-container {
+      padding: 1rem !important;
+    }
+    .estoque-header {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 1rem;
+    }
+    .estoque-header > div:last-child {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .estoque-header > div:last-child button {
+      width: 100%;
+      justify-content: center;
+    }
+    .kpi-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .estoque-filters {
+      flex-direction: column;
+      align-items: stretch !important;
+    }
+    .estoque-filters > div:last-child {
+      max-width: 100% !important;
+    }
+    .tabs {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+      -webkit-overflow-scrolling: touch;
+    }
+    .estoque-list {
+      grid-template-columns: 1fr !important;
+    }
+    .produto-actions {
+      flex-direction: column;
+    }
+  }
+
   @media print {
     body * { visibility: hidden; }
     .print-area, .print-area * { visibility: visible; }
