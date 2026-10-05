@@ -67,6 +67,11 @@ COMO O MODULO ESTA ORGANIZADO
    O produto mantem o saldo atual. Cada entrada aumenta esse saldo; cada saida
    diminui. O registro da movimentacao conserva os dados da operacao.
 
+   No Django Admin, os modelos Produto e MovimentacaoEstoque ficam disponiveis
+   na secao Dashboard. A lista de produtos mostra e permite filtrar pela
+   fazenda; a lista de movimentacoes tambem mostra a fazenda associada ao
+   produto.
+
 4. ROTAS E REGRAS DE ACESSO
    Arquivo: dashboard/urls.py
    Implementacao: dashboard/views.py

@@ -2,7 +2,8 @@ from django.contrib import admin
 
 from .models import (
     ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
-    MembroFazenda, NotificacaoFazenda, PerfilProdutor, RecomendacaoJanela, SensorIoT, Talhao,
+    MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, PerfilProdutor, Produto,
+    RecomendacaoJanela, SensorIoT, Talhao,
 )
 
 
@@ -78,3 +79,31 @@ class SensorIoTAdmin(admin.ModelAdmin):
 class LeituraSensorIoTAdmin(admin.ModelAdmin):
     list_display = ("sensor", "lida_em", "umidade_solo", "temperatura")
     list_filter = ("lida_em",)
+
+
+@admin.register(Produto)
+class ProdutoAdmin(admin.ModelAdmin):
+    list_display = (
+        "nome", "fazenda", "categoria", "quantidade_atual", "unidade",
+        "estoque_minimo", "ativo",
+    )
+    list_filter = ("fazenda", "categoria", "ativo")
+    search_fields = ("nome", "fazenda__nome", "categoria")
+    list_select_related = ("fazenda",)
+
+
+@admin.register(MovimentacaoEstoque)
+class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
+    list_display = (
+        "produto", "fazenda", "tipo", "quantidade", "motivo", "data",
+        "talhao", "criado_por",
+    )
+    list_filter = ("tipo", "data")
+    search_fields = (
+        "produto__nome", "produto__fazenda__nome", "motivo", "talhao__nome",
+    )
+    list_select_related = ("produto", "produto__fazenda", "talhao", "criado_por")
+
+    @admin.display(description="Fazenda", ordering="produto__fazenda__nome")
+    def fazenda(self, obj):
+        return obj.produto.fazenda
