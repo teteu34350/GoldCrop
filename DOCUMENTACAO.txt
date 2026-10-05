@@ -127,14 +127,13 @@ Arquivo: templates/cadastro.html
 Funcionalidades:
 - etapa 1: dados do produtor
 - etapa 2: dados da fazenda e endereço
-- etapa 3: função na fazenda, área, cultura, quantidade de talhões e irrigação
+- etapa 3: função de proprietário, área, cultura, quantidade de talhões e irrigação
 - validação de campos obrigatórios
 - validação de senha e e-mail
 - máscara de telefone e CEP
 - busca automática via ViaCEP no navegador
 - criação de usuário, perfil e fazenda no backend
-- escolha obrigatória da função do novo membro: Proprietário, Gerente,
-  Técnico/Agrônomo ou Funcionário; as permissões são aplicadas pelo backend
+- a única função disponível é Proprietário, com acesso completo à fazenda
 - criação automática de talhões em quantidade definida
 
 5.3. Dashboard
@@ -420,24 +419,24 @@ Equipe e acesso:
 - Cada fazenda recebe um UUID interno e um código de acesso aleatório e único,
   distinto do identificador interno.
 - O proprietário pode criar várias fazendas e compartilhar o código de acesso;
-  quem entra recebe inicialmente a função Funcionário, sem duplicar vínculos.
+  quem entra recebe a função Proprietário, sem duplicar vínculos.
 - O proprietário pode gerar outro código; o anterior deixa de ser válido.
 - A troca de fazenda ativa persiste na sessão e cada consulta verifica o vínculo
   ativo antes de devolver dados daquela fazenda.
 - O cadastro pode ser concluído sem criar uma fazenda; ela pode ser criada ou
   acessada posteriormente pelo seletor de fazendas.
-- Proprietário pode convidar por e-mail, revogar convites pendentes e remover
-  membros, além de alterar a função dos demais membros.
+- Qualquer proprietário pode convidar por e-mail, revogar convites pendentes e
+  remover outros membros; não é possível remover o próprio vínculo.
 - ConviteFazenda guarda o convite, função, estado, prazo e somente o hash do
   token; o link é enviado por SMTP e expira em sete dias.
 - A pessoa convidada pode criar conta ou entrar na conta do e-mail convidado.
 - NotificacaoFazenda persiste alertas operacionais e a leitura individual.
 
 Funções autorizadas no servidor:
-- Proprietário: visualizar, planejar, registrar, gerenciar talhões e equipe.
-- Gerente: visualizar, planejar, registrar e gerenciar talhões.
-- Técnico/Agrônomo: visualizar, planejar e registrar.
-- Funcionário: visualizar e registrar.
+- Proprietário: acesso completo para visualizar, planejar, registrar, gerenciar
+  talhões, estoque e equipe.
+- Os vínculos e convites existentes são convertidos para Proprietário na
+  migração 0009; restrições no banco impedem a gravação de outra função.
 
 Os dados do perfil são persistidos em:
 - User do Django

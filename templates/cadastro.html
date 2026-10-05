@@ -381,13 +381,9 @@
             <div class="form-group">
               <label class="form-label" for="funcao">Sua função nesta fazenda <span class="required-star">*</span></label>
               <select id="funcao" class="form-select" required>
-                <option value="">Selecione sua função</option>
-                <option value="OWNER">Proprietário — gerencia a fazenda, talhões e equipe</option>
-                <option value="MANAGER">Gerente — gerencia a fazenda e os talhões</option>
-                <option value="TECHNICIAN">Técnico / Agrônomo — visualiza, planeja e registra aplicações</option>
-                <option value="EMPLOYEE">Funcionário — visualiza e registra aplicações</option>
+                <option value="OWNER">Proprietário — acesso completo à fazenda</option>
               </select>
-              <p class="form-hint">A função escolhida define as permissões desta conta nesta fazenda.</p>
+              <p class="form-hint">No momento, todas as pessoas vinculadas à fazenda têm acesso de proprietário.</p>
               <div class="form-error-msg">
                 <span>Selecione sua função na fazenda.</span>
               </div>
@@ -510,6 +506,6 @@
   </div>
 
   <!-- Scripts -->
-  <script src="{% static 'auth.js' %}?v=4"></script>
+  <script src="{% static 'auth.js' %}?v=5"></script>
 </body>
 </html>

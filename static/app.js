@@ -1752,12 +1752,7 @@ function renderFazenda() {
     <article class="team-member-card">
       <div class="team-avatar">${escapeHtml(initialsFromName(person.name))}</div>
       <div class="team-member-main"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role_label)} · ${escapeHtml(person.status_label || 'Ativo')}</span><small>${escapeHtml(person.email)}</small></div>
-      ${FARM.permissions?.team && person.role !== 'OWNER' ? `<select aria-label="Permissão de ${escapeHtml(person.name)}" onchange="updateFarmMemberRole(${Number(person.id)}, this.value)">
-        <option value="MANAGER"${person.role === 'MANAGER' ? ' selected' : ''}>Gerente</option>
-        <option value="TECHNICIAN"${person.role === 'TECHNICIAN' ? ' selected' : ''}>Técnico</option>
-        <option value="EMPLOYEE"${person.role === 'EMPLOYEE' ? ' selected' : ''}>Funcionário</option>
-      </select>` : ''}
-      ${FARM.permissions?.team && person.role !== 'OWNER' ? `<button type="button" class="btn-ghost-sm" onclick="removeFarmMember(${Number(person.id)})">Remover</button>` : ''}
+      ${FARM.permissions?.team && person.id !== USER_DATA.id ? `<button type="button" class="btn-ghost-sm" onclick="removeFarmMember(${Number(person.id)})">Remover</button>` : ''}
     </article>`).join('');
   const invitations = INVITATIONS_DATA.map(invitation => `
     <article class="team-member-card pending-invitation">
@@ -1781,7 +1776,7 @@ function renderFazenda() {
     ${FARM.permissions?.team ? `<section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Código de acesso da fazenda</h2><p class="farm-section-sub">Compartilhe com pessoas que precisam acessar esta fazenda.</p></div></div><div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><code id="farmAccessCode">${escapeHtml(FARM.accessCode || '')}</code><button type="button" class="btn-ghost-sm" onclick="copyFarmAccessCode()">Copiar código</button><button type="button" class="btn-ghost-sm" onclick="rotateFarmAccessCode()">Gerar novo código</button></div></section>` : ''}
     <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${escapeHtml(selected?.name || 'Sem talhão')}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
     <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">Membros e convites persistidos.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}${invitations}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Eventos operacionais registrados no sistema.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
-    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Permissões da equipe</h2><p class="farm-section-sub">Permissões aplicadas no servidor em todas as operações.</p></div></div><div class="permission-table-wrap"><table class="permission-table"><thead><tr><th>Perfil</th><th>Visualizar</th><th>Planejar</th><th>Registrar</th><th>Gerenciar talhões/equipe</th></tr></thead><tbody><tr><td><b>Proprietário</b></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr><tr><td><b>Gerente</b></td><td>✓</td><td>✓</td><td>✓</td><td>Talhões</td></tr><tr><td><b>Técnico / Agrônomo</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Funcionário</b></td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr></tbody></table></div></section>`;
+    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Acesso da equipe</h2><p class="farm-section-sub">Atualmente, todas as pessoas vinculadas são proprietárias e têm acesso completo para visualizar, planejar, registrar e gerenciar esta fazenda.</p></div></div></section>`;
 }
 
 function initialsFromName(name) { return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '—'; }
@@ -1880,23 +1875,6 @@ async function rotateFarmAccessCode() {
   }
 }
 
-async function updateFarmMemberRole(userId, role) {
-  try {
-    const response = await apiRequest(`/api/farms/team/${Number(userId)}/`, {
-      method: 'PATCH',
-      body: JSON.stringify({ role }),
-    });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível alterar a permissão.');
-    await loadFarmTeamData();
-    renderFazenda();
-    showToast('Permissão do membro atualizada.', 'success');
-  } catch (error) {
-    showToast(error.message || 'Não foi possível alterar a permissão.', 'error');
-    await loadFarmTeamData();
-    renderFazenda();
-  }
-}
 async function submitPessoa() {
   const email = document.getElementById('pessoaEmail').value.trim();
   const errorElement = document.getElementById('invitationError');
@@ -1906,7 +1884,7 @@ async function submitPessoa() {
   try {
     const response = await apiRequest('/api/farms/invitations/', {
       method: 'POST',
-      body: JSON.stringify({ email, role: document.getElementById('pessoaFuncao').value }),
+      body: JSON.stringify({ email }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível enviar o convite.');

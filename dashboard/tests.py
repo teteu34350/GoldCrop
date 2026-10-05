@@ -37,13 +37,12 @@ class CadastroELoginApiTests(TestCase):
         self.assertEqual(fazenda.membros.get(usuario=user).funcao, MembroFazenda.Funcao.PROPRIETARIO)
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
 
-    def test_cadastro_persiste_a_funcao_escolhida_na_fazenda(self):
-        self.payload["funcao"] = MembroFazenda.Funcao.GERENTE
+    def test_cadastro_rejeita_funcao_que_nao_seja_proprietario(self):
+        self.payload["funcao"] = "MANAGER"
         response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
-        self.assertEqual(response.status_code, 201)
-        user = User.objects.get(username="maria@example.com")
-        farm = Fazenda.objects.get(produtor=user)
-        self.assertEqual(farm.membros.get(usuario=user).funcao, MembroFazenda.Funcao.GERENTE)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("funcao", response.json()["field_errors"])
+        self.assertFalse(User.objects.filter(username="maria@example.com").exists())
 
     def test_cadastro_pode_ser_concluido_sem_criar_fazenda(self):
         payload = {
@@ -442,7 +441,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=another_farm,
             usuario=self.owner,
-            funcao=MembroFazenda.Funcao.TECNICO,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
         )
         list_response = self.client.get(reverse("dashboard:farms_api"))
         self.assertEqual(list_response.status_code, 200)
@@ -455,7 +454,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(switch_response.status_code, 200)
         state = self.client.get(reverse("dashboard:system_state_api")).json()
         self.assertEqual(state["farm"]["id"], another_farm.id)
-        self.assertEqual(state["farm"]["role"], MembroFazenda.Funcao.TECNICO)
+        self.assertEqual(state["farm"]["role"], MembroFazenda.Funcao.PROPRIETARIO)
         denied = self.client.post(
             reverse("dashboard:farms_api"),
             {"farm_id": 999999},
@@ -512,7 +511,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=member)
-        self.assertEqual(membership.funcao, MembroFazenda.Funcao.FUNCIONARIO)
+        self.assertEqual(membership.funcao, MembroFazenda.Funcao.PROPRIETARIO)
         self.assertEqual(membership.status, MembroFazenda.Status.ATIVO)
         self.assertEqual(
             self.client.get(reverse("dashboard:system_state_api")).json()["talhoes"][0]["name"],
@@ -529,6 +528,12 @@ class MembershipTeamAndNotificationTests(TestCase):
         )
         self.assertEqual(duplicate.status_code, 409)
         self.assertEqual(MembroFazenda.objects.filter(fazenda=self.farm, usuario=member).count(), 1)
+        rotate_code = self.client.post(
+            reverse("dashboard:farm_access_code_api"),
+            {},
+            content_type="application/json",
+        )
+        self.assertEqual(rotate_code.status_code, 200)
 
     def test_proprietario_pode_trocar_codigo_e_codigo_antigo_perde_validade(self):
         old_code = self.farm.codigo_acesso
@@ -565,7 +570,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=inactive_user,
-            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
             status=MembroFazenda.Status.INATIVO,
         )
         self.client.force_login(inactive_user)
@@ -574,7 +579,15 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(farms.json()["farms"], [])
         self.assertIsNone(state.json()["farm"])
 
-    def test_proprietario_altera_funcao_do_membro_e_membro_nao_pode_alterar_equipe(self):
+    def test_funcao_e_unica_e_nao_pode_ser_alterada_por_api(self):
+        invalid_invite = self.client.post(
+            reverse("dashboard:farm_invitation_api"),
+            {"email": "non-owner@example.com", "role": "MANAGER"},
+            content_type="application/json",
+        )
+        self.assertEqual(invalid_invite.status_code, 400)
+        self.assertFalse(ConviteFazenda.objects.exists())
+
         member = User.objects.create_user(
             username="role-change@example.com",
             email="role-change@example.com",
@@ -583,28 +596,28 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=member,
-            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
         )
         response = self.client.patch(
             reverse("dashboard:farm_member_api", args=[member.id]),
-            {"role": MembroFazenda.Funcao.GERENTE},
+            {"role": "MANAGER"},
             content_type="application/json",
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 405)
         self.assertEqual(
             MembroFazenda.objects.get(fazenda=self.farm, usuario=member).funcao,
-            MembroFazenda.Funcao.GERENTE,
+            MembroFazenda.Funcao.PROPRIETARIO,
         )
 
         self.client.force_login(member)
         denied = self.client.patch(
             reverse("dashboard:farm_member_api", args=[self.owner.id]),
-            {"role": MembroFazenda.Funcao.FUNCIONARIO},
+            {"role": "EMPLOYEE"},
             content_type="application/json",
         )
-        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(denied.status_code, 405)
 
-    def test_permissoes_sao_aplicadas_no_servidor(self):
+    def test_todos_os_membros_proprietarios_tem_acesso_completo(self):
         employee = User.objects.create_user(
             username="employee@example.com",
             email="employee@example.com",
@@ -614,7 +627,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=employee,
-            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
         )
         self.client.force_login(employee)
         planning_response = self.client.post(
@@ -626,13 +639,13 @@ class MembershipTeamAndNotificationTests(TestCase):
             },
             content_type="application/json",
         )
-        self.assertEqual(planning_response.status_code, 403)
+        self.assertEqual(planning_response.status_code, 201)
         talhao_response = self.client.post(
             reverse("dashboard:talhao_create_api"),
             {"nome": "Talhão proibido", "area": 2, "cultura": "Café", "latitude": -20.9, "longitude": -46.1},
             content_type="application/json",
         )
-        self.assertEqual(talhao_response.status_code, 403)
+        self.assertEqual(talhao_response.status_code, 201)
         application_response = self.client.post(
             reverse("dashboard:application_create_api"),
             {
@@ -655,7 +668,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=member,
-            funcao=MembroFazenda.Funcao.TECNICO,
+            funcao=MembroFazenda.Funcao.PROPRIETARIO,
         )
         create_response = self.client.post(
             reverse("dashboard:planejamento_create_api"),
@@ -683,7 +696,7 @@ class MembershipTeamAndNotificationTests(TestCase):
     def test_convite_nao_finge_envio_quando_smtp_nao_esta_configurado(self):
         response = self.client.post(
             reverse("dashboard:farm_invitation_api"),
-            {"email": "novo@example.com", "role": MembroFazenda.Funcao.FUNCIONARIO},
+            {"email": "novo@example.com", "role": MembroFazenda.Funcao.PROPRIETARIO},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 503)
@@ -697,7 +710,7 @@ class MembershipTeamAndNotificationTests(TestCase):
     def test_convite_email_e_aceite_criam_membro_persistido(self):
         response = self.client.post(
             reverse("dashboard:farm_invitation_api"),
-            {"email": "novo@example.com", "role": MembroFazenda.Funcao.FUNCIONARIO},
+            {"email": "novo@example.com", "role": MembroFazenda.Funcao.PROPRIETARIO},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 201)
@@ -715,15 +728,20 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(accepted.status_code, 302)
         new_user = User.objects.get(email="novo@example.com")
         membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=new_user)
-        self.assertEqual(membership.funcao, MembroFazenda.Funcao.FUNCIONARIO)
+        self.assertEqual(membership.funcao, MembroFazenda.Funcao.PROPRIETARIO)
         self.assertEqual(ConviteFazenda.objects.get(email="novo@example.com").status, ConviteFazenda.Status.ACEITO)
 
-    def test_proprietario_pode_remover_membro_mas_membro_nao_pode_remover_proprietario(self):
+    def test_proprietario_pode_remover_outro_e_nao_pode_remover_a_si_proprio(self):
         member = User.objects.create_user(username="remove@example.com", email="remove@example.com", password="Senha123")
-        MembroFazenda.objects.create(fazenda=self.farm, usuario=member, funcao=MembroFazenda.Funcao.GERENTE)
+        MembroFazenda.objects.create(fazenda=self.farm, usuario=member, funcao=MembroFazenda.Funcao.PROPRIETARIO)
         response = self.client.delete(reverse("dashboard:farm_member_api", args=[member.id]))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(MembroFazenda.objects.filter(fazenda=self.farm, usuario=member).exists())
+        own_membership = self.client.delete(
+            reverse("dashboard:farm_member_api", args=[self.owner.id])
+        )
+        self.assertEqual(own_membership.status_code, 400)
+        self.assertTrue(MembroFazenda.objects.filter(fazenda=self.farm, usuario=self.owner).exists())
 
     @override_settings(
         EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",

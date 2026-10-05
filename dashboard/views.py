@@ -51,6 +51,7 @@ def _protected_page(request, template):
     nome = perfil.nome_completo if perfil else request.user.get_full_name() or request.user.username
     membership = _membership(fazenda, request.user) if fazenda else None
     return render(request, template, {"auth_user_data": {
+        "id": request.user.id,
         "name": nome,
         "initials": "".join(part[0] for part in nome.split()[:2]).upper(),
         "email": request.user.email,
@@ -125,21 +126,8 @@ def _membership(farm, user):
 
 
 FARM_PERMISSIONS = {
-    "view": {
-        MembroFazenda.Funcao.PROPRIETARIO,
-        MembroFazenda.Funcao.GERENTE,
-        MembroFazenda.Funcao.TECNICO,
-        MembroFazenda.Funcao.FUNCIONARIO,
-    },
-    "manage": {MembroFazenda.Funcao.PROPRIETARIO, MembroFazenda.Funcao.GERENTE},
-    "plan": {MembroFazenda.Funcao.PROPRIETARIO, MembroFazenda.Funcao.GERENTE, MembroFazenda.Funcao.TECNICO},
-    "record": {
-        MembroFazenda.Funcao.PROPRIETARIO,
-        MembroFazenda.Funcao.GERENTE,
-        MembroFazenda.Funcao.TECNICO,
-        MembroFazenda.Funcao.FUNCIONARIO,
-    },
-    "team": {MembroFazenda.Funcao.PROPRIETARIO},
+    permission: {MembroFazenda.Funcao.PROPRIETARIO}
+    for permission in ("view", "manage", "plan", "record", "team")
 }
 
 
@@ -294,13 +282,13 @@ def farm_join_api(request):
                 return _error("Você já faz parte desta fazenda.", 409)
             if membership:
                 membership.status = MembroFazenda.Status.ATIVO
-                membership.funcao = MembroFazenda.Funcao.FUNCIONARIO
+                membership.funcao = MembroFazenda.Funcao.PROPRIETARIO
                 membership.save(update_fields=["status", "funcao", "atualizado_em"])
             else:
                 MembroFazenda.objects.create(
                     fazenda=farm,
                     usuario=request.user,
-                    funcao=MembroFazenda.Funcao.FUNCIONARIO,
+                    funcao=MembroFazenda.Funcao.PROPRIETARIO,
                     status=MembroFazenda.Status.ATIVO,
                 )
     except IntegrityError:
@@ -397,7 +385,7 @@ def farm_team_api(request):
     })
 
 
-@require_http_methods(["PATCH", "DELETE"])
+@require_http_methods(["DELETE"])
 def farm_member_api(request, user_id):
     if not request.user.is_authenticated:
         return _error("Autenticação necessária.", 401)
@@ -409,21 +397,8 @@ def farm_member_api(request, user_id):
     member = farm.membros.filter(usuario_id=user_id).first()
     if not member:
         return _error("Membro não encontrado nesta fazenda.", 404)
-    if member.funcao == MembroFazenda.Funcao.PROPRIETARIO:
-        return _error("O proprietário não pode ser removido da própria fazenda.", 400)
-    if request.method == "PATCH":
-        data = _json_body(request)
-        role = data.get("role") if isinstance(data, dict) else None
-        allowed_roles = {
-            MembroFazenda.Funcao.GERENTE,
-            MembroFazenda.Funcao.TECNICO,
-            MembroFazenda.Funcao.FUNCIONARIO,
-        }
-        if role not in allowed_roles:
-            return _error("Selecione uma função válida.")
-        member.funcao = role
-        member.save(update_fields=["funcao", "atualizado_em"])
-        return JsonResponse({"ok": True, "member": _role_json(member)})
+    if member.usuario_id == request.user.id:
+        return _error("Você não pode remover seu próprio acesso à fazenda.", 400)
     member.delete()
     return JsonResponse({"ok": True, "removed_user_id": user_id})
 
@@ -454,13 +429,9 @@ def farm_invitation_api(request, invitation_id=None):
         validate_email(email)
     except ValidationError:
         return _error("Informe um e-mail válido.", field_errors={"email": "Informe um e-mail válido."})
-    allowed_roles = {
-        MembroFazenda.Funcao.GERENTE,
-        MembroFazenda.Funcao.TECNICO,
-        MembroFazenda.Funcao.FUNCIONARIO,
-    }
-    if role not in allowed_roles:
-        return _error("Selecione uma função válida.")
+    if role and role != MembroFazenda.Funcao.PROPRIETARIO:
+        return _error("No momento, a única função disponível é Proprietário.")
+    role = MembroFazenda.Funcao.PROPRIETARIO
     if farm.membros.filter(usuario__email__iexact=email).exists():
         return _error("Este usuário já faz parte da equipe.")
     if farm.convites.filter(email__iexact=email, status=ConviteFazenda.Status.PENDENTE, expira_em__gt=timezone.now()).exists():
@@ -1339,7 +1310,7 @@ def cadastro_api(request):
         if not isinstance(culturas, list) or not culturas: errors["culturas"] = "Selecione ao menos uma cultura."
         if tipo_cultivo not in Fazenda.TipoCultivo.values: errors["tipo_cultivo"] = "Selecione um tipo de cultivo válido."
         if irrigacao not in Fazenda.Irrigacao.values: errors["irrigacao"] = "Selecione um sistema de irrigação válido."
-        if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "Selecione sua função na fazenda."
+        if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "No momento, a única função disponível é Proprietário."
         try:
             area = Decimal(str(data.get("area_hectares", "")))
             if area <= 0: raise InvalidOperation

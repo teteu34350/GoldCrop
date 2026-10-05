@@ -283,7 +283,7 @@
       <div class="modal-body">
         <p>O convite será enviado por e-mail. A pessoa criará uma conta ou entrará na conta correspondente para aceitar.</p>
         <div class="form-group"><label class="form-label" for="pessoaEmail">E-mail</label><input class="form-input" id="pessoaEmail" type="email" autocomplete="email" required /></div>
-        <div class="form-group"><label class="form-label" for="pessoaFuncao">Função e permissões</label><select class="form-input" id="pessoaFuncao" required><option value="MANAGER">Gerente — pode planejar, registrar e gerenciar talhões</option><option value="TECHNICIAN">Técnico / Agrônomo — pode visualizar, planejar e registrar</option><option value="EMPLOYEE">Funcionário — pode visualizar e registrar aplicações</option></select></div>
+        <p class="form-hint">A pessoa convidada entrará como proprietária e terá acesso completo a esta fazenda.</p>
         <p id="invitationError" class="form-error-msg" role="alert" hidden></p>
       </div>
       <div class="modal-footer"><button class="btn-ghost" type="button" onclick="closePessoa()">Cancelar</button><button class="btn-primary" id="sendInvitationButton" type="button" onclick="submitPessoa()">Enviar convite</button></div>
@@ -615,6 +615,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
-  <script src="{% static 'app.js' %}?v=19"></script>
+  <script src="{% static 'app.js' %}?v=20"></script>
 </body>
 </html>

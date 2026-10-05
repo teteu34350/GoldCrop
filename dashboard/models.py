@@ -81,13 +81,10 @@ class MembroFazenda(models.Model):
 
     class Funcao(models.TextChoices):
         PROPRIETARIO = "OWNER", "Proprietário"
-        GERENTE = "MANAGER", "Gerente"
-        TECNICO = "TECHNICIAN", "Técnico / Agrônomo"
-        FUNCIONARIO = "EMPLOYEE", "Funcionário"
 
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="membros")
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="membros_fazenda")
-    funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.FUNCIONARIO)
+    funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.PROPRIETARIO)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ATIVO)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -96,6 +93,7 @@ class MembroFazenda(models.Model):
         ordering = ["criado_em", "id"]
         constraints = [
             models.UniqueConstraint(fields=["fazenda", "usuario"], name="membro_unico_por_fazenda"),
+            models.CheckConstraint(condition=models.Q(funcao="OWNER"), name="membro_somente_proprietario"),
         ]
 
     def __str__(self):
@@ -112,7 +110,8 @@ class ConviteFazenda(models.Model):
     email = models.EmailField()
     funcao = models.CharField(
         max_length=20,
-        choices=[choice for choice in MembroFazenda.Funcao.choices if choice[0] != MembroFazenda.Funcao.PROPRIETARIO],
+        choices=MembroFazenda.Funcao.choices,
+        default=MembroFazenda.Funcao.PROPRIETARIO,
     )
     token_digest = models.CharField(max_length=64, unique=True)
     convidado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="convites_enviados")
@@ -123,6 +122,9 @@ class ConviteFazenda(models.Model):
 
     class Meta:
         ordering = ["-criado_em"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(funcao="OWNER"), name="convite_somente_proprietario"),
+        ]
 
     def __str__(self):
         return f"{self.email} — {self.fazenda} ({self.get_status_display()})"
