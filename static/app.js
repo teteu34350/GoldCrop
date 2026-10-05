@@ -28,6 +28,7 @@ async function loadFarmTeamData() {
   const data = await response.json();
   TEAM_DATA.splice(0, TEAM_DATA.length, ...(data.members || []));
   INVITATIONS_DATA.splice(0, INVITATIONS_DATA.length, ...(data.invitations || []));
+  FARM.accessCode = data.access_code || '';
 }
 
 async function loadNotifications() {
@@ -1734,7 +1735,9 @@ function renderFazenda() {
   const container = document.getElementById('fazendaContent');
   if (!container) return;
   if (!FARM.name) {
-    container.innerHTML = '<p class="farm-section-sub">Nenhuma fazenda cadastrada ou compartilhada com esta conta.</p>';
+    container.innerHTML = `<section class="farm-section card"><h2>Bem-vindo ao GoldCrop</h2>
+      <p class="farm-section-sub">Crie uma fazenda ou entre em uma fazenda existente para começar. Você pode fazer isso agora ou mais tarde.</p>
+      <button type="button" class="btn-primary" onclick="openTrocarFazendaModal()">+ Criar ou entrar em uma fazenda</button></section>`;
     return;
   }
   const teamData = TEAM_DATA;
@@ -1748,7 +1751,12 @@ function renderFazenda() {
   const teamCards = teamData.map(person => `
     <article class="team-member-card">
       <div class="team-avatar">${escapeHtml(initialsFromName(person.name))}</div>
-      <div class="team-member-main"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role_label)}</span><small>${escapeHtml(person.email)}</small></div>
+      <div class="team-member-main"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role_label)} · ${escapeHtml(person.status_label || 'Ativo')}</span><small>${escapeHtml(person.email)}</small></div>
+      ${FARM.permissions?.team && person.role !== 'OWNER' ? `<select aria-label="Permissão de ${escapeHtml(person.name)}" onchange="updateFarmMemberRole(${Number(person.id)}, this.value)">
+        <option value="MANAGER"${person.role === 'MANAGER' ? ' selected' : ''}>Gerente</option>
+        <option value="TECHNICIAN"${person.role === 'TECHNICIAN' ? ' selected' : ''}>Técnico</option>
+        <option value="EMPLOYEE"${person.role === 'EMPLOYEE' ? ' selected' : ''}>Funcionário</option>
+      </select>` : ''}
       ${FARM.permissions?.team && person.role !== 'OWNER' ? `<button type="button" class="btn-ghost-sm" onclick="removeFarmMember(${Number(person.id)})">Remover</button>` : ''}
     </article>`).join('');
   const invitations = INVITATIONS_DATA.map(invitation => `
@@ -1770,6 +1778,7 @@ function renderFazenda() {
       ${FARM.permissions?.team ? '<button class="btn-primary" onclick="openPessoa()">+ Convidar pessoa</button>' : ''}
     </header>
     <div class="farm-shared-note"><span>◉</span><div><strong>Equipe com acesso a esta fazenda</strong><p>Talhões e operações são carregados do banco e compartilhados conforme a função de cada membro.</p></div></div>
+    ${FARM.permissions?.team ? `<section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Código de acesso da fazenda</h2><p class="farm-section-sub">Compartilhe com pessoas que precisam acessar esta fazenda.</p></div></div><div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><code id="farmAccessCode">${escapeHtml(FARM.accessCode || '')}</code><button type="button" class="btn-ghost-sm" onclick="copyFarmAccessCode()">Copiar código</button><button type="button" class="btn-ghost-sm" onclick="rotateFarmAccessCode()">Gerar novo código</button></div></section>` : ''}
     <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${escapeHtml(selected?.name || 'Sem talhão')}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
     <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">Membros e convites persistidos.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}${invitations}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Eventos operacionais registrados no sistema.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
     <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Permissões da equipe</h2><p class="farm-section-sub">Permissões aplicadas no servidor em todas as operações.</p></div></div><div class="permission-table-wrap"><table class="permission-table"><thead><tr><th>Perfil</th><th>Visualizar</th><th>Planejar</th><th>Registrar</th><th>Gerenciar talhões/equipe</th></tr></thead><tbody><tr><td><b>Proprietário</b></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr><tr><td><b>Gerente</b></td><td>✓</td><td>✓</td><td>✓</td><td>Talhões</td></tr><tr><td><b>Técnico / Agrônomo</b></td><td>✓</td><td>✓</td><td>✓</td><td>—</td></tr><tr><td><b>Funcionário</b></td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr></tbody></table></div></section>`;
@@ -1784,6 +1793,110 @@ function openPessoa() {
   document.body.style.overflow = 'hidden';
 }
 function closePessoa() { document.getElementById('modalPessoa').style.display = 'none'; document.body.style.overflow = ''; }
+
+function openCreateFarmModal() {
+  closeTrocarFazendaModal();
+  document.getElementById('createFarmError').hidden = true;
+  document.getElementById('modalCriarFazenda').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreateFarmModal() {
+  document.getElementById('modalCriarFazenda').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function createFarm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = document.getElementById('createFarmButton');
+  const error = document.getElementById('createFarmError');
+  const formData = new FormData(form);
+  const payload = Object.fromEntries(formData.entries());
+  button.disabled = true;
+  error.hidden = true;
+  try {
+    const response = await apiRequest('/api/farms/create/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível criar a fazenda.');
+    closeCreateFarmModal();
+    showToast(`Fazenda "${result.name}" criada.`, 'success');
+    window.location.reload();
+  } catch (requestError) {
+    error.textContent = requestError.message || 'Não foi possível criar a fazenda.';
+    error.hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function joinFarmByCode() {
+  const input = document.getElementById('farmJoinCode');
+  const button = document.getElementById('farmJoinButton');
+  const error = document.getElementById('farmJoinError');
+  button.disabled = true;
+  error.hidden = true;
+  try {
+    const response = await apiRequest('/api/farms/join/', {
+      method: 'POST',
+      body: JSON.stringify({ access_code: input.value }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível entrar na fazenda.');
+    showToast(`Você entrou na fazenda "${result.farm_name}".`, 'success');
+    window.location.reload();
+  } catch (requestError) {
+    error.textContent = requestError.message || 'Não foi possível entrar na fazenda.';
+    error.hidden = false;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function copyFarmAccessCode() {
+  if (!FARM.accessCode) return;
+  try {
+    await navigator.clipboard.writeText(FARM.accessCode);
+    showToast('Código copiado.', 'success');
+  } catch (error) {
+    console.error('Falha ao copiar código da fazenda:', error);
+    showToast(`Copie o código manualmente: ${FARM.accessCode}`, 'error');
+  }
+}
+
+async function rotateFarmAccessCode() {
+  try {
+    const response = await apiRequest('/api/farms/access-code/', { method: 'POST', body: '{}' });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível trocar o código.');
+    FARM.accessCode = result.access_code;
+    renderFazenda();
+    showToast('Novo código gerado. O anterior não funciona mais.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível trocar o código.', 'error');
+  }
+}
+
+async function updateFarmMemberRole(userId, role) {
+  try {
+    const response = await apiRequest(`/api/farms/team/${Number(userId)}/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível alterar a permissão.');
+    await loadFarmTeamData();
+    renderFazenda();
+    showToast('Permissão do membro atualizada.', 'success');
+  } catch (error) {
+    showToast(error.message || 'Não foi possível alterar a permissão.', 'error');
+    await loadFarmTeamData();
+    renderFazenda();
+  }
+}
 async function submitPessoa() {
   const email = document.getElementById('pessoaEmail').value.trim();
   const errorElement = document.getElementById('invitationError');
@@ -2428,6 +2541,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     navigateTo('settings');
   });
   document.getElementById('btnSwitchFarm')?.addEventListener('click', openTrocarFazendaModal);
+  document.getElementById('createFarmForm')?.addEventListener('submit', createFarm);
   document.getElementById('btnSupport')?.addEventListener('click', openSuporteModal);
   document.getElementById('btnCadastrarTalhao')?.addEventListener('click', openCadastrarTalhaoModal);
   document.getElementById('cadastroTalhaoForm')?.addEventListener('submit', cadastrarTalhao);

@@ -25,7 +25,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from .models import (
     ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
-    SensorIoT, Talhao, Produto, MovimentacaoEstoque
+    SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
 
 
@@ -102,7 +102,10 @@ def _current_farm(request):
 
 
 def _accessible_farms(user):
-    return Fazenda.objects.filter(Q(produtor=user) | Q(membros__usuario=user)).distinct().order_by("nome", "id")
+    return Fazenda.objects.filter(
+        Q(membros__usuario=user, membros__status=MembroFazenda.Status.ATIVO)
+        | (Q(produtor=user) & ~Q(membros__usuario=user))
+    ).distinct().order_by("nome", "id")
 
 
 def _membership(farm, user):
@@ -110,7 +113,7 @@ def _membership(farm, user):
         return None
     membership = MembroFazenda.objects.filter(fazenda=farm, usuario=user).first()
     if membership:
-        return membership
+        return membership if membership.status == MembroFazenda.Status.ATIVO else None
     if farm.produtor_id == user.id:
         membership, _ = MembroFazenda.objects.get_or_create(
             fazenda=farm,
@@ -168,6 +171,8 @@ def _role_json(membership):
         "email": membership.usuario.email,
         "role": membership.funcao,
         "role_label": membership.get_funcao_display(),
+        "status": membership.status,
+        "status_label": membership.get_status_display(),
     }
 
 
@@ -203,6 +208,131 @@ def farms_api(request):
             "role": _membership(farm, request.user).get_funcao_display(),
         } for farm in farms],
     })
+
+
+@require_POST
+def farm_create_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados da fazenda inválidos.")
+
+    name = str(data.get("name", "")).strip()
+    cep = re.sub(r"\D", "", str(data.get("cep", "")))
+    state = str(data.get("state", "")).strip().upper()
+    city = str(data.get("city", "")).strip()
+    district = str(data.get("district", "")).strip()
+    address = str(data.get("address", "")).strip()
+    culture = str(data.get("culture", "")).strip()
+    farm_type = str(data.get("farm_type", Fazenda.TipoCultivo.CONVENCIONAL))
+    irrigation = str(data.get("irrigation", Fazenda.Irrigacao.GOTEJAMENTO))
+    try:
+        area = Decimal(str(data.get("area", "")))
+        plot_count = int(data.get("plot_count", 0))
+    except (InvalidOperation, TypeError, ValueError):
+        return _error("Informe uma área e uma quantidade de talhões válidas.")
+    if not name or len(name) > 150 or len(cep) != 8 or len(state) != 2 or not city or not district:
+        return _error("Preencha nome, CEP, estado, cidade e bairro da fazenda.")
+    if area <= 0 or plot_count < 1:
+        return _error("Informe uma área maior que zero e ao menos um talhão.")
+    if farm_type not in Fazenda.TipoCultivo.values or irrigation not in Fazenda.Irrigacao.values:
+        return _error("Selecione um tipo de cultivo e irrigação válidos.")
+
+    try:
+        with transaction.atomic():
+            farm = Fazenda(
+                produtor=request.user,
+                nome=name,
+                cep=cep,
+                estado=state,
+                cidade=city,
+                bairro=district,
+                endereco=address,
+                area_hectares=area,
+                quantidade_talhoes=plot_count,
+                culturas=[culture] if culture else [],
+                tipo_cultivo=farm_type,
+                irrigacao=irrigation,
+            )
+            farm.full_clean()
+            farm.save()
+            MembroFazenda.objects.create(
+                fazenda=farm,
+                usuario=request.user,
+                funcao=MembroFazenda.Funcao.PROPRIETARIO,
+            )
+            Talhao.objects.bulk_create([
+                Talhao(fazenda=farm, nome=f"Talhão {index:02d}")
+                for index in range(1, plot_count + 1)
+            ])
+    except (IntegrityError, ValidationError):
+        return _error("Não foi possível criar a fazenda. Verifique os dados e tente outro nome.")
+
+    request.session["current_farm_id"] = farm.id
+    return JsonResponse({"ok": True, "name": farm.nome}, status=201)
+
+
+@require_POST
+def farm_join_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Código da fazenda inválido.")
+    access_code = str(data.get("access_code", "")).strip().upper()
+    if not re.fullmatch(r"GC-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}", access_code):
+        return _error("Informe um código de fazenda válido.")
+
+    try:
+        with transaction.atomic():
+            farm = Fazenda.objects.select_for_update().filter(codigo_acesso=access_code).first()
+            if farm is None:
+                return _error("Não foi encontrada uma fazenda com esse código.", 404)
+            membership = MembroFazenda.objects.filter(fazenda=farm, usuario=request.user).first()
+            if membership and membership.status == MembroFazenda.Status.ATIVO:
+                return _error("Você já faz parte desta fazenda.", 409)
+            if membership:
+                membership.status = MembroFazenda.Status.ATIVO
+                membership.funcao = MembroFazenda.Funcao.FUNCIONARIO
+                membership.save(update_fields=["status", "funcao", "atualizado_em"])
+            else:
+                MembroFazenda.objects.create(
+                    fazenda=farm,
+                    usuario=request.user,
+                    funcao=MembroFazenda.Funcao.FUNCIONARIO,
+                    status=MembroFazenda.Status.ATIVO,
+                )
+    except IntegrityError:
+        return _error("Você já faz parte desta fazenda.", 409)
+
+    request.session["current_farm_id"] = farm.id
+    _create_farm_notification(
+        farm, request.user, NotificacaoFazenda.Tipo.MEMBRO, "Novo membro",
+        f"{request.user.get_full_name() or request.user.email} entrou na fazenda pelo código.",
+    )
+    return JsonResponse({"ok": True, "farm_name": farm.nome}, status=200)
+
+
+@require_POST
+def farm_access_code_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    membership = _membership(farm, request.user)
+    if not membership or membership.funcao != MembroFazenda.Funcao.PROPRIETARIO:
+        return _error("Somente o proprietário pode gerar um novo código.", 403)
+
+    for _ in range(3):
+        farm.codigo_acesso = generate_farm_access_code()
+        try:
+            farm.save(update_fields=["codigo_acesso"])
+            return JsonResponse({"ok": True, "access_code": farm.codigo_acesso})
+        except IntegrityError:
+            continue
+    return _error("Não foi possível gerar um código único. Tente novamente.", 503)
 
 
 @require_POST
@@ -255,6 +385,7 @@ def farm_team_api(request):
     ).select_related("convidado_por")
     return JsonResponse({
         "ok": True,
+        "access_code": farm.codigo_acesso if _has_farm_permission(farm, request.user, "team") else None,
         "members": [_role_json(member) for member in members],
         "invitations": [{
             "id": invitation.id,
@@ -266,7 +397,7 @@ def farm_team_api(request):
     })
 
 
-@require_http_methods(["DELETE"])
+@require_http_methods(["PATCH", "DELETE"])
 def farm_member_api(request, user_id):
     if not request.user.is_authenticated:
         return _error("Autenticação necessária.", 401)
@@ -280,6 +411,19 @@ def farm_member_api(request, user_id):
         return _error("Membro não encontrado nesta fazenda.", 404)
     if member.funcao == MembroFazenda.Funcao.PROPRIETARIO:
         return _error("O proprietário não pode ser removido da própria fazenda.", 400)
+    if request.method == "PATCH":
+        data = _json_body(request)
+        role = data.get("role") if isinstance(data, dict) else None
+        allowed_roles = {
+            MembroFazenda.Funcao.GERENTE,
+            MembroFazenda.Funcao.TECNICO,
+            MembroFazenda.Funcao.FUNCIONARIO,
+        }
+        if role not in allowed_roles:
+            return _error("Selecione uma função válida.")
+        member.funcao = role
+        member.save(update_fields=["funcao", "atualizado_em"])
+        return JsonResponse({"ok": True, "member": _role_json(member)})
     member.delete()
     return JsonResponse({"ok": True, "removed_user_id": user_id})
 
@@ -1175,33 +1319,35 @@ def cadastro_api(request):
     email = required("email", "um e-mail").lower()
     telefone = re.sub(r"\D", "", str(data.get("telefone", "")))
     senha = str(data.get("senha", ""))
-    nome_fazenda = required("nome_fazenda", "o nome da fazenda")
-    estado = required("estado", "o estado").upper()
-    cidade = required("cidade", "a cidade")
-    bairro = required("bairro", "o bairro ou distrito")
-    cep = re.sub(r"\D", "", str(data.get("cep", "")))
-    culturas = data.get("culturas", [])
-    tipo_cultivo = str(data.get("tipo_cultivo", ""))
-    irrigacao = str(data.get("irrigacao", ""))
-    funcao = str(data.get("funcao", ""))
+    skip_farm = data.get("skip_farm") is True
+    nome_fazenda = "" if skip_farm else required("nome_fazenda", "o nome da fazenda")
+    estado = "" if skip_farm else required("estado", "o estado").upper()
+    cidade = "" if skip_farm else required("cidade", "a cidade")
+    bairro = "" if skip_farm else required("bairro", "o bairro ou distrito")
+    cep = "" if skip_farm else re.sub(r"\D", "", str(data.get("cep", "")))
+    culturas = [] if skip_farm else data.get("culturas", [])
+    tipo_cultivo = "" if skip_farm else str(data.get("tipo_cultivo", ""))
+    irrigacao = "" if skip_farm else str(data.get("irrigacao", ""))
+    funcao = "" if skip_farm else str(data.get("funcao", ""))
     if len(nome.split()) < 2: errors["nome"] = "Informe nome e sobrenome."
     try: validate_email(email)
     except ValidationError: errors["email"] = "Informe um e-mail válido."
     if len(telefone) not in (10, 11): errors["telefone"] = "Informe um telefone com DDD válido."
-    if len(cep) != 8: errors["cep"] = "Informe um CEP válido."
-    if len(estado) != 2: errors["estado"] = "Selecione uma UF válida."
-    if not isinstance(culturas, list) or not culturas: errors["culturas"] = "Selecione ao menos uma cultura."
-    if tipo_cultivo not in Fazenda.TipoCultivo.values: errors["tipo_cultivo"] = "Selecione um tipo de cultivo válido."
-    if irrigacao not in Fazenda.Irrigacao.values: errors["irrigacao"] = "Selecione um sistema de irrigação válido."
-    if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "Selecione sua função na fazenda."
-    try:
-        area = Decimal(str(data.get("area_hectares", "")))
-        if area <= 0: raise InvalidOperation
-    except (InvalidOperation, ValueError): errors["area_hectares"] = "Informe uma área maior que zero."
-    try:
-        talhoes = int(data.get("quantidade_talhoes", 0))
-        if talhoes < 1: raise ValueError
-    except (ValueError, TypeError): errors["quantidade_talhoes"] = "Informe ao menos um talhão."
+    if not skip_farm:
+        if len(cep) != 8: errors["cep"] = "Informe um CEP válido."
+        if len(estado) != 2: errors["estado"] = "Selecione uma UF válida."
+        if not isinstance(culturas, list) or not culturas: errors["culturas"] = "Selecione ao menos uma cultura."
+        if tipo_cultivo not in Fazenda.TipoCultivo.values: errors["tipo_cultivo"] = "Selecione um tipo de cultivo válido."
+        if irrigacao not in Fazenda.Irrigacao.values: errors["irrigacao"] = "Selecione um sistema de irrigação válido."
+        if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "Selecione sua função na fazenda."
+        try:
+            area = Decimal(str(data.get("area_hectares", "")))
+            if area <= 0: raise InvalidOperation
+        except (InvalidOperation, ValueError): errors["area_hectares"] = "Informe uma área maior que zero."
+        try:
+            talhoes = int(data.get("quantidade_talhoes", 0))
+            if talhoes < 1: raise ValueError
+        except (ValueError, TypeError): errors["quantidade_talhoes"] = "Informe ao menos um talhão."
     try: validate_password(senha)
     except ValidationError as exc: errors["senha"] = " ".join(exc.messages)
     if not re.search(r"[A-Za-z]", senha) or not re.search(r"\d", senha): errors["senha"] = "A senha deve ter letras e números."
@@ -1214,13 +1360,14 @@ def cadastro_api(request):
             first_name, *last_name = nome.split(maxsplit=1)
             user = User.objects.create_user(username=email, email=email, password=senha, first_name=first_name, last_name=last_name[0] if last_name else "")
             PerfilProdutor.objects.create(usuario=user, nome_completo=nome, telefone=telefone)
-            farm = Fazenda.objects.create(produtor=user, nome=nome_fazenda, cep=cep, estado=estado, cidade=cidade, bairro=bairro, endereco=str(data.get("endereco", "")).strip(), area_hectares=area, quantidade_talhoes=talhoes, culturas=culturas, tipo_cultivo=tipo_cultivo, irrigacao=irrigacao)
-            MembroFazenda.objects.create(
-                fazenda=farm,
-                usuario=user,
-                funcao=funcao,
-            )
-            Talhao.objects.bulk_create([Talhao(fazenda=farm, nome=f"Talhão {index:02d}") for index in range(1, talhoes + 1)])
+            if not skip_farm:
+                farm = Fazenda.objects.create(produtor=user, nome=nome_fazenda, cep=cep, estado=estado, cidade=cidade, bairro=bairro, endereco=str(data.get("endereco", "")).strip(), area_hectares=area, quantidade_talhoes=talhoes, culturas=culturas, tipo_cultivo=tipo_cultivo, irrigacao=irrigacao)
+                MembroFazenda.objects.create(
+                    fazenda=farm,
+                    usuario=user,
+                    funcao=funcao,
+                )
+                Talhao.objects.bulk_create([Talhao(fazenda=farm, nome=f"Talhão {index:02d}") for index in range(1, talhoes + 1)])
     except IntegrityError:
         return _error("Já existe uma conta ou fazenda com estes dados.")
     login(request, user)

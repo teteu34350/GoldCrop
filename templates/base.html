@@ -491,10 +491,101 @@
       <div class="modal-body">
         <p style="font-size:.875rem;color:var(--text-secondary);margin-bottom:1rem">Selecione a fazenda que você deseja monitorar no sistema:</p>
         <div class="farms-selection-list" id="farmsSelectionList"><p>Carregando fazendas acessíveis…</p></div>
+        <div class="form-group" style="margin-top:1.25rem">
+          <label class="form-label" for="farmJoinCode">Entrar em uma fazenda com código</label>
+          <div style="display:flex;gap:.5rem">
+            <input class="form-input" id="farmJoinCode" type="text" placeholder="GC-XXXXXXXX" maxlength="11" autocomplete="off" />
+            <button class="btn-primary" type="button" id="farmJoinButton" onclick="joinFarmByCode()">Entrar</button>
+          </div>
+          <p id="farmJoinError" class="form-error-msg" role="alert" hidden></p>
+        </div>
       </div>
       <div class="modal-footer">
+        <button class="btn-primary" type="button" onclick="openCreateFarmModal()">+ Criar fazenda</button>
         <button class="btn-ghost" onclick="closeTrocarFazendaModal()">Cancelar</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal: Criar Fazenda -->
+  <div class="modal-overlay" id="modalCriarFazenda" style="display:none">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2 class="modal-title">Criar fazenda</h2>
+        <button class="modal-close" type="button" onclick="closeCreateFarmModal()">×</button>
+      </div>
+      <form id="createFarmForm">
+        <div class="modal-body">
+          <p class="form-hint">A nova fazenda será compartilhada somente com as pessoas que você adicionar.</p>
+          <div class="form-group">
+            <label class="form-label" for="newFarmName">Nome da fazenda</label>
+            <input class="form-input" id="newFarmName" name="name" maxlength="150" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="newFarmCep">CEP</label>
+              <input class="form-input" id="newFarmCep" name="cep" inputmode="numeric" maxlength="9" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="newFarmState">Estado (UF)</label>
+              <input class="form-input" id="newFarmState" name="state" maxlength="2" required />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="newFarmCity">Cidade</label>
+              <input class="form-input" id="newFarmCity" name="city" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="newFarmDistrict">Bairro / Distrito rural</label>
+              <input class="form-input" id="newFarmDistrict" name="district" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="newFarmAddress">Endereço da propriedade</label>
+            <input class="form-input" id="newFarmAddress" name="address" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="newFarmArea">Área (hectares)</label>
+              <input class="form-input" id="newFarmArea" name="area" type="number" min="0.01" step="0.01" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="newFarmPlots">Quantidade de talhões</label>
+              <input class="form-input" id="newFarmPlots" name="plot_count" type="number" min="1" step="1" value="1" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="newFarmCulture">Cultura principal</label>
+            <input class="form-input" id="newFarmCulture" name="culture" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="newFarmType">Tipo de cultivo</label>
+              <select class="form-input" id="newFarmType" name="farm_type">
+                <option value="Convencional">Convencional</option>
+                <option value="Orgânico">Orgânico Certificado</option>
+                <option value="Agroflorestal">Agroflorestal</option>
+                <option value="Integrado (ILPF)">Integrado (ILPF)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="newFarmIrrigation">Irrigação</label>
+              <select class="form-input" id="newFarmIrrigation" name="irrigation">
+                <option value="Gotejamento">Gotejamento</option>
+                <option value="Aspersão / Pivô Central">Aspersão / Pivô Central</option>
+                <option value="Microaspersão">Microaspersão</option>
+                <option value="Sem Irrigação (Sequeiro)">Sem Irrigação (Sequeiro)</option>
+              </select>
+            </div>
+          </div>
+          <p id="createFarmError" class="form-error-msg" role="alert" hidden></p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-ghost" type="button" onclick="closeCreateFarmModal()">Cancelar</button>
+          <button class="btn-primary" id="createFarmButton" type="submit">Criar fazenda</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -524,6 +615,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
-  <script src="{% static 'app.js' %}?v=18"></script>
+  <script src="{% static 'app.js' %}?v=19"></script>
 </body>
 </html>

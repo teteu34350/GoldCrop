@@ -416,9 +416,18 @@ O papel do usuário não é editável no perfil: ele vem do vínculo persistido 
 cada fazenda. A seleção da fazenda ativa é armazenada na sessão autenticada.
 
 Equipe e acesso:
-- MembroFazenda armazena usuário, fazenda e função.
+- MembroFazenda armazena usuário, fazenda, função e status ativo.
+- Cada fazenda recebe um UUID interno e um código de acesso aleatório e único,
+  distinto do identificador interno.
+- O proprietário pode criar várias fazendas e compartilhar o código de acesso;
+  quem entra recebe inicialmente a função Funcionário, sem duplicar vínculos.
+- O proprietário pode gerar outro código; o anterior deixa de ser válido.
+- A troca de fazenda ativa persiste na sessão e cada consulta verifica o vínculo
+  ativo antes de devolver dados daquela fazenda.
+- O cadastro pode ser concluído sem criar uma fazenda; ela pode ser criada ou
+  acessada posteriormente pelo seletor de fazendas.
 - Proprietário pode convidar por e-mail, revogar convites pendentes e remover
-  membros.
+  membros, além de alterar a função dos demais membros.
 - ConviteFazenda guarda o convite, função, estado, prazo e somente o hash do
   token; o link é enviado por SMTP e expira em sete dias.
 - A pessoa convidada pode criar conta ou entrar na conta do e-mail convidado.

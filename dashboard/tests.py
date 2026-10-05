@@ -9,7 +9,7 @@ from django.urls import reverse
 from .models import (
     ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
-    Talhao,
+    Produto, Talhao,
 )
 
 
@@ -44,6 +44,24 @@ class CadastroELoginApiTests(TestCase):
         user = User.objects.get(username="maria@example.com")
         farm = Fazenda.objects.get(produtor=user)
         self.assertEqual(farm.membros.get(usuario=user).funcao, MembroFazenda.Funcao.GERENTE)
+
+    def test_cadastro_pode_ser_concluido_sem_criar_fazenda(self):
+        payload = {
+            "nome": "Maria da Silva",
+            "email": "maria-sem-fazenda@example.com",
+            "telefone": "(35) 99999-1234",
+            "senha": "Senha123",
+            "skip_farm": True,
+        }
+        response = self.client.post(
+            reverse("dashboard:cadastro_api"),
+            payload,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(username=payload["email"])
+        self.assertFalse(Fazenda.objects.filter(produtor=user).exists())
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
 
     def test_cadastro_rejeita_funcao_invalida(self):
         self.payload["funcao"] = "INVALID"
@@ -441,6 +459,147 @@ class MembershipTeamAndNotificationTests(TestCase):
         denied = self.client.post(
             reverse("dashboard:farms_api"),
             {"farm_id": 999999},
+            content_type="application/json",
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_proprietario_cria_multiplas_fazendas_com_codigo_e_talhoes(self):
+        payload = {
+            "name": "Fazenda Nova",
+            "cep": "37000002",
+            "state": "MG",
+            "city": "Varginha",
+            "district": "Zona Rural",
+            "address": "Estrada do Café",
+            "area": "18.5",
+            "plot_count": 2,
+            "culture": "Café",
+        }
+        response = self.client.post(
+            reverse("dashboard:farm_create_api"),
+            payload,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        farm = Fazenda.objects.get(nome="Fazenda Nova")
+        self.assertNotEqual(farm.identificador, self.farm.identificador)
+        self.assertRegex(farm.codigo_acesso, r"^GC-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$")
+        self.assertEqual(
+            MembroFazenda.objects.get(fazenda=farm, usuario=self.owner).funcao,
+            MembroFazenda.Funcao.PROPRIETARIO,
+        )
+        self.assertEqual(farm.talhoes.count(), 2)
+        self.assertEqual(self.client.get(reverse("dashboard:system_state_api")).json()["farm"]["id"], farm.id)
+
+    def test_codigo_vincula_usuario_a_dados_compartilhados_e_nao_duplica_vinculo(self):
+        product = Produto.objects.create(
+            fazenda=self.farm,
+            nome="Adubo compartilhado",
+            categoria="Fertilizante",
+            unidade="kg",
+            quantidade_atual=25,
+        )
+        member = User.objects.create_user(
+            username="new-member@example.com",
+            email="new-member@example.com",
+            password="test-password-123",
+        )
+        self.client.force_login(member)
+        response = self.client.post(
+            reverse("dashboard:farm_join_api"),
+            {"access_code": self.farm.codigo_acesso.lower()},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=member)
+        self.assertEqual(membership.funcao, MembroFazenda.Funcao.FUNCIONARIO)
+        self.assertEqual(membership.status, MembroFazenda.Status.ATIVO)
+        self.assertEqual(
+            self.client.get(reverse("dashboard:system_state_api")).json()["talhoes"][0]["name"],
+            self.talhao.nome,
+        )
+        shared_stock = self.client.get(reverse("dashboard:estoque_produtos_api"))
+        self.assertEqual(shared_stock.status_code, 200)
+        self.assertEqual(shared_stock.json()["produtos"][0]["id"], product.id)
+
+        duplicate = self.client.post(
+            reverse("dashboard:farm_join_api"),
+            {"access_code": self.farm.codigo_acesso},
+            content_type="application/json",
+        )
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(MembroFazenda.objects.filter(fazenda=self.farm, usuario=member).count(), 1)
+
+    def test_proprietario_pode_trocar_codigo_e_codigo_antigo_perde_validade(self):
+        old_code = self.farm.codigo_acesso
+        rotate = self.client.post(reverse("dashboard:farm_access_code_api"), {}, content_type="application/json")
+        self.assertEqual(rotate.status_code, 200)
+        self.farm.refresh_from_db()
+        self.assertNotEqual(self.farm.codigo_acesso, old_code)
+
+        member = User.objects.create_user(
+            username="rotated-member@example.com",
+            email="rotated-member@example.com",
+            password="test-password-123",
+        )
+        self.client.force_login(member)
+        old_code_response = self.client.post(
+            reverse("dashboard:farm_join_api"),
+            {"access_code": old_code},
+            content_type="application/json",
+        )
+        self.assertEqual(old_code_response.status_code, 404)
+        new_code_response = self.client.post(
+            reverse("dashboard:farm_join_api"),
+            {"access_code": self.farm.codigo_acesso},
+            content_type="application/json",
+        )
+        self.assertEqual(new_code_response.status_code, 200)
+
+    def test_vinculo_inativo_nao_concede_acesso_a_fazenda(self):
+        inactive_user = User.objects.create_user(
+            username="inactive@example.com",
+            email="inactive@example.com",
+            password="test-password-123",
+        )
+        MembroFazenda.objects.create(
+            fazenda=self.farm,
+            usuario=inactive_user,
+            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+            status=MembroFazenda.Status.INATIVO,
+        )
+        self.client.force_login(inactive_user)
+        farms = self.client.get(reverse("dashboard:farms_api"))
+        state = self.client.get(reverse("dashboard:system_state_api"))
+        self.assertEqual(farms.json()["farms"], [])
+        self.assertIsNone(state.json()["farm"])
+
+    def test_proprietario_altera_funcao_do_membro_e_membro_nao_pode_alterar_equipe(self):
+        member = User.objects.create_user(
+            username="role-change@example.com",
+            email="role-change@example.com",
+            password="test-password-123",
+        )
+        MembroFazenda.objects.create(
+            fazenda=self.farm,
+            usuario=member,
+            funcao=MembroFazenda.Funcao.FUNCIONARIO,
+        )
+        response = self.client.patch(
+            reverse("dashboard:farm_member_api", args=[member.id]),
+            {"role": MembroFazenda.Funcao.GERENTE},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            MembroFazenda.objects.get(fazenda=self.farm, usuario=member).funcao,
+            MembroFazenda.Funcao.GERENTE,
+        )
+
+        self.client.force_login(member)
+        denied = self.client.patch(
+            reverse("dashboard:farm_member_api", args=[self.owner.id]),
+            {"role": MembroFazenda.Funcao.FUNCIONARIO},
             content_type="application/json",
         )
         self.assertEqual(denied.status_code, 403)

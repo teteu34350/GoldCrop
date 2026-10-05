@@ -1,4 +1,6 @@
 from datetime import date, datetime, time
+import secrets
+import uuid
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
@@ -10,6 +12,12 @@ phone_validator = RegexValidator(
     regex=r"^\d{10,11}$",
     message="Informe um telefone brasileiro com DDD.",
 )
+
+FARM_ACCESS_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+
+def generate_farm_access_code():
+    return "GC-" + "".join(secrets.choice(FARM_ACCESS_CODE_ALPHABET) for _ in range(8))
 
 
 class PerfilProdutor(models.Model):
@@ -41,6 +49,8 @@ class Fazenda(models.Model):
         SEQUEIRO = "Sem Irrigação (Sequeiro)", "Sem Irrigação (Sequeiro)"
 
     produtor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fazendas")
+    identificador = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    codigo_acesso = models.CharField(max_length=11, unique=True, default=generate_farm_access_code, editable=False)
     nome = models.CharField(max_length=150)
     cep = models.CharField(max_length=8, validators=[RegexValidator(r"^\d{8}$", "Informe um CEP válido.")])
     estado = models.CharField(max_length=2)
@@ -64,6 +74,11 @@ class Fazenda(models.Model):
 
 
 class MembroFazenda(models.Model):
+    class Status(models.TextChoices):
+        ATIVO = "ACTIVE", "Ativo"
+        PENDENTE = "PENDING", "Pendente"
+        INATIVO = "INACTIVE", "Inativo"
+
     class Funcao(models.TextChoices):
         PROPRIETARIO = "OWNER", "Proprietário"
         GERENTE = "MANAGER", "Gerente"
@@ -73,7 +88,9 @@ class MembroFazenda(models.Model):
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="membros")
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="membros_fazenda")
     funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.FUNCIONARIO)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ATIVO)
     criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["criado_em", "id"]

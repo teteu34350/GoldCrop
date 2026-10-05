@@ -567,6 +567,31 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- CADASTRO PAGE LOGIC ---
   const registerForm = document.getElementById('cadastro-form');
   if (registerForm) {
+    document.getElementById('btn-skip-farm')?.addEventListener('click', async () => {
+      hideAlert('register-alert');
+      if (!validateStep(1)) {
+        showAlert('register-alert', 'Por favor, corrija seus dados antes de continuar.', 'error');
+        return;
+      }
+      const button = document.getElementById('btn-skip-farm');
+      button.disabled = true;
+      try {
+        const result = await AuthService.register({
+          nome: document.getElementById('nome').value.trim(),
+          email: document.getElementById('email').value.trim(),
+          telefone: document.getElementById('telefone').value.trim(),
+          senha: document.getElementById('senha').value,
+          skip_farm: true,
+        });
+        showAlert('register-alert', 'Conta criada. Você poderá criar ou acessar uma fazenda depois.', 'success');
+        window.location.href = result.redirect_url;
+      } catch (error) {
+        Object.entries(error.fieldErrors || {}).forEach(([field, message]) => showFieldError(field, message));
+        showAlert('register-alert', error.message || 'Erro ao criar sua conta.', 'error');
+        button.disabled = false;
+      }
+    });
+
     // Phone mask listener
     const phoneInput = document.getElementById('telefone');
     if (phoneInput) {
