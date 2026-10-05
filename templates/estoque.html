@@ -4,7 +4,7 @@
 {% block breadcrumb %}Estoque{% endblock %}
 
 {% block content %}
-<div class="dashboard-container" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+<div class="dashboard-container estoque-page" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
   
   <div class="estoque-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
     <div>
@@ -27,7 +27,7 @@
     </div>
   </div>
 
-  <div class="tabs" style="display: flex; gap: 1.5rem; border-bottom: 1px solid var(--gray-200); margin-bottom: 2rem; overflow-x: auto;">
+  <div class="tabs estoque-main-tabs" style="display: flex; gap: 1.5rem; border-bottom: 1px solid var(--gray-200); margin-bottom: 2rem; overflow-x: auto;">
     <button class="tab-main-btn active" onclick="switchTab('dashboard')">Visão geral</button>
     <button class="tab-main-btn" onclick="switchTab('produtos')">Produtos</button>
     <button class="tab-main-btn" onclick="switchTab('movimentacoes')">Movimentações</button>
@@ -56,7 +56,7 @@
       </div>
     </div>
 
-    <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+    <div class="dashboard-grid estoque-dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
       <!-- ESTOQUE POR CATEGORIA -->
       <div class="dash-panel" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 1.5rem;">
         <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1.5rem;">Estoque por categoria</h3>
@@ -86,7 +86,7 @@
       </div>
     </div>
 
-    <div class="dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+    <div class="dashboard-grid estoque-dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
       <!-- CONSUMO POR TALHAO -->
       <div class="dash-panel" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 1.5rem;">
         <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1.5rem;">Consumo por talhão</h3>
@@ -101,7 +101,7 @@
           <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900);">Movimentações recentes</h3>
           <button class="btn-text" style="color: var(--green-600); font-weight: 500; font-size: 0.875rem; background: none; border: none; cursor: pointer;" onclick="switchTab('movimentacoes')">Ver todas →</button>
         </div>
-        <div style="overflow-x: auto;">
+        <div class="estoque-recent-table-wrap" style="overflow-x: auto;">
           <table style="width: 100%; border-collapse: collapse; min-width: 400px;">
             <thead>
               <tr style="border-bottom: 1px solid var(--gray-100); color: var(--gray-500); font-size: 0.75rem;">
@@ -130,7 +130,7 @@
         <button class="tab-btn" data-categoria="Corretivo">Corretivos</button>
         <button class="tab-btn" data-categoria="Outros">Outros</button>
       </div>
-      <div style="position: relative; flex-grow: 1; max-width: 300px;">
+      <div class="estoque-search" style="position: relative; flex-grow: 1; max-width: 300px;">
         <svg style="position: absolute; left: 10px; top: 10px; color: var(--gray-400);" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" id="buscaProduto" class="form-input" placeholder="Buscar produto..." style="padding-left: 36px; margin: 0;">
       </div>
@@ -143,7 +143,7 @@
 
   <!-- TAB: MOVIMENTACOES -->
   <div id="tab-movimentacoes" class="tab-content" style="display: none;">
-    <div style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
+    <div class="estoque-movements-table-wrap" role="region" aria-label="Tabela de movimentações de estoque" tabindex="0" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
       <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
         <thead>
           <tr style="border-bottom: 1px solid var(--gray-200); background: var(--gray-50);">
@@ -165,7 +165,7 @@
 
   <!-- TAB: RELATORIOS -->
   <div id="tab-relatorios" class="tab-content" style="display: none;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+    <div class="estoque-report-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
       <div class="dash-panel" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
         <div>
           <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">Estoque atual</h3>
@@ -197,8 +197,8 @@
 <!-- Modais preservados com classes responsivas -->
 
 <!-- MODAL: NOVO PRODUTO -->
-<div class="modal-overlay" id="modalNovoProduto" style="display:none">
-  <div class="modal modal-md">
+<div class="modal-overlay estoque-modal-overlay" id="modalNovoProduto" style="display:none">
+  <div class="modal modal-md estoque-modal">
     <div class="modal-header">
       <h2 class="modal-title">Cadastrar Produto</h2>
       <button class="modal-close" onclick="fecharModalNovoProduto()">×</button>
@@ -257,8 +257,8 @@
 </div>
 
 <!-- MODAL: ENTRADA -->
-<div class="modal-overlay" id="modalEntrada" style="display:none">
-  <div class="modal modal-sm">
+<div class="modal-overlay estoque-modal-overlay" id="modalEntrada" style="display:none">
+  <div class="modal modal-sm estoque-modal">
     <div class="modal-header">
       <h2 class="modal-title">Entrada de Estoque</h2>
       <button class="modal-close" onclick="fecharModalEntrada()">×</button>
@@ -302,8 +302,8 @@
 </div>
 
 <!-- MODAL: SAÍDA -->
-<div class="modal-overlay" id="modalSaida" style="display:none">
-  <div class="modal modal-sm">
+<div class="modal-overlay estoque-modal-overlay" id="modalSaida" style="display:none">
+  <div class="modal modal-sm estoque-modal">
     <div class="modal-header">
       <h2 class="modal-title">Saída de Estoque</h2>
       <button class="modal-close" onclick="fecharModalSaida()">×</button>
