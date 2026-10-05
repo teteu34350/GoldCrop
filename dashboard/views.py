@@ -1,7 +1,5 @@
 import json
-import hashlib
 import re
-import secrets
 import smtplib
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
@@ -13,17 +11,16 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.utils import timezone
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import (
-    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
@@ -46,8 +43,10 @@ def _error(message, status=400, field_errors=None):
 def _protected_page(request, template):
     if not request.user.is_authenticated:
         return redirect(f"/login/?next={request.path}")
-    perfil = getattr(request.user, "perfil", None)
     fazenda = _current_farm(request)
+    if not fazenda:
+        return redirect("dashboard:farm_onboarding")
+    perfil = getattr(request.user, "perfil", None)
     nome = perfil.nome_completo if perfil else request.user.get_full_name() or request.user.username
     membership = _membership(fazenda, request.user) if fazenda else None
     return render(request, template, {"auth_user_data": {
@@ -74,14 +73,39 @@ def estoque_view(request): return _protected_page(request, "estoque.html")
 
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect("dashboard:dashboard")
+        return redirect(_farm_landing_url(request))
     return render(request, "login.html")
 
 
 def cadastro_view(request):
     if request.user.is_authenticated:
-        return redirect("dashboard:dashboard")
+        return redirect(_farm_landing_url(request))
     return render(request, "cadastro.html")
+
+
+def farm_onboarding_view(request):
+    if not request.user.is_authenticated:
+        return redirect(f"/login/?next={request.path}")
+    if _current_farm(request):
+        return redirect("dashboard:dashboard")
+    perfil = getattr(request.user, "perfil", None)
+    nome = perfil.nome_completo if perfil else request.user.get_full_name() or request.user.username
+    return render(request, "farm_onboarding.html", {"auth_user_data": {
+        "id": request.user.id,
+        "name": nome,
+        "initials": "".join(part[0] for part in nome.split()[:2]).upper(),
+        "email": request.user.email,
+        "phone": perfil.telefone if perfil else "",
+        "role": "",
+        "farm": "Sem fazenda cadastrada",
+    }})
+
+
+def _farm_landing_url(request):
+    farm = _current_farm(request)
+    if farm:
+        return reverse("dashboard:dashboard")
+    return reverse("dashboard:farm_onboarding")
 
 
 def _current_farm(request):
@@ -126,7 +150,7 @@ def _membership(farm, user):
 
 
 FARM_PERMISSIONS = {
-    permission: {MembroFazenda.Funcao.PROPRIETARIO}
+    permission: {MembroFazenda.Funcao.PROPRIETARIO, MembroFazenda.Funcao.MEMBRO}
     for permission in ("view", "manage", "plan", "record", "team")
 }
 
@@ -254,8 +278,17 @@ def farm_create_api(request):
                 Talhao(fazenda=farm, nome=f"Talhão {index:02d}")
                 for index in range(1, plot_count + 1)
             ])
-    except (IntegrityError, ValidationError):
-        return _error("Não foi possível criar a fazenda. Verifique os dados e tente outro nome.")
+    except ValidationError as error:
+        field_errors = {
+            field: " ".join(messages)
+            for field, messages in error.message_dict.items()
+        } if hasattr(error, "message_dict") else None
+        return _error(
+            "Não foi possível criar a fazenda. " + " ".join(error.messages),
+            field_errors=field_errors,
+        )
+    except IntegrityError:
+        return _error("Não foi possível criar a fazenda. Verifique se o nome já está em uso.")
 
     request.session["current_farm_id"] = farm.id
     return JsonResponse({"ok": True, "name": farm.nome}, status=201)
@@ -269,26 +302,26 @@ def farm_join_api(request):
     if not isinstance(data, dict):
         return _error("Código da fazenda inválido.")
     access_code = str(data.get("access_code", "")).strip().upper()
-    if not re.fullmatch(r"GC-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}", access_code):
-        return _error("Informe um código de fazenda válido.")
+    if not re.fullmatch(r"GCRP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}", access_code):
+        return _error("Código de fazenda inválido. Verifique o código e tente novamente.", 404)
 
     try:
         with transaction.atomic():
             farm = Fazenda.objects.select_for_update().filter(codigo_acesso=access_code).first()
             if farm is None:
-                return _error("Não foi encontrada uma fazenda com esse código.", 404)
+                return _error("Código de fazenda inválido. Verifique o código e tente novamente.", 404)
             membership = MembroFazenda.objects.filter(fazenda=farm, usuario=request.user).first()
             if membership and membership.status == MembroFazenda.Status.ATIVO:
                 return _error("Você já faz parte desta fazenda.", 409)
             if membership:
                 membership.status = MembroFazenda.Status.ATIVO
-                membership.funcao = MembroFazenda.Funcao.PROPRIETARIO
+                membership.funcao = MembroFazenda.Funcao.MEMBRO
                 membership.save(update_fields=["status", "funcao", "atualizado_em"])
             else:
                 MembroFazenda.objects.create(
                     fazenda=farm,
                     usuario=request.user,
-                    funcao=MembroFazenda.Funcao.PROPRIETARIO,
+                    funcao=MembroFazenda.Funcao.MEMBRO,
                     status=MembroFazenda.Status.ATIVO,
                 )
     except IntegrityError:
@@ -309,9 +342,8 @@ def farm_access_code_api(request):
     farm = _current_farm(request)
     if not farm:
         return _error("Fazenda não encontrada.", 404)
-    membership = _membership(farm, request.user)
-    if not membership or membership.funcao != MembroFazenda.Funcao.PROPRIETARIO:
-        return _error("Somente o proprietário pode gerar um novo código.", 403)
+    if not _has_farm_permission(farm, request.user, "team"):
+        return _error("Acesso negado para alterar o código da fazenda.", 403)
 
     for _ in range(3):
         farm.codigo_acesso = generate_farm_access_code()
@@ -365,23 +397,12 @@ def farm_team_api(request):
         return _error("Autenticação necessária.", 401)
     farm = _current_farm(request)
     if not farm:
-        return JsonResponse({"ok": True, "members": [], "invitations": []})
+        return JsonResponse({"ok": True, "members": [], "access_code": None})
     members = farm.membros.select_related("usuario").all()
-    invitations = farm.convites.filter(
-        status=ConviteFazenda.Status.PENDENTE,
-        expira_em__gt=timezone.now(),
-    ).select_related("convidado_por")
     return JsonResponse({
         "ok": True,
         "access_code": farm.codigo_acesso if _has_farm_permission(farm, request.user, "team") else None,
         "members": [_role_json(member) for member in members],
-        "invitations": [{
-            "id": invitation.id,
-            "email": invitation.email,
-            "role": invitation.funcao,
-            "role_label": invitation.get_funcao_display(),
-            "expires_at": invitation.expira_em.isoformat(),
-        } for invitation in invitations],
     })
 
 
@@ -393,193 +414,16 @@ def farm_member_api(request, user_id):
     if not farm:
         return _error("Fazenda não encontrada.")
     if not _has_farm_permission(farm, request.user, "team"):
-        return _error("Somente o proprietário pode gerenciar a equipe.", 403)
+        return _error("Você não tem permissão para gerenciar a equipe.", 403)
     member = farm.membros.filter(usuario_id=user_id).first()
     if not member:
         return _error("Membro não encontrado nesta fazenda.", 404)
     if member.usuario_id == request.user.id:
         return _error("Você não pode remover seu próprio acesso à fazenda.", 400)
+    if member.usuario_id == farm.produtor_id:
+        return _error("O proprietário que criou a fazenda não pode ser removido.", 400)
     member.delete()
     return JsonResponse({"ok": True, "removed_user_id": user_id})
-
-
-@require_http_methods(["POST", "DELETE"])
-def farm_invitation_api(request, invitation_id=None):
-    if not request.user.is_authenticated:
-        return _error("Autenticação necessária.", 401)
-    farm = _current_farm(request)
-    if not farm:
-        return _error("Fazenda não encontrada.")
-    if not _has_farm_permission(farm, request.user, "team"):
-        return _error("Somente o proprietário pode gerenciar a equipe.", 403)
-    if request.method == "DELETE":
-        invitation = farm.convites.filter(pk=invitation_id, status=ConviteFazenda.Status.PENDENTE).first()
-        if not invitation:
-            return _error("Convite pendente não encontrado.", 404)
-        invitation.status = ConviteFazenda.Status.REVOGADO
-        invitation.save(update_fields=["status"])
-        return JsonResponse({"ok": True, "revoked_id": invitation.id})
-
-    data = _json_body(request)
-    if not isinstance(data, dict):
-        return _error("Dados do convite inválidos.")
-    email = str(data.get("email", "")).strip().lower()
-    role = str(data.get("role", ""))
-    try:
-        validate_email(email)
-    except ValidationError:
-        return _error("Informe um e-mail válido.", field_errors={"email": "Informe um e-mail válido."})
-    if role and role != MembroFazenda.Funcao.PROPRIETARIO:
-        return _error("No momento, a única função disponível é Proprietário.")
-    role = MembroFazenda.Funcao.PROPRIETARIO
-    if farm.membros.filter(usuario__email__iexact=email).exists():
-        return _error("Este usuário já faz parte da equipe.")
-    if farm.convites.filter(email__iexact=email, status=ConviteFazenda.Status.PENDENTE, expira_em__gt=timezone.now()).exists():
-        return _error("Já existe um convite pendente para este e-mail.")
-    if not settings.EMAIL_HOST or not settings.DEFAULT_FROM_EMAIL or (settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL):
-        return _error("O envio de convites não está disponível: configure EMAIL_HOST e DEFAULT_FROM_EMAIL no ambiente.", 503)
-
-    token = secrets.token_urlsafe(32)
-    invitation_url = request.build_absolute_uri(reverse("dashboard:accept_invitation", args=[token]))
-    role_label = dict(MembroFazenda.Funcao.choices)[role]
-    message = (
-        f"Você foi convidado para participar da fazenda {farm.nome} no GoldCrop como {role_label}.\n\n"
-        f"Para aceitar o convite e acessar a fazenda, abra este link:\n{invitation_url}\n\n"
-        "O convite expira em 7 dias. Se você não esperava este e-mail, ignore-o."
-    )
-    try:
-        with transaction.atomic():
-            invitation = ConviteFazenda.objects.create(
-                fazenda=farm,
-                email=email,
-                funcao=role,
-                token_digest=hashlib.sha256(token.encode("utf-8")).hexdigest(),
-                convidado_por=request.user,
-                expira_em=timezone.now() + timedelta(days=7),
-            )
-            sent_count = send_mail(
-                f"Convite para a fazenda {farm.nome} no GoldCrop",
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [email],
-                fail_silently=False,
-            )
-            if sent_count != 1:
-                raise RuntimeError("O servidor de e-mail não confirmou o envio.")
-    except (OSError, RuntimeError, smtplib.SMTPException, ValueError) as error:
-        return _error(f"Não foi possível enviar o convite por e-mail: {error}", 503)
-
-    return JsonResponse({
-        "ok": True,
-        "invitation": {
-            "id": invitation.id,
-            "email": invitation.email,
-            "role": invitation.funcao,
-            "role_label": invitation.get_funcao_display(),
-            "expires_at": invitation.expira_em.isoformat(),
-        },
-    }, status=201)
-
-
-def accept_invitation(request, token):
-    token_digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
-    invitation = get_object_or_404(
-        ConviteFazenda.objects.select_related("fazenda"),
-        token_digest=token_digest,
-        status=ConviteFazenda.Status.PENDENTE,
-    )
-    if invitation.expira_em <= timezone.now():
-        invitation.status = ConviteFazenda.Status.REVOGADO
-        invitation.save(update_fields=["status"])
-        return HttpResponse("Este convite expirou. Solicite um novo convite ao proprietário.", status=410)
-
-    invited_user = User.objects.filter(email__iexact=invitation.email).first()
-    if request.user.is_authenticated and request.user.email.lower() != invitation.email.lower():
-        return HttpResponse("Entre com a conta vinculada ao e-mail do convite.", status=403)
-    if invited_user and not request.user.is_authenticated:
-        request.session["pending_invitation_token"] = token
-        return redirect(f"{reverse('dashboard:login')}?next={reverse('dashboard:accept_invitation', args=[token])}")
-
-    if request.method == "GET":
-        return render(request, "invitation_accept.html", {
-            "invitation": invitation,
-            "existing_account": invited_user is not None,
-        })
-    if request.method != "POST":
-        return HttpResponse(status=405)
-
-    user = request.user if request.user.is_authenticated else None
-    created_user = False
-    if user is None:
-        name = str(request.POST.get("name", "")).strip()
-        password = request.POST.get("password", "")
-        if not name:
-            return render(request, "invitation_accept.html", {
-                "invitation": invitation,
-                "existing_account": False,
-                "error": "Informe seu nome completo.",
-            }, status=400)
-        try:
-            validate_password(password)
-        except ValidationError as error:
-            return render(request, "invitation_accept.html", {
-                "invitation": invitation,
-                "existing_account": False,
-                "error": " ".join(error.messages),
-            }, status=400)
-        if len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
-            return render(request, "invitation_accept.html", {
-                "invitation": invitation,
-                "existing_account": False,
-                "error": "A senha deve ter pelo menos 8 caracteres, incluindo letras e números.",
-            }, status=400)
-        if User.objects.filter(Q(username__iexact=invitation.email) | Q(email__iexact=invitation.email)).exists():
-            return HttpResponse("Já existe uma conta para este e-mail. Entre nessa conta para aceitar o convite.", status=409)
-        user = None
-        try:
-            with transaction.atomic():
-                first_name, *last_name = name.split(maxsplit=1)
-                user = User.objects.create_user(
-                    username=invitation.email,
-                    email=invitation.email,
-                    password=password,
-                    first_name=first_name,
-                    last_name=last_name[0] if last_name else "",
-                )
-                PerfilProdutor.objects.create(usuario=user, nome_completo=name, telefone="")
-                created_user = True
-        except IntegrityError:
-            return HttpResponse("Não foi possível criar a conta. Tente novamente ou entre na conta existente.", status=409)
-
-    try:
-        with transaction.atomic():
-            membership, created = MembroFazenda.objects.get_or_create(
-                fazenda=invitation.fazenda,
-                usuario=user,
-                defaults={"funcao": invitation.funcao},
-            )
-            if not created:
-                return HttpResponse("Esta conta já possui acesso à fazenda.", status=409)
-            invitation.status = ConviteFazenda.Status.ACEITO
-            invitation.aceito_em = timezone.now()
-            invitation.save(update_fields=["status", "aceito_em"])
-            _create_farm_notification(
-                invitation.fazenda,
-                user,
-                NotificacaoFazenda.Tipo.MEMBRO,
-                "Convite aceito",
-                f"{user.get_full_name() or user.email} agora faz parte da equipe da fazenda.",
-            )
-    except IntegrityError:
-        if created_user and user:
-            user.delete()
-        return HttpResponse("Não foi possível aceitar este convite. Solicite um novo ao proprietário.", status=409)
-
-    request.session["current_farm_id"] = invitation.fazenda_id
-    if created_user:
-        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
-    request.session.pop("pending_invitation_token", None)
-    return redirect("dashboard:fazenda")
 
 
 @require_GET
@@ -1226,22 +1070,10 @@ def login_api(request):
     user = authenticate(request, username=user_record.username, password=password) if user_record else None
     if user is None:
         return _error("E-mail ou senha incorretos.", 401)
-    pending_token = request.session.get("pending_invitation_token")
     login(request, user)
     if not data.get("remember_me"):
         request.session.set_expiry(0)
-    redirect_url = "/dashboard/"
-    if pending_token:
-        invitation = ConviteFazenda.objects.filter(
-            token_digest=hashlib.sha256(pending_token.encode("utf-8")).hexdigest(),
-            status=ConviteFazenda.Status.PENDENTE,
-            email__iexact=user.email,
-        ).first()
-        if invitation and invitation.expira_em > timezone.now():
-            redirect_url = reverse("dashboard:accept_invitation", args=[pending_token])
-        else:
-            request.session.pop("pending_invitation_token", None)
-    return JsonResponse({"ok": True, "redirect_url": redirect_url})
+    return JsonResponse({"ok": True, "redirect_url": _farm_landing_url(request)})
 
 
 @require_POST
@@ -1290,35 +1122,10 @@ def cadastro_api(request):
     email = required("email", "um e-mail").lower()
     telefone = re.sub(r"\D", "", str(data.get("telefone", "")))
     senha = str(data.get("senha", ""))
-    skip_farm = data.get("skip_farm") is True
-    nome_fazenda = "" if skip_farm else required("nome_fazenda", "o nome da fazenda")
-    estado = "" if skip_farm else required("estado", "o estado").upper()
-    cidade = "" if skip_farm else required("cidade", "a cidade")
-    bairro = "" if skip_farm else required("bairro", "o bairro ou distrito")
-    cep = "" if skip_farm else re.sub(r"\D", "", str(data.get("cep", "")))
-    culturas = [] if skip_farm else data.get("culturas", [])
-    tipo_cultivo = "" if skip_farm else str(data.get("tipo_cultivo", ""))
-    irrigacao = "" if skip_farm else str(data.get("irrigacao", ""))
-    funcao = "" if skip_farm else str(data.get("funcao", ""))
     if len(nome.split()) < 2: errors["nome"] = "Informe nome e sobrenome."
     try: validate_email(email)
     except ValidationError: errors["email"] = "Informe um e-mail válido."
     if len(telefone) not in (10, 11): errors["telefone"] = "Informe um telefone com DDD válido."
-    if not skip_farm:
-        if len(cep) != 8: errors["cep"] = "Informe um CEP válido."
-        if len(estado) != 2: errors["estado"] = "Selecione uma UF válida."
-        if not isinstance(culturas, list) or not culturas: errors["culturas"] = "Selecione ao menos uma cultura."
-        if tipo_cultivo not in Fazenda.TipoCultivo.values: errors["tipo_cultivo"] = "Selecione um tipo de cultivo válido."
-        if irrigacao not in Fazenda.Irrigacao.values: errors["irrigacao"] = "Selecione um sistema de irrigação válido."
-        if funcao not in MembroFazenda.Funcao.values: errors["funcao"] = "No momento, a única função disponível é Proprietário."
-        try:
-            area = Decimal(str(data.get("area_hectares", "")))
-            if area <= 0: raise InvalidOperation
-        except (InvalidOperation, ValueError): errors["area_hectares"] = "Informe uma área maior que zero."
-        try:
-            talhoes = int(data.get("quantidade_talhoes", 0))
-            if talhoes < 1: raise ValueError
-        except (ValueError, TypeError): errors["quantidade_talhoes"] = "Informe ao menos um talhão."
     try: validate_password(senha)
     except ValidationError as exc: errors["senha"] = " ".join(exc.messages)
     if not re.search(r"[A-Za-z]", senha) or not re.search(r"\d", senha): errors["senha"] = "A senha deve ter letras e números."
@@ -1331,18 +1138,10 @@ def cadastro_api(request):
             first_name, *last_name = nome.split(maxsplit=1)
             user = User.objects.create_user(username=email, email=email, password=senha, first_name=first_name, last_name=last_name[0] if last_name else "")
             PerfilProdutor.objects.create(usuario=user, nome_completo=nome, telefone=telefone)
-            if not skip_farm:
-                farm = Fazenda.objects.create(produtor=user, nome=nome_fazenda, cep=cep, estado=estado, cidade=cidade, bairro=bairro, endereco=str(data.get("endereco", "")).strip(), area_hectares=area, quantidade_talhoes=talhoes, culturas=culturas, tipo_cultivo=tipo_cultivo, irrigacao=irrigacao)
-                MembroFazenda.objects.create(
-                    fazenda=farm,
-                    usuario=user,
-                    funcao=funcao,
-                )
-                Talhao.objects.bulk_create([Talhao(fazenda=farm, nome=f"Talhão {index:02d}") for index in range(1, talhoes + 1)])
     except IntegrityError:
-        return _error("Já existe uma conta ou fazenda com estes dados.")
+        return _error("Já existe uma conta com este e-mail.")
     login(request, user)
-    return JsonResponse({"ok": True, "redirect_url": "/dashboard/"}, status=201)
+    return JsonResponse({"ok": True, "redirect_url": reverse("dashboard:farm_onboarding")}, status=201)
 
 
 @require_http_methods(["GET", "POST"])

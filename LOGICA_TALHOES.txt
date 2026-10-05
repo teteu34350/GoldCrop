@@ -273,8 +273,8 @@ excluido, a aplicacao pode permanecer, mas sem a relacao/nome do talhao.
 
 E uma pagina de resumo da fazenda, pessoas e atividades. Resumos operacionais
 de janela, planejamento e aplicacao respeitam o talhao selecionado. Dados de
-equipe e parte das atividades ainda sao demonstrativos no frontend e nao
-representam um sistema persistido de convites/permissoes.
+equipe e atividades sao carregados do backend. O codigo da fazenda pode ser
+compartilhado para vincular novos usuarios, sem convites por e-mail.
 
 8.6. Sensores
 
@@ -356,8 +356,7 @@ Ainda indisponivel ou limitado:
 - leituras reais de umidade por SensorIoT e temperatura de solo;
 - desenho de limites reais por poligono;
 - regras finais de recomendacao ajustadas por cultura, variedade, solo e idade;
-- funcionamento de equipe/convites e algumas atividades, que ainda sao
-  demonstrativos no frontend.
+- atividades ainda dependem de integracoes operacionais em tempo real.
 
 
 12. ARQUIVOS E ROTAS PARA INVESTIGAR

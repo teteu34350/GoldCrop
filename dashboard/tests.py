@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import (
-    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     Produto, Talhao,
 )
@@ -24,33 +24,24 @@ class CadastroELoginApiTests(TestCase):
             "funcao": MembroFazenda.Funcao.PROPRIETARIO,
         }
 
-    def test_cadastro_cria_usuario_perfil_e_fazenda_e_autentica(self):
+    def test_cadastro_cria_apenas_usuario_e_perfil(self):
         response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(username="maria@example.com")
         self.assertTrue(user.check_password("Senha123"))
         self.assertEqual(PerfilProdutor.objects.get(usuario=user).telefone, "35999991234")
-        fazenda = Fazenda.objects.get(produtor=user)
-        self.assertEqual(fazenda.cep, "37000000")
-        self.assertEqual(fazenda.culturas, ["Café Arábica"])
-        self.assertEqual(fazenda.talhoes.count(), 8)
-        self.assertEqual(fazenda.membros.get(usuario=user).funcao, MembroFazenda.Funcao.PROPRIETARIO)
+        self.assertFalse(Fazenda.objects.filter(produtor=user).exists())
+        self.assertEqual(response.json()["redirect_url"], reverse("dashboard:farm_onboarding"))
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
 
-    def test_cadastro_rejeita_funcao_que_nao_seja_proprietario(self):
-        self.payload["funcao"] = "MANAGER"
-        response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("funcao", response.json()["field_errors"])
-        self.assertFalse(User.objects.filter(username="maria@example.com").exists())
-
-    def test_cadastro_pode_ser_concluido_sem_criar_fazenda(self):
+    def test_cadastro_ignora_dados_de_fazenda_herdados_do_formulario_antigo(self):
         payload = {
             "nome": "Maria da Silva",
             "email": "maria-sem-fazenda@example.com",
             "telefone": "(35) 99999-1234",
             "senha": "Senha123",
-            "skip_farm": True,
+            "nome_fazenda": "Fazenda que não deve ser criada",
+            "funcao": "MANAGER",
         }
         response = self.client.post(
             reverse("dashboard:cadastro_api"),
@@ -60,13 +51,23 @@ class CadastroELoginApiTests(TestCase):
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(username=payload["email"])
         self.assertFalse(Fazenda.objects.filter(produtor=user).exists())
+        self.assertEqual(response.json()["redirect_url"], reverse("dashboard:farm_onboarding"))
         self.assertEqual(int(self.client.session["_auth_user_id"]), user.id)
 
-    def test_cadastro_rejeita_funcao_invalida(self):
-        self.payload["funcao"] = "INVALID"
-        response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("funcao", response.json()["field_errors"])
+    def test_usuario_sem_fazenda_e_redirecionado_ao_onboarding(self):
+        response = self.client.post(
+            reverse("dashboard:cadastro_api"),
+            {
+                "nome": "Maria da Silva",
+                "email": "onboarding@example.com",
+                "telefone": "(35) 99999-1234",
+                "senha": "Senha123",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertContains(self.client.get(response.json()["redirect_url"]), "Entrar na Fazenda")
+        self.assertRedirects(self.client.get(reverse("dashboard:dashboard")), reverse("dashboard:farm_onboarding"))
 
     def test_impede_email_duplicado(self):
         self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
@@ -79,7 +80,7 @@ class CadastroELoginApiTests(TestCase):
         self.client.logout()
         response = self.client.post(reverse("dashboard:login_api"), {"email": self.payload["email"], "password": self.payload["senha"], "remember_me": True}, content_type="application/json")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["redirect_url"], "/dashboard/")
+        self.assertEqual(response.json()["redirect_url"], reverse("dashboard:farm_onboarding"))
 
 
 class PersistenciaSistemaTests(TestCase):
@@ -462,6 +463,19 @@ class MembershipTeamAndNotificationTests(TestCase):
         )
         self.assertEqual(denied.status_code, 403)
 
+    def test_login_de_usuario_vinculado_abre_dashboard_sem_criar_fazenda(self):
+        self.owner.set_password("Senha123")
+        self.owner.save(update_fields=["password"])
+        self.client.logout()
+        response = self.client.post(
+            reverse("dashboard:login_api"),
+            {"email": self.owner.email, "password": "Senha123", "remember_me": True},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["redirect_url"], reverse("dashboard:dashboard"))
+        self.assertEqual(Fazenda.objects.filter(produtor=self.owner).count(), 1)
+
     def test_proprietario_cria_multiplas_fazendas_com_codigo_e_talhoes(self):
         payload = {
             "name": "Fazenda Nova",
@@ -482,13 +496,45 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(response.status_code, 201)
         farm = Fazenda.objects.get(nome="Fazenda Nova")
         self.assertNotEqual(farm.identificador, self.farm.identificador)
-        self.assertRegex(farm.codigo_acesso, r"^GC-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$")
+        self.assertRegex(farm.codigo_acesso, r"^GCRP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$")
         self.assertEqual(
             MembroFazenda.objects.get(fazenda=farm, usuario=self.owner).funcao,
             MembroFazenda.Funcao.PROPRIETARIO,
         )
         self.assertEqual(farm.talhoes.count(), 2)
         self.assertEqual(self.client.get(reverse("dashboard:system_state_api")).json()["farm"]["id"], farm.id)
+
+    def test_novo_usuario_pode_criar_fazenda_depois_do_cadastro(self):
+        response = self.client.post(
+            reverse("dashboard:cadastro_api"),
+            {
+                "nome": "Novo Proprietário",
+                "email": "new-owner@example.com",
+                "telefone": "(35) 99999-1234",
+                "senha": "Senha123",
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        user = User.objects.get(email="new-owner@example.com")
+        self.assertFalse(Fazenda.objects.filter(produtor=user).exists())
+        create_response = self.client.post(
+            reverse("dashboard:farm_create_api"),
+            {
+                "name": "Fazenda Pós-Cadastro",
+                "cep": "37000002",
+                "state": "MG",
+                "city": "Varginha",
+                "district": "Zona Rural",
+                "area": "18.5",
+                "plot_count": 2,
+            },
+            content_type="application/json",
+        )
+        self.assertEqual(create_response.status_code, 201, create_response.content.decode())
+        farm = Fazenda.objects.get(nome="Fazenda Pós-Cadastro")
+        self.assertEqual(farm.membros.get(usuario=user).funcao, MembroFazenda.Funcao.PROPRIETARIO)
+        self.assertEqual(farm.talhoes.count(), 2)
 
     def test_codigo_vincula_usuario_a_dados_compartilhados_e_nao_duplica_vinculo(self):
         product = Produto.objects.create(
@@ -511,7 +557,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=member)
-        self.assertEqual(membership.funcao, MembroFazenda.Funcao.PROPRIETARIO)
+        self.assertEqual(membership.funcao, MembroFazenda.Funcao.MEMBRO)
         self.assertEqual(membership.status, MembroFazenda.Status.ATIVO)
         self.assertEqual(
             self.client.get(reverse("dashboard:system_state_api")).json()["talhoes"][0]["name"],
@@ -534,6 +580,24 @@ class MembershipTeamAndNotificationTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(rotate_code.status_code, 200)
+
+    def test_codigo_invalido_mostra_erro_claro(self):
+        member = User.objects.create_user(
+            username="invalid-code@example.com",
+            email="invalid-code@example.com",
+            password="Senha123",
+        )
+        self.client.force_login(member)
+        response = self.client.post(
+            reverse("dashboard:farm_join_api"),
+            {"access_code": "GCRP-XXXX-XXXX"},
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json()["message"],
+            "Código de fazenda inválido. Verifique o código e tente novamente.",
+        )
 
     def test_proprietario_pode_trocar_codigo_e_codigo_antigo_perde_validade(self):
         old_code = self.farm.codigo_acesso
@@ -579,45 +643,29 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(farms.json()["farms"], [])
         self.assertIsNone(state.json()["farm"])
 
-    def test_funcao_e_unica_e_nao_pode_ser_alterada_por_api(self):
-        invalid_invite = self.client.post(
-            reverse("dashboard:farm_invitation_api"),
-            {"email": "non-owner@example.com", "role": "MANAGER"},
-            content_type="application/json",
-        )
-        self.assertEqual(invalid_invite.status_code, 400)
-        self.assertFalse(ConviteFazenda.objects.exists())
-
+    def test_vinculo_membro_tem_funcao_valida_e_nao_pode_ser_alterada_por_api(self):
         member = User.objects.create_user(
             username="role-change@example.com",
             email="role-change@example.com",
-            password="test-password-123",
+            password="Senha123",
         )
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=member,
-            funcao=MembroFazenda.Funcao.PROPRIETARIO,
+            funcao=MembroFazenda.Funcao.MEMBRO,
         )
         response = self.client.patch(
             reverse("dashboard:farm_member_api", args=[member.id]),
-            {"role": "MANAGER"},
+            {"role": "OWNER"},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 405)
         self.assertEqual(
             MembroFazenda.objects.get(fazenda=self.farm, usuario=member).funcao,
-            MembroFazenda.Funcao.PROPRIETARIO,
+            MembroFazenda.Funcao.MEMBRO,
         )
 
-        self.client.force_login(member)
-        denied = self.client.patch(
-            reverse("dashboard:farm_member_api", args=[self.owner.id]),
-            {"role": "EMPLOYEE"},
-            content_type="application/json",
-        )
-        self.assertEqual(denied.status_code, 405)
-
-    def test_todos_os_membros_proprietarios_tem_acesso_completo(self):
+    def test_membros_que_entram_pelo_codigo_tem_acesso_completo(self):
         employee = User.objects.create_user(
             username="employee@example.com",
             email="employee@example.com",
@@ -627,7 +675,7 @@ class MembershipTeamAndNotificationTests(TestCase):
         MembroFazenda.objects.create(
             fazenda=self.farm,
             usuario=employee,
-            funcao=MembroFazenda.Funcao.PROPRIETARIO,
+            funcao=MembroFazenda.Funcao.MEMBRO,
         )
         self.client.force_login(employee)
         planning_response = self.client.post(
@@ -691,45 +739,6 @@ class MembershipTeamAndNotificationTests(TestCase):
         read_response = self.client.post(reverse("dashboard:notification_read_api", args=[notification_id]))
         self.assertEqual(read_response.status_code, 200)
         self.assertEqual(self.client.get(reverse("dashboard:notifications_api")).json()["unread_count"], 0)
-
-    @override_settings(EMAIL_HOST="", DEFAULT_FROM_EMAIL="")
-    def test_convite_nao_finge_envio_quando_smtp_nao_esta_configurado(self):
-        response = self.client.post(
-            reverse("dashboard:farm_invitation_api"),
-            {"email": "novo@example.com", "role": MembroFazenda.Funcao.PROPRIETARIO},
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 503)
-        self.assertFalse(ConviteFazenda.objects.exists())
-
-    @override_settings(
-        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-        EMAIL_HOST="smtp.example.test",
-        DEFAULT_FROM_EMAIL="convites@goldcrop.test",
-    )
-    def test_convite_email_e_aceite_criam_membro_persistido(self):
-        response = self.client.post(
-            reverse("dashboard:farm_invitation_api"),
-            {"email": "novo@example.com", "role": MembroFazenda.Funcao.PROPRIETARIO},
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(len(mail.outbox), 1)
-        token_match = re.search(r"/convites/([\w-]+)/", mail.outbox[0].body)
-        self.assertIsNotNone(token_match)
-        token = token_match.group(1)
-        self.client.logout()
-        accept_url = reverse("dashboard:accept_invitation", args=[token])
-        self.assertEqual(self.client.get(accept_url).status_code, 200)
-        accepted = self.client.post(
-            accept_url,
-            {"name": "Novo Membro", "password": "senhaNova123"},
-        )
-        self.assertEqual(accepted.status_code, 302)
-        new_user = User.objects.get(email="novo@example.com")
-        membership = MembroFazenda.objects.get(fazenda=self.farm, usuario=new_user)
-        self.assertEqual(membership.funcao, MembroFazenda.Funcao.PROPRIETARIO)
-        self.assertEqual(ConviteFazenda.objects.get(email="novo@example.com").status, ConviteFazenda.Status.ACEITO)
 
     def test_proprietario_pode_remover_outro_e_nao_pode_remover_a_si_proprio(self):
         member = User.objects.create_user(username="remove@example.com", email="remove@example.com", password="Senha123")

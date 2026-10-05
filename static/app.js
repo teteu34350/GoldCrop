@@ -8,7 +8,6 @@
 const FARM = { name: '', owner: '', culture: '', area: 0, talhoes: 0, sensors: 0 };
 const TEAM_DATA = [];
 const ACTIVITY_DATA = [];
-const INVITATIONS_DATA = [];
 const TALHOES_DATA = [];
 const HISTORICO_DATA = [];
 const CAL_DATA = {};
@@ -27,7 +26,6 @@ async function loadFarmTeamData() {
   if (!response.ok) throw new Error(`Team request failed: ${response.status}`);
   const data = await response.json();
   TEAM_DATA.splice(0, TEAM_DATA.length, ...(data.members || []));
-  INVITATIONS_DATA.splice(0, INVITATIONS_DATA.length, ...(data.invitations || []));
   FARM.accessCode = data.access_code || '';
 }
 
@@ -1754,12 +1752,6 @@ function renderFazenda() {
       <div class="team-member-main"><strong>${escapeHtml(person.name)}</strong><span>${escapeHtml(person.role_label)} · ${escapeHtml(person.status_label || 'Ativo')}</span><small>${escapeHtml(person.email)}</small></div>
       ${FARM.permissions?.team && person.id !== USER_DATA.id ? `<button type="button" class="btn-ghost-sm" onclick="removeFarmMember(${Number(person.id)})">Remover</button>` : ''}
     </article>`).join('');
-  const invitations = INVITATIONS_DATA.map(invitation => `
-    <article class="team-member-card pending-invitation">
-      <div class="team-avatar">${escapeHtml(invitation.email.slice(0, 1).toUpperCase())}</div>
-      <div class="team-member-main"><strong>${escapeHtml(invitation.email)}</strong><span>Convite pendente · ${escapeHtml(invitation.role_label)}</span><small>Expira em ${new Date(invitation.expires_at).toLocaleDateString('pt-BR')}</small></div>
-      ${FARM.permissions?.team ? `<button type="button" class="btn-ghost-sm" onclick="revokeInvitation(${Number(invitation.id)})">Revogar</button>` : ''}
-    </article>`).join('');
   const activities = activityData.length ? activityData.slice(0, 8).map(item => `
     <div class="farm-activity"><div class="activity-avatar">${escapeHtml(initialsFromName(item.actor || ''))}</div>
       <div><strong>${escapeHtml(item.actor || 'GoldCrop')}</strong> · ${escapeHtml(item.title)}<b>${escapeHtml(item.message)}</b>
@@ -1770,24 +1762,15 @@ function renderFazenda() {
     <header class="farm-hero">
       <div class="farm-hero-mark">✦</div><div class="farm-hero-copy"><span>Dados compartilhados</span><h1>${escapeHtml(FARM.name)}</h1><p>${escapeHtml(location)} · ${escapeHtml(FARM.culture || 'Cultivo não informado')}</p></div>
       <div class="farm-hero-stats"><div><b>${FARM.area || '—'}</b><span>hectares</span></div><div><b>${FARM.talhoes}</b><span>talhões</span></div><div><b>${sensors}</b><span>sensores ativos</span></div><div><b>${teamData.length}</b><span>pessoas</span></div></div>
-      ${FARM.permissions?.team ? '<button class="btn-primary" onclick="openPessoa()">+ Convidar pessoa</button>' : ''}
     </header>
-    <div class="farm-shared-note"><span>◉</span><div><strong>Equipe com acesso a esta fazenda</strong><p>Talhões e operações são carregados do banco e compartilhados conforme a função de cada membro.</p></div></div>
-    ${FARM.permissions?.team ? `<section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Código de acesso da fazenda</h2><p class="farm-section-sub">Compartilhe com pessoas que precisam acessar esta fazenda.</p></div></div><div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><code id="farmAccessCode">${escapeHtml(FARM.accessCode || '')}</code><button type="button" class="btn-ghost-sm" onclick="copyFarmAccessCode()">Copiar código</button><button type="button" class="btn-ghost-sm" onclick="rotateFarmAccessCode()">Gerar novo código</button></div></section>` : ''}
+    <div class="farm-shared-note"><span>◉</span><div><strong>Equipe com acesso a esta fazenda</strong><p>Talhões e operações são carregados do banco e ficam disponíveis a todos os membros vinculados.</p></div></div>
+    ${FARM.permissions?.team ? `<section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Código da Fazenda</h2><p class="farm-section-sub">Compartilhe este código com outras pessoas para que elas possam entrar nesta fazenda.</p></div></div><div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><code id="farmAccessCode">${escapeHtml(FARM.accessCode || '')}</code><button type="button" class="btn-ghost-sm" onclick="copyFarmAccessCode()">Copiar código</button><button type="button" class="btn-ghost-sm" onclick="rotateFarmAccessCode()">Gerar novo código</button></div></section>` : ''}
     <div class="farm-data-grid"><div><span>Talhões monitorados</span><b>${FARM.talhoes}</b></div><div><span>Sensores ativos</span><b>${sensors}</b></div><div><span>Aplicações planejadas</span><b>${plannedCount}</b></div><div><span>Aplicações realizadas</span><b>${HISTORICO_DATA.filter(h => h.resultClass === 'done').length}</b></div><div class="next-window"><span>Próxima Janela de Ouro · ${escapeHtml(selected?.name || 'Sem talhão')}</span><b>${nextDate} · ${nextTime}</b><small>${nextIea == null ? 'Sem recomendação disponível' : `Recomendação do motor · IEA ${nextIea}%`}</small></div></div>
-    <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">Membros e convites persistidos.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}${invitations}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Eventos operacionais registrados no sistema.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
-    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Acesso da equipe</h2><p class="farm-section-sub">Atualmente, todas as pessoas vinculadas são proprietárias e têm acesso completo para visualizar, planejar, registrar e gerenciar esta fazenda.</p></div></div></section>`;
+    <div class="farm-main-grid"><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Pessoas da Fazenda</h2><p class="farm-section-sub">Pessoas vinculadas pelo código da fazenda.</p></div><span class="team-count">${teamData.length} membro${teamData.length === 1 ? '' : 's'}</span></div><div class="team-list">${teamCards}</div></section><section class="farm-section card"><div class="card-header"><div><h2 class="farm-section-title">Atividades recentes</h2><p class="farm-section-sub">Eventos operacionais registrados no sistema.</p></div></div><div class="activity-timeline">${activities}</div></section></div>
+    <section class="farm-section card permissions-section"><div class="card-header"><div><h2 class="farm-section-title">Acesso da equipe</h2><p class="farm-section-sub">Todas as pessoas vinculadas têm acesso completo para visualizar, planejar, registrar e gerenciar esta fazenda.</p></div></div></section>`;
 }
 
 function initialsFromName(name) { return String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '—'; }
-
-function openPessoa() {
-  document.getElementById('pessoaEmail').value = '';
-  document.getElementById('invitationError').hidden = true;
-  document.getElementById('modalPessoa').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-function closePessoa() { document.getElementById('modalPessoa').style.display = 'none'; document.body.style.overflow = ''; }
 
 function openCreateFarmModal() {
   closeTrocarFazendaModal();
@@ -1828,16 +1811,18 @@ async function createFarm(event) {
   }
 }
 
-async function joinFarmByCode() {
-  const input = document.getElementById('farmJoinCode');
-  const button = document.getElementById('farmJoinButton');
-  const error = document.getElementById('farmJoinError');
+async function joinFarmByCode(event = null, inputId = 'farmJoinCode', errorId = 'farmJoinError', buttonId = 'farmJoinButton') {
+  event?.preventDefault();
+  const input = document.getElementById(inputId);
+  const button = document.getElementById(buttonId);
+  const error = document.getElementById(errorId);
+  if (!input || !button || !error) return;
   button.disabled = true;
   error.hidden = true;
   try {
     const response = await apiRequest('/api/farms/join/', {
       method: 'POST',
-      body: JSON.stringify({ access_code: input.value }),
+      body: JSON.stringify({ access_code: input.value.trim().toUpperCase() }),
     });
     const result = await response.json();
     if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível entrar na fazenda.');
@@ -1872,44 +1857,6 @@ async function rotateFarmAccessCode() {
     showToast('Novo código gerado. O anterior não funciona mais.', 'success');
   } catch (error) {
     showToast(error.message || 'Não foi possível trocar o código.', 'error');
-  }
-}
-
-async function submitPessoa() {
-  const email = document.getElementById('pessoaEmail').value.trim();
-  const errorElement = document.getElementById('invitationError');
-  const button = document.getElementById('sendInvitationButton');
-  if (!email) { errorElement.textContent = 'Informe o e-mail da pessoa.'; errorElement.hidden = false; return; }
-  button.disabled = true;
-  try {
-    const response = await apiRequest('/api/farms/invitations/', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível enviar o convite.');
-    await loadFarmTeamData();
-    closePessoa();
-    renderFazenda();
-    showToast('Convite enviado por e-mail e registrado no sistema.', 'success');
-  } catch (error) {
-    errorElement.textContent = error.message || 'Falha ao enviar o convite.';
-    errorElement.hidden = false;
-  } finally {
-    button.disabled = false;
-  }
-}
-
-async function revokeInvitation(invitationId) {
-  try {
-    const response = await apiRequest(`/api/farms/invitations/${invitationId}/`, { method: 'DELETE', body: '{}' });
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw new Error(result.message || 'Não foi possível revogar o convite.');
-    await loadFarmTeamData();
-    renderFazenda();
-    showToast('Convite revogado.', 'success');
-  } catch (error) {
-    showToast(error.message || 'Não foi possível revogar o convite.', 'error');
   }
 }
 
@@ -2520,6 +2467,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('btnSwitchFarm')?.addEventListener('click', openTrocarFazendaModal);
   document.getElementById('createFarmForm')?.addEventListener('submit', createFarm);
+  document.getElementById('farmOnboardingJoinForm')?.addEventListener('submit', event => {
+    joinFarmByCode(event, 'onboardingFarmCode', 'onboardingFarmJoinError', 'onboardingFarmJoinButton');
+  });
   document.getElementById('btnSupport')?.addEventListener('click', openSuporteModal);
   document.getElementById('btnCadastrarTalhao')?.addEventListener('click', openCadastrarTalhaoModal);
   document.getElementById('cadastroTalhaoForm')?.addEventListener('submit', cadastrarTalhao);
@@ -2603,10 +2553,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('modalPlanejar')?.addEventListener('click', (e) => {
     if (e.target === e.currentTarget) closePlanejar();
-  });
-
-  document.getElementById('modalPessoa')?.addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closePessoa();
   });
 
   document.getElementById('modalTalhao').addEventListener('click', (e) => {

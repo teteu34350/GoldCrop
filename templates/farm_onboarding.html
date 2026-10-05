@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<section class="page active" id="page-farm-onboarding">
+  <div class="page-content">
+    <div class="farm-section card" style="max-width:760px;margin:2rem auto;padding:2rem">
+      <span class="farm-section-sub">Bem-vindo ao GoldCrop</span>
+      <h1 class="farm-section-title" style="margin-top:.5rem">Escolha uma fazenda para continuar</h1>
+      <p class="farm-section-sub">Você ainda não está vinculado a nenhuma fazenda. Crie uma propriedade ou entre em uma fazenda existente usando o código compartilhado pelo responsável.</p>
+
+      <div class="farm-main-grid" style="margin-top:1.5rem">
+        <article class="card" style="padding:1.25rem">
+          <h2 class="farm-section-title">Criar uma nova fazenda</h2>
+          <p class="farm-section-sub">Cadastre a propriedade. Sua conta será vinculada como proprietária.</p>
+          <button type="button" class="btn-primary" onclick="openCreateFarmModal()">Criar uma nova fazenda</button>
+        </article>
+
+        <article class="card" style="padding:1.25rem">
+          <h2 class="farm-section-title">Entrar em uma fazenda existente</h2>
+          <p class="farm-section-sub">Digite o código fornecido por alguém que já pertence à fazenda.</p>
+          <form id="farmOnboardingJoinForm">
+            {% csrf_token %}
+            <div class="form-group">
+              <label class="form-label" for="onboardingFarmCode">Código da Fazenda</label>
+              <input class="form-input" id="onboardingFarmCode" type="text" placeholder="GCRP-XXXX-XXXX" maxlength="14" autocomplete="off" required />
+            </div>
+            <p id="onboardingFarmJoinError" class="form-error-msg" role="alert" hidden></p>
+            <button class="btn-primary" id="onboardingFarmJoinButton" type="submit">Entrar na Fazenda</button>
+          </form>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

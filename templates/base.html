@@ -276,20 +276,6 @@
     </div>
   </div>
 
-  <!-- MODAL: CONVIDAR PESSOA -->
-  <div class="modal-overlay" id="modalPessoa" style="display:none">
-    <div class="modal modal-md">
-      <div class="modal-header"><h2 class="modal-title">Convidar pessoa para a fazenda</h2><button class="modal-close" onclick="closePessoa()">×</button></div>
-      <div class="modal-body">
-        <p>O convite será enviado por e-mail. A pessoa criará uma conta ou entrará na conta correspondente para aceitar.</p>
-        <div class="form-group"><label class="form-label" for="pessoaEmail">E-mail</label><input class="form-input" id="pessoaEmail" type="email" autocomplete="email" required /></div>
-        <p class="form-hint">A pessoa convidada entrará como proprietária e terá acesso completo a esta fazenda.</p>
-        <p id="invitationError" class="form-error-msg" role="alert" hidden></p>
-      </div>
-      <div class="modal-footer"><button class="btn-ghost" type="button" onclick="closePessoa()">Cancelar</button><button class="btn-primary" id="sendInvitationButton" type="button" onclick="submitPessoa()">Enviar convite</button></div>
-    </div>
-  </div>
-
   <!-- MODAL: PLANEJAR APLICAÇÃO -->
   <div class="modal-overlay" id="modalPlanejar" style="display:none">
     <div class="modal modal-md">
@@ -494,7 +480,7 @@
         <div class="form-group" style="margin-top:1.25rem">
           <label class="form-label" for="farmJoinCode">Entrar em uma fazenda com código</label>
           <div style="display:flex;gap:.5rem">
-            <input class="form-input" id="farmJoinCode" type="text" placeholder="GC-XXXXXXXX" maxlength="11" autocomplete="off" />
+            <input class="form-input" id="farmJoinCode" type="text" placeholder="GCRP-XXXX-XXXX" maxlength="14" autocomplete="off" />
             <button class="btn-primary" type="button" id="farmJoinButton" onclick="joinFarmByCode()">Entrar</button>
           </div>
           <p id="farmJoinError" class="form-error-msg" role="alert" hidden></p>
@@ -516,7 +502,7 @@
       </div>
       <form id="createFarmForm">
         <div class="modal-body">
-          <p class="form-hint">A nova fazenda será compartilhada somente com as pessoas que você adicionar.</p>
+          <p class="form-hint">Depois de criada, compartilhe o código de acesso com as pessoas que devem entrar nesta fazenda.</p>
           <div class="form-group">
             <label class="form-label" for="newFarmName">Nome da fazenda</label>
             <input class="form-input" id="newFarmName" name="name" maxlength="150" required />
@@ -615,6 +601,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
-  <script src="{% static 'app.js' %}?v=20"></script>
+  <script src="{% static 'app.js' %}?v=21"></script>
 </body>
 </html>

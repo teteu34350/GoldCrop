@@ -17,7 +17,9 @@ FARM_ACCESS_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 
 def generate_farm_access_code():
-    return "GC-" + "".join(secrets.choice(FARM_ACCESS_CODE_ALPHABET) for _ in range(8))
+    first_block = "".join(secrets.choice(FARM_ACCESS_CODE_ALPHABET) for _ in range(4))
+    second_block = "".join(secrets.choice(FARM_ACCESS_CODE_ALPHABET) for _ in range(4))
+    return f"GCRP-{first_block}-{second_block}"
 
 
 class PerfilProdutor(models.Model):
@@ -50,7 +52,7 @@ class Fazenda(models.Model):
 
     produtor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="fazendas")
     identificador = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
-    codigo_acesso = models.CharField(max_length=11, unique=True, default=generate_farm_access_code, editable=False)
+    codigo_acesso = models.CharField(max_length=14, unique=True, default=generate_farm_access_code, editable=False)
     nome = models.CharField(max_length=150)
     cep = models.CharField(max_length=8, validators=[RegexValidator(r"^\d{8}$", "Informe um CEP válido.")])
     estado = models.CharField(max_length=2)
@@ -59,7 +61,7 @@ class Fazenda(models.Model):
     endereco = models.CharField(max_length=255, blank=True)
     area_hectares = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0.01)])
     quantidade_talhoes = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    culturas = models.JSONField(default=list)
+    culturas = models.JSONField(blank=True, default=list)
     tipo_cultivo = models.CharField(max_length=30, choices=TipoCultivo.choices, default=TipoCultivo.CONVENCIONAL)
     irrigacao = models.CharField(max_length=35, choices=Irrigacao.choices, default=Irrigacao.GOTEJAMENTO)
     criada_em = models.DateTimeField(auto_now_add=True)
@@ -81,10 +83,11 @@ class MembroFazenda(models.Model):
 
     class Funcao(models.TextChoices):
         PROPRIETARIO = "OWNER", "Proprietário"
+        MEMBRO = "MEMBER", "Membro"
 
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="membros")
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="membros_fazenda")
-    funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.PROPRIETARIO)
+    funcao = models.CharField(max_length=20, choices=Funcao.choices, default=Funcao.MEMBRO)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ATIVO)
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -93,41 +96,14 @@ class MembroFazenda(models.Model):
         ordering = ["criado_em", "id"]
         constraints = [
             models.UniqueConstraint(fields=["fazenda", "usuario"], name="membro_unico_por_fazenda"),
-            models.CheckConstraint(condition=models.Q(funcao="OWNER"), name="membro_somente_proprietario"),
+            models.CheckConstraint(
+                condition=models.Q(funcao__in=["OWNER", "MEMBER"]),
+                name="membro_funcao_valida",
+            ),
         ]
 
     def __str__(self):
         return f"{self.usuario} — {self.fazenda} ({self.get_funcao_display()})"
-
-
-class ConviteFazenda(models.Model):
-    class Status(models.TextChoices):
-        PENDENTE = "PENDING", "Pendente"
-        ACEITO = "ACCEPTED", "Aceito"
-        REVOGADO = "REVOKED", "Revogado"
-
-    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="convites")
-    email = models.EmailField()
-    funcao = models.CharField(
-        max_length=20,
-        choices=MembroFazenda.Funcao.choices,
-        default=MembroFazenda.Funcao.PROPRIETARIO,
-    )
-    token_digest = models.CharField(max_length=64, unique=True)
-    convidado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="convites_enviados")
-    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDENTE)
-    expira_em = models.DateTimeField()
-    criado_em = models.DateTimeField(auto_now_add=True)
-    aceito_em = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-criado_em"]
-        constraints = [
-            models.CheckConstraint(condition=models.Q(funcao="OWNER"), name="convite_somente_proprietario"),
-        ]
-
-    def __str__(self):
-        return f"{self.email} — {self.fazenda} ({self.get_status_display()})"
 
 
 class NotificacaoFazenda(models.Model):

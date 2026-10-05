@@ -5,12 +5,13 @@ from django.contrib.auth import views as auth_views
 from .views import (
     home, calendario_view, talhoes_view, fazenda_view,
     sensores_view, aplicacoes_view, historico_view, configuracoes_view,
+    farm_onboarding_view,
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
     system_state_api, weather_ingest_api, recommendations_ingest_api,
     application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api,
     profile_update_api, password_reset_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
     farms_api, farm_create_api, farm_join_api, farm_access_code_api,
-    farm_settings_api, farm_team_api, farm_member_api, farm_invitation_api, accept_invitation,
+    farm_settings_api, farm_team_api, farm_member_api,
     notifications_api, notification_read_api,
     estoque_view, estoque_dashboard_api, estoque_produtos_api, estoque_movimentacoes_api,
 )
@@ -19,6 +20,7 @@ app_name = 'dashboard'
 
 urlpatterns = [
     path('dashboard/', home, name='dashboard'),
+    path('fazendas/boas-vindas/', farm_onboarding_view, name='farm_onboarding'),
     path('calendario/', calendario_view, name='calendar'),
     path('talhoes/', talhoes_view, name='talhoes'),
     path('fazenda/', fazenda_view, name='fazenda'),
@@ -51,11 +53,8 @@ urlpatterns = [
     path('api/farms/settings/', farm_settings_api, name='farm_settings_api'),
     path('api/farms/team/', farm_team_api, name='farm_team_api'),
     path('api/farms/team/<int:user_id>/', farm_member_api, name='farm_member_api'),
-    path('api/farms/invitations/', farm_invitation_api, name='farm_invitation_api'),
-    path('api/farms/invitations/<int:invitation_id>/', farm_invitation_api, name='farm_invitation_delete_api'),
     path('api/notifications/', notifications_api, name='notifications_api'),
     path('api/notifications/<int:notification_id>/read/', notification_read_api, name='notification_read_api'),
-    path('convites/<str:token>/', accept_invitation, name='accept_invitation'),
     path('conta/redefinir/concluido/', auth_views.PasswordResetCompleteView.as_view(
         template_name='registration/password_reset_complete.html',
     ), name='password_reset_complete'),

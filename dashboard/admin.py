@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    ColetaMeteorologica, ConviteFazenda, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
+    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
     MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, PerfilProdutor, Produto,
     RecomendacaoJanela, SensorIoT, Talhao,
 )
@@ -25,13 +25,6 @@ class MembroFazendaAdmin(admin.ModelAdmin):
     list_display = ("fazenda", "usuario", "funcao", "criado_em")
     list_filter = ("funcao",)
     search_fields = ("fazenda__nome", "usuario__email")
-
-
-@admin.register(ConviteFazenda)
-class ConviteFazendaAdmin(admin.ModelAdmin):
-    list_display = ("fazenda", "email", "funcao", "status", "expira_em")
-    list_filter = ("status", "funcao")
-    search_fields = ("fazenda__nome", "email")
 
 
 @admin.register(NotificacaoFazenda)

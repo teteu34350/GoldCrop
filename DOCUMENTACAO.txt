@@ -418,25 +418,27 @@ Equipe e acesso:
 - MembroFazenda armazena usuário, fazenda, função e status ativo.
 - Cada fazenda recebe um UUID interno e um código de acesso aleatório e único,
   distinto do identificador interno.
-- O proprietário pode criar várias fazendas e compartilhar o código de acesso;
-  quem entra recebe a função Proprietário, sem duplicar vínculos.
-- O proprietário pode gerar outro código; o anterior deixa de ser válido.
+- O cadastro cria somente a conta e o perfil; não cria fazenda nem talhões.
+- Uma conta sem fazenda é direcionada para `/fazendas/boas-vindas/`, onde pode
+  criar uma fazenda ou entrar em uma existente pelo código.
+- Quem cria a fazenda fica como Proprietário. Quem entra pelo código fica como
+  Membro e recebe o mesmo acesso completo. O código tem formato
+  `GCRP-XXXX-XXXX`.
+- A restrição única `(fazenda, usuário)` impede vínculos duplicados.
+- Pessoas vinculadas podem gerar outro código; o anterior deixa de ser válido.
 - A troca de fazenda ativa persiste na sessão e cada consulta verifica o vínculo
   ativo antes de devolver dados daquela fazenda.
-- O cadastro pode ser concluído sem criar uma fazenda; ela pode ser criada ou
-  acessada posteriormente pelo seletor de fazendas.
-- Qualquer proprietário pode convidar por e-mail, revogar convites pendentes e
-  remover outros membros; não é possível remover o próprio vínculo.
-- ConviteFazenda guarda o convite, função, estado, prazo e somente o hash do
-  token; o link é enviado por SMTP e expira em sete dias.
-- A pessoa convidada pode criar conta ou entrar na conta do e-mail convidado.
+- Usuários autenticados sem vínculo são redirecionados ao onboarding em páginas
+  protegidas; usuários já vinculados seguem diretamente para o dashboard.
+- Não há convites por e-mail; o compartilhamento e a entrada na equipe usam o
+  código da fazenda.
 - NotificacaoFazenda persiste alertas operacionais e a leitura individual.
 
 Funções autorizadas no servidor:
-- Proprietário: acesso completo para visualizar, planejar, registrar, gerenciar
-  talhões, estoque e equipe.
-- Os vínculos e convites existentes são convertidos para Proprietário na
-  migração 0009; restrições no banco impedem a gravação de outra função.
+- Proprietário e Membro: ambos têm acesso completo para visualizar, planejar,
+  registrar e gerenciar os dados da fazenda.
+- A migração 0010 mantém como Proprietário o usuário criador e converte os
+  demais vínculos existentes para Membro; códigos antigos são renovados.
 
 Os dados do perfil são persistidos em:
 - User do Django
@@ -453,7 +455,6 @@ O backend Django persiste:
 - perfis
 - fazendas
 - membros e funções por fazenda
-- convites de equipe
 - notificações operacionais
 - talhões
 - aplicações
@@ -469,7 +470,7 @@ Os endpoints principais são:
 - /api/talhoes/
 - /api/profile/
 - /api/farms/ e /api/farms/settings/
-- /api/farms/team/ e /api/farms/invitations/
+- /api/farms/team/, /api/farms/create/ e /api/farms/join/
 - /api/notifications/
 - /api/auth/password-reset/
 
@@ -506,15 +507,16 @@ fallback. Se o servidor falhar, a interface mostra estado vazio/erro em vez de
 substituir a resposta por registros inventados. Ele já possui:
 - autenticação real em Django
 - páginas protegidas
-- cadastro de usuário e fazenda
+- cadastro de usuário separado da criação/entrada em fazendas
+- onboarding para criar uma fazenda ou entrar pelo código
 - cadastro e manutenção de talhões
 - visualização de mapa georreferenciado
 - calendário com recomendações
 - painel dashboard
 - painel de aplicações e histórico
 - controle de perfil e dados da fazenda
-- seleção de fazendas vinculadas à conta e permissões por membro
-- convites de equipe e notificações persistidos
+- seleção de fazendas vinculadas à conta e acesso completo por membro
+- código compartilhável de fazenda e notificações persistidas
 - recuperação de senha com token Django e envio por e-mail
 
 Ainda há pontos a evoluir, como:
@@ -540,7 +542,7 @@ python manage.py test
 Criar superusuário:
 python manage.py createsuperuser
 
-Configurar convites e recuperação de senha por SMTP:
+Configurar recuperação de senha por SMTP:
 - EMAIL_HOST
 - EMAIL_PORT (padrão 587)
 - EMAIL_HOST_USER
@@ -549,7 +551,7 @@ Configurar convites e recuperação de senha por SMTP:
 - DEFAULT_FROM_EMAIL
 
 Sem EMAIL_HOST ou DEFAULT_FROM_EMAIL, o backend retorna erro explícito para
-envio de convites e redefinição de senha; não registra sucesso fictício.
+redefinição de senha; não registra sucesso fictício.
 
 Banco de dados em produção (Vercel):
 - SQLite é usado apenas no desenvolvimento local; o filesystem da Vercel não é
