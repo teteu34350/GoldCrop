@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let produtosGlobal = [];
 let talhoesGlobal = [];
+let movimentacoesGlobal = [];
 
 async function carregarEstoque() {
     try {
@@ -42,6 +43,7 @@ async function carregarMovimentacoes() {
         const res = await fetch("/api/estoque/movimentacoes/");
         const data = await res.json();
         if (data.ok) {
+            movimentacoesGlobal = data.movimentacoes;
             renderizarMovimentacoes(data.movimentacoes);
         }
     } catch (e) {
@@ -103,7 +105,6 @@ function renderizarProdutos(lista) {
                 <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--green-600)" onclick="abrirModalEntrada(${p.id}, '${p.nome}', '${p.unidade}')">+ Entrada</button>
                 <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--red-600)" onclick="abrirModalSaida(${p.id}, '${p.nome}', '${p.unidade}', ${p.quantidade_atual})">- Saída</button>
             </div>
-        </div>
         `;
     }).join("");
 }
@@ -351,87 +352,112 @@ function fecharModalRelatorio() {
     document.getElementById("modalRelatorio").style.display = "none";
 }
 
+function escaparHtmlRelatorio(valor) {
+    return String(valor ?? "").replace(/[&<>"']/g, caractere => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[caractere]);
+}
+
 function imprimirRelatorio(tipo) {
     fecharModalRelatorio();
     
     const div = document.createElement("div");
     div.className = "print-area";
-    div.style.background = "white";
-    div.style.padding = "20px";
-    
-    const dataHoje = new Date().toLocaleDateString("pt-BR");
+    const agora = new Date();
+    const geradoEm = agora.toLocaleString("pt-BR");
+    const logo = document.querySelector(".estoque-page")?.dataset.reportLogo || "";
+    const produtos = tipo === "baixo"
+        ? produtosGlobal.filter(p => p.status !== "success")
+        : produtosGlobal;
     let html = `
-        <div style="text-align:center; margin-bottom: 2rem;">
-            <h2>GOLDCROP - RELATÓRIO DE ESTOQUE</h2>
-            <p>Data de geração: ${dataHoje}</p>
-        </div>
+        <header class="report-heading">
+            ${logo ? `<img class="report-logo" src="${escaparHtmlRelatorio(logo)}" alt="GoldCrop">` : ""}
+            <div>
+                <h1>GoldCrop — Relatório de Estoque</h1>
+                <p class="report-generated">Gerado em ${escaparHtmlRelatorio(geradoEm)}</p>
+            </div>
+        </header>
     `;
     
     if (tipo === "atual" || tipo === "baixo") {
         html += `
-            <h3>Produtos</h3>
-            <table style="width:100%; border-collapse:collapse; margin-top:1rem;">
-                <tr style="border-bottom:1px solid #000; text-align:left;">
-                    <th style="padding:8px">Produto</th>
-                    <th style="padding:8px">Categoria</th>
-                    <th style="padding:8px; text-align:right;">Qtd</th>
-                    <th style="padding:8px">Und</th>
-                    <th style="padding:8px">Status</th>
-                </tr>
+            <h2>${tipo === "baixo" ? "Produtos com estoque baixo ou zerado" : "Estoque atual"}</h2>
+            ${produtos.length ? `
+            <table class="report-table">
+                <thead><tr>
+                    <th>Produto</th><th>Categoria</th><th class="numeric">Quantidade</th>
+                    <th>Unidade</th><th class="numeric">Estoque mínimo</th><th>Status</th>
+                </tr></thead>
+                <tbody>
+                    ${produtos.map(p => {
+                        const status = p.status === "danger" ? "Sem estoque" : p.status === "warning" ? "Estoque baixo" : "Normal";
+                        return `<tr>
+                            <td>${escaparHtmlRelatorio(p.nome)}</td>
+                            <td>${escaparHtmlRelatorio(p.categoria)}</td>
+                            <td class="numeric">${Number(p.quantidade_atual).toLocaleString("pt-BR")}</td>
+                            <td>${escaparHtmlRelatorio(p.unidade)}</td>
+                            <td class="numeric">${Number(p.estoque_minimo).toLocaleString("pt-BR")}</td>
+                            <td>${status}</td>
+                        </tr>`;
+                    }).join("")}
+                </tbody>
+            </table>` : '<p class="report-empty">Nenhum produto corresponde a este relatório.</p>'}
+        </div>
         `;
-        
-        produtosGlobal.forEach(p => {
-            if (tipo === "baixo" && p.status === "success") return;
-            let st = p.status === "danger" ? "Sem Estoque" : (p.status === "warning" ? "Baixo" : "Normal");
-            html += `
-                <tr style="border-bottom:1px solid #ccc;">
-                    <td style="padding:8px">${p.nome}</td>
-                    <td style="padding:8px">${p.categoria}</td>
-                    <td style="padding:8px; text-align:right;">${p.quantidade_atual}</td>
-                    <td style="padding:8px">${p.unidade}</td>
-                    <td style="padding:8px">${st}</td>
-                </tr>
-            `;
-        });
-        html += `</table>`;
     } else if (tipo === "movimentacoes") {
         html += `
-            <h3>Histórico Recente</h3>
-            <table style="width:100%; border-collapse:collapse; margin-top:1rem;">
-                <tr style="border-bottom:1px solid #000; text-align:left;">
-                    <th style="padding:8px">Data</th>
-                    <th style="padding:8px">Produto</th>
-                    <th style="padding:8px">Tipo</th>
-                    <th style="padding:8px; text-align:right;">Qtd</th>
-                    <th style="padding:8px">Motivo</th>
-                    <th style="padding:8px">Talhão</th>
-                </tr>
+            <h2>Histórico recente de movimentações</h2>
+            ${movimentacoesGlobal.length ? `
+            <table class="report-table">
+                <thead><tr>
+                    <th>Data</th><th>Produto</th><th>Tipo</th><th class="numeric">Quantidade</th>
+                    <th>Motivo</th><th>Talhão</th>
+                </tr></thead>
+                <tbody>
+                    ${movimentacoesGlobal.map(m => {
+                        const data = new Date(`${m.data}T12:00:00`).toLocaleDateString("pt-BR");
+                        const sinal = m.tipo === "ENTRADA" ? "+" : "-";
+                        const quantidade = `${sinal}${Number(m.quantidade).toLocaleString("pt-BR")} ${escaparHtmlRelatorio(m.produto_unidade)}`;
+                        return `<tr>
+                            <td>${escaparHtmlRelatorio(data)}</td>
+                            <td>${escaparHtmlRelatorio(m.produto_nome)}</td>
+                            <td>${escaparHtmlRelatorio(m.tipo)}</td>
+                            <td class="numeric">${quantidade}</td>
+                            <td>${escaparHtmlRelatorio(m.motivo)}</td>
+                            <td>${escaparHtmlRelatorio(m.talhao_nome || "-")}</td>
+                        </tr>`;
+                    }).join("")}
+                </tbody>
+            </table>` : '<p class="report-empty">Nenhuma movimentação registrada.</p>'}
         `;
-        
-        const tbody = document.getElementById("listaMovimentacoes");
-        const rows = tbody.querySelectorAll("tr");
-        rows.forEach(r => {
-            if(r.cells.length > 1) {
-                html += `
-                    <tr style="border-bottom:1px solid #ccc;">
-                        <td style="padding:8px">${r.cells[0].innerText}</td>
-                        <td style="padding:8px">${r.cells[1].innerText}</td>
-                        <td style="padding:8px">${r.cells[2].innerText}</td>
-                        <td style="padding:8px; text-align:right;">${r.cells[3].innerText}</td>
-                        <td style="padding:8px">${r.cells[4].innerText}</td>
-                        <td style="padding:8px">${r.cells[5].innerText}</td>
-                    </tr>
-                `;
-            }
-        });
-        html += `</table>`;
     }
     
     div.innerHTML = html;
+    document.body.classList.add("printing-report");
     document.body.appendChild(div);
-    
-    setTimeout(() => {
-        window.print();
-        document.body.removeChild(div);
-    }, 500);
+
+    let cleanedUp = false;
+    const cleanup = () => {
+        cleanedUp = true;
+        document.body.classList.remove("printing-report");
+        div.remove();
+    };
+    window.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(() => {
+        const logoImage = div.querySelector("img");
+        const print = () => {
+            if (!cleanedUp) window.print();
+        };
+        if (logoImage && !logoImage.complete) {
+            logoImage.addEventListener("load", print, { once: true });
+            logoImage.addEventListener("error", print, { once: true });
+        } else {
+            print();
+        }
+    }, 100);
+    window.setTimeout(cleanup, 60000);
 }

@@ -4,7 +4,7 @@
 {% block breadcrumb %}Estoque{% endblock %}
 
 {% block content %}
-<div class="dashboard-container estoque-page" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
+<div class="dashboard-container estoque-page" data-report-logo="{% static 'favicon-goldcrop.jpg' %}" style="padding: 1.5rem; max-width: 1200px; margin: 0 auto;">
   
   <div class="estoque-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
     <div>
@@ -264,7 +264,7 @@
   </div>
 </div>
 
-<script src="{% static 'estoque.js' %}?v=1"></script>
+<script src="{% static 'estoque.js' %}?v=2"></script>
 <style>
   .tab-btn {
     padding: 0.5rem 1rem;
@@ -338,10 +338,35 @@
   }
   
   @media print {
-    body * { visibility: hidden; }
-    .print-area, .print-area * { visibility: visible; }
-    .print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 2rem; }
-    .sidebar, .topbar, .estoque-header, .kpi-grid, .estoque-filters, .produto-actions, .modal-overlay { display: none !important; }
+    body.printing-report > :not(.print-area) { display: none !important; }
+    body.printing-report > .print-area {
+      display: block !important;
+      position: static !important;
+      width: 100% !important;
+      max-width: none !important;
+      padding: 0 !important;
+      color: #17231b !important;
+      background: #fff !important;
+      font: 10pt Arial, sans-serif !important;
+    }
+    .print-area .report-heading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      text-align: left;
+    }
+    .print-area .report-logo { width: 56px; height: 56px; object-fit: contain; object-position: center; }
+    .print-area h1 { margin: 0 0 .3rem; font-size: 18pt; }
+    .print-area .report-generated { margin: 0; color: #4b5563; font-size: 9pt; }
+    .print-area h2 { margin: 1rem 0 .5rem; font-size: 13pt; }
+    .print-area .report-table { width: 100%; border-collapse: collapse; }
+    .print-area .report-table th,
+    .print-area .report-table td { padding: .45rem .5rem; border: 1px solid #cbd5ce; text-align: left; }
+    .print-area .report-table th { color: #fff; background: #1a3d2b !important; print-color-adjust: exact; }
+    .print-area .report-table .numeric { text-align: right; }
+    .print-area .report-empty { padding: 1rem; border: 1px solid #cbd5ce; }
   }
 </style>
 {% endblock %}
