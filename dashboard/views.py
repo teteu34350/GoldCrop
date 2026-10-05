@@ -1430,3 +1430,104 @@ def estoque_movimentacoes_api(request):
             "usuario": m.criado_por.get_full_name() or m.criado_por.username if m.criado_por else ""
         } for m in movimentacoes]
     })
+
+
+@require_GET
+def estoque_dashboard_api(request):
+    from django.db.models import Count, Sum, F
+    
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    if not _has_farm_permission(farm, request.user, "view"):
+        return _error("Acesso negado.", 403)
+
+    # 1. Resumo e Alertas
+    produtos = Produto.objects.filter(fazenda=farm, ativo=True)
+    total_produtos = produtos.count()
+    
+    # Avaliando estoques na memória para facilitar a lógica de status
+    # já que não há muitos produtos, mas pode ser feito no BD
+    alertas = []
+    estoque_baixo = 0
+    sem_estoque = 0
+    
+    for p in produtos:
+        if p.quantidade_atual == 0:
+            sem_estoque += 1
+            alertas.append({
+                "produto_id": p.id,
+                "produto": p.nome,
+                "quantidade": float(p.quantidade_atual),
+                "estoque_minimo": float(p.estoque_minimo),
+                "unidade": p.unidade,
+                "situacao": "danger"
+            })
+        elif p.quantidade_atual <= p.estoque_minimo:
+            estoque_baixo += 1
+            alertas.append({
+                "produto_id": p.id,
+                "produto": p.nome,
+                "quantidade": float(p.quantidade_atual),
+                "estoque_minimo": float(p.estoque_minimo),
+                "unidade": p.unidade,
+                "situacao": "warning"
+            })
+            
+    # 2. Categorias
+    categorias_agrupadas = produtos.values('categoria').annotate(quantidade=Count('id')).order_by('-quantidade')
+    categorias = [{"nome": c['categoria'], "quantidade": c['quantidade']} for c in categorias_agrupadas]
+
+    # 3. Movimentações nos últimos 30 dias
+    hoje = timezone.now().date()
+    trinta_dias_atras = hoje - timedelta(days=30)
+    movimentacoes_30d = MovimentacaoEstoque.objects.filter(
+        produto__fazenda=farm,
+        data__gte=trinta_dias_atras
+    )
+    
+    entradas_agrupadas = movimentacoes_30d.filter(tipo="ENTRADA").values('data').annotate(total=Sum('quantidade')).order_by('data')
+    saidas_agrupadas = movimentacoes_30d.filter(tipo="SAIDA").values('data').annotate(total=Sum('quantidade')).order_by('data')
+    
+    # 4. Consumo por Talhão (somente Saídas com motivo 'Aplicação' e com talhão definido)
+    consumo = MovimentacaoEstoque.objects.filter(
+        produto__fazenda=farm, 
+        tipo="SAIDA", 
+        motivo="Aplicação",
+        talhao__isnull=False
+    ).values('talhao__nome').annotate(total=Sum('quantidade')).order_by('-total')
+    
+    consumo_talhoes = [{"talhao": c['talhao__nome'], "quantidade": float(c['total'])} for c in consumo]
+
+    # 5. Movimentações Recentes (últimas 8)
+    recentes = MovimentacaoEstoque.objects.filter(produto__fazenda=farm).select_related('produto', 'talhao').order_by('-data', '-criado_em')[:8]
+    movimentacoes_recentes = [{
+        "id": m.id,
+        "data": m.data.isoformat(),
+        "produto": m.produto.nome,
+        "tipo": m.tipo,
+        "quantidade": float(m.quantidade),
+        "unidade": m.produto.unidade,
+        "motivo": m.motivo,
+        "talhao": m.talhao.nome if m.talhao else None
+    } for m in recentes]
+
+    return JsonResponse({
+        "ok": True,
+        "resumo": {
+            "total_produtos": total_produtos,
+            "estoque_baixo": estoque_baixo,
+            "sem_estoque": sem_estoque,
+            "movimentacoes_30d": movimentacoes_30d.count()
+        },
+        "categorias": categorias,
+        "alertas": alertas,
+        "movimentacoes_periodo": {
+            "entradas": [{"data": e['data'].isoformat(), "total": float(e['total'])} for e in entradas_agrupadas],
+            "saidas": [{"data": s['data'].isoformat(), "total": float(s['total'])} for s in saidas_agrupadas]
+        },
+        "consumo_talhoes": consumo_talhoes,
+        "movimentacoes_recentes": movimentacoes_recentes
+    })

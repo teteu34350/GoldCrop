@@ -1,0 +1,131 @@
+MODULO DE ESTOQUE - GOLDCROP
+============================
+
+OBJETIVO
+--------
+O modulo de estoque controla os insumos associados a uma fazenda, registra
+entradas e saidas e mostra o saldo atual e o historico recente de movimentacoes.
+Uma saida registrada como aplicacao pode tambem ser vinculada a um talhao e
+aparecer no historico de aplicacoes.
+
+COMO O MODULO ESTA ORGANIZADO
+-----------------------------
+
+1. TELA
+   Arquivo: templates/estoque.html
+   URL: /estoque/
+
+   A pagina contem:
+   - Indicadores: total de produtos, estoque baixo e produtos sem estoque.
+   - Filtros por categoria e campo de busca.
+   - Cartoes de produtos com quantidade, unidade, situacao e botoes de entrada
+     e saida.
+   - Historico recente em tabela, com data, produto, tipo, quantidade, motivo e
+     talhao quando informado.
+   - Formularios em janelas (modais) para cadastrar produto, registrar entrada,
+     registrar saida e escolher relatorio.
+
+   A pagina tambem define os estilos dos cartoes e a folha de estilos usada na
+   impressao dos relatorios.
+
+2. LOGICA DO NAVEGADOR
+   Arquivo: static/estoque.js
+
+   Responsabilidades:
+   - Carregar produtos e movimentacoes pelas APIs.
+   - Atualizar os indicadores e desenhar os cartoes e a tabela.
+   - Filtrar produtos por categoria e texto.
+   - Enviar cadastro de produto e registros de entrada/saida.
+   - Buscar talhoes para associar uma saida do tipo "Aplicacao".
+   - Montar os relatorios para impressao ou salvamento como PDF pelo navegador.
+   - Escapar os valores apresentados no relatorio antes de inserir dados no
+     HTML impresso.
+
+   Relatorios disponiveis:
+   - Estoque atual: lista os produtos cadastrados e seus saldos.
+   - Produtos com estoque baixo ou zerado: filtra os produtos cuja situacao nao
+     e normal.
+   - Historico recente: mostra as movimentacoes carregadas pela API (ate 100).
+   A imagem da GoldCrop usada como favicon tambem e usada no cabecalho do
+   relatorio impresso.
+
+3. MODELOS E DADOS
+   Arquivo: dashboard/models.py
+
+   Produto:
+   - Pertence a uma fazenda.
+   - Guarda nome, categoria, unidade, estoque minimo, local de armazenamento,
+     observacao, quantidade atual e estado ativo/inativo.
+   - Os produtos sao ordenados pelo nome.
+
+   MovimentacaoEstoque:
+   - Pertence a um produto e registra tipo (ENTRADA ou SAIDA), quantidade,
+     motivo, data, fornecedor, valor, observacao e usuario que registrou.
+   - Pode estar associada a um talhao; a associacao e opcional.
+   - As movimentacoes aparecem da mais recente para a mais antiga.
+
+   O produto mantem o saldo atual. Cada entrada aumenta esse saldo; cada saida
+   diminui. O registro da movimentacao conserva os dados da operacao.
+
+4. ROTAS E REGRAS DE ACESSO
+   Arquivo: dashboard/urls.py
+   Implementacao: dashboard/views.py
+
+   Pagina:
+   - GET /estoque/ - abre a tela do estoque.
+
+   Produtos:
+   - GET /api/estoque/produtos/ - lista produtos ativos da fazenda selecionada,
+     incluindo saldo e situacao.
+   - POST /api/estoque/produtos/ - cadastra um produto e, se houver quantidade
+     inicial maior que zero, registra tambem uma movimentacao inicial.
+
+   Movimentacoes:
+   - GET /api/estoque/movimentacoes/ - lista as movimentacoes recentes dos
+     produtos da fazenda selecionada (limite atual: 100).
+   - POST /api/estoque/movimentacoes/ - registra uma entrada ou saida e atualiza
+     o saldo do produto.
+
+   As APIs exigem autenticacao e operam sobre a fazenda ativa do usuario.
+   Consultar exige permissao de visualizacao; cadastrar produto exige permissao
+   de gerenciamento; registrar movimentacoes exige permissao de registro.
+   Uma saida nao e permitida quando a quantidade solicitada supera o saldo.
+
+   Quando uma saida tem motivo "Aplicacao" e um talhao valido, o sistema tambem
+   cria um registro de execucao de aplicacao associado a esse talhao.
+
+5. SITUACAO DO ESTOQUE
+   A API calcula a situacao com base no saldo e no estoque minimo:
+   - "danger": saldo igual a zero.
+   - "warning": saldo maior que zero e menor ou igual ao minimo.
+   - "success": saldo acima do minimo.
+
+   Os indicadores da tela contam produtos e produtos nestas situacoes.
+
+6. IDENTIDADE VISUAL E IMPRESSAO
+   Arquivo: templates/base.html
+   Imagem: static/favicon-goldcrop.jpg
+   Imagem original recebida: favicon-goldcrop.jpg na raiz do projeto
+
+   O favicon e declarado no cabecalho comum do sistema. A tela de estoque
+   informa o caminho da mesma imagem ao JavaScript para que ela apareca nos
+   relatorios impressos.
+
+7. TESTES RELACIONADOS
+   Arquivo: tests/stockReport.test.js
+
+   Verifica a montagem do relatorio de estoque baixo, a inclusao da imagem da
+   GoldCrop e o fluxo de abertura/limpeza da impressao.
+
+   A verificacao de configuracao do Django pode ser executada com:
+   python manage.py check
+
+FLUXO RESUMIDO
+--------------
+Navegador -> tela estoque.html -> logica estoque.js -> rotas em urls.py ->
+funcoes de API em views.py -> modelos Produto e MovimentacaoEstoque ->
+banco de dados.
+
+Depois que a API responde, o JavaScript atualiza os cartoes, indicadores e
+historico. Os relatorios sao montados no navegador a partir dos dados ja
+carregados e enviados para a funcao de impressao do navegador.

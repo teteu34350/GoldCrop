@@ -1,6 +1,8 @@
 document.addEventListener("DOMContentLoaded", () => {
+    carregarDashboard();
     carregarEstoque();
     carregarMovimentacoes();
+    carregarTalhoes();
     
     document.querySelectorAll(".tab-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
@@ -12,15 +14,172 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.getElementById("buscaProduto").addEventListener("input", filtrarProdutos);
     
-    // Configurar datas padrões
     const hoje = new Date().toISOString().split("T")[0];
     document.getElementById("entData").value = hoje;
     document.getElementById("saiData").value = hoje;
 });
 
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.getElementById('tab-' + tabId).style.display = 'block';
+    
+    document.querySelectorAll('.tab-main-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(tabId)) {
+            btn.classList.add('active');
+        }
+    });
+
+    if (tabId === 'dashboard') carregarDashboard();
+    if (tabId === 'produtos') carregarEstoque();
+    if (tabId === 'movimentacoes') carregarMovimentacoes();
+}
+
 let produtosGlobal = [];
 let talhoesGlobal = [];
-let movimentacoesGlobal = [];
+
+async function carregarDashboard() {
+    try {
+        const res = await fetch("/api/estoque/dashboard/");
+        const data = await res.json();
+        if (data.ok) {
+            renderizarDashboard(data);
+        } else {
+            showToast(data.message || "Erro ao carregar dashboard.", "error");
+        }
+    } catch (e) {
+        console.error("Falha de conexão no dashboard.", e);
+    }
+}
+
+function renderizarDashboard(data) {
+    // 1. Resumo
+    document.getElementById("dashTotalProdutos").innerText = data.resumo.total_produtos;
+    document.getElementById("dashEstoqueBaixo").innerText = data.resumo.estoque_baixo;
+    document.getElementById("dashSemEstoque").innerText = data.resumo.sem_estoque;
+    document.getElementById("dashMovimentacoes").innerText = data.resumo.movimentacoes_30d;
+
+    // 2. Alertas
+    const listaAlertas = document.getElementById("listaAlertas");
+    if (data.alertas.length === 0) {
+        listaAlertas.innerHTML = `<div style="text-align:center; color:var(--gray-500); padding: 1rem 0;">Tudo certo!<br><small>Nenhum produto precisa de reposição no momento.</small></div>`;
+    } else {
+        listaAlertas.innerHTML = data.alertas.map(a => `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem;">
+                <div>
+                    <div style="font-weight:600; font-size:0.875rem; color:var(--gray-900);">${a.produto}</div>
+                    <div style="font-size:0.75rem; color:var(--gray-500);">
+                        ${a.quantidade} ${a.unidade} (Mín: ${a.estoque_minimo})
+                    </div>
+                </div>
+                <div>
+                    ${a.situacao === 'danger' ? '<span style="color:var(--red-600); font-size:0.75rem; font-weight:700; margin-right:0.5rem;">SEM ESTOQUE</span>' : ''}
+                    <button class="btn-ghost" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="abrirModalEntrada(${a.produto_id}, '${a.produto}', '${a.unidade}')">Repor</button>
+                </div>
+            </div>
+        `).join("");
+    }
+
+    // 3. Categorias (Gráfico de Barras Horizontal)
+    const maxCat = Math.max(...data.categorias.map(c => c.quantidade), 1);
+    const chartCat = document.getElementById("chartCategorias");
+    if (data.categorias.length === 0) {
+        chartCat.innerHTML = `<div style="color:var(--gray-500); font-size:0.875rem;">Nenhuma categoria cadastrada.</div>`;
+    } else {
+        chartCat.innerHTML = data.categorias.map(c => {
+            const pct = (c.quantidade / maxCat) * 100;
+            return `
+            <div class="bar-row">
+                <div class="bar-label">${c.nome}</div>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: ${pct}%; background: var(--green-500);"></div>
+                </div>
+                <div class="bar-value">${c.quantidade}</div>
+            </div>
+            `;
+        }).join("");
+    }
+
+    // 4. Consumo por Talhão
+    const maxTalhao = Math.max(...data.consumo_talhoes.map(t => t.quantidade), 1);
+    const chartTal = document.getElementById("chartTalhoes");
+    if (data.consumo_talhoes.length === 0) {
+        chartTal.innerHTML = `<div style="color:var(--gray-500); font-size:0.875rem;">Nenhum consumo registrado em talhões.</div>`;
+    } else {
+        chartTal.innerHTML = data.consumo_talhoes.map(t => {
+            const pct = (t.quantidade / maxTalhao) * 100;
+            return `
+            <div class="bar-row">
+                <div class="bar-label">${t.talhao}</div>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: ${pct}%; background: var(--amber-500);"></div>
+                </div>
+                <div class="bar-value">${t.quantidade}</div>
+            </div>
+            `;
+        }).join("");
+    }
+
+    // 5. Movimentações 30d (Gráfico de Barras Vertical Simples)
+    const chartMov = document.getElementById("chartMovimentacoes");
+    const dictEntradas = {};
+    const dictSaidas = {};
+    data.movimentacoes_periodo.entradas.forEach(e => dictEntradas[e.data] = e.total);
+    data.movimentacoes_periodo.saidas.forEach(s => dictSaidas[s.data] = s.total);
+    
+    const dates = [...new Set([...Object.keys(dictEntradas), ...Object.keys(dictSaidas)])].sort();
+    if(dates.length === 0) {
+        chartMov.innerHTML = `<div style="color:var(--gray-500); font-size:0.875rem; width:100%; text-align:center;">Sem movimentações nos últimos 30 dias.</div>`;
+    } else {
+        // Pega no máximo os últimos 15 dias com movimento para não espremer muito
+        const recentDates = dates.slice(-15);
+        let maxVal = 1;
+        recentDates.forEach(d => {
+            if(dictEntradas[d] > maxVal) maxVal = dictEntradas[d];
+            if(dictSaidas[d] > maxVal) maxVal = dictSaidas[d];
+        });
+        
+        chartMov.innerHTML = recentDates.map(d => {
+            const ent = dictEntradas[d] || 0;
+            const sai = dictSaidas[d] || 0;
+            const hEnt = (ent / maxVal) * 100;
+            const hSai = (sai / maxVal) * 100;
+            const dayStr = d.split("-")[2] + "/" + d.split("-")[1];
+            return `
+            <div class="v-bar-col" title="Dia ${dayStr}\nEntrada: ${ent}\nSaída: ${sai}">
+                <div class="v-bar-container">
+                    <div class="v-bar-in" style="height: ${hEnt}%"></div>
+                    <div class="v-bar-out" style="height: ${hSai}%"></div>
+                </div>
+                <div class="v-bar-label">${dayStr}</div>
+            </div>
+            `;
+        }).join("");
+    }
+
+    // 6. Movimentações Recentes Tabela
+    const tbody = document.getElementById("listaRecentesDashboard");
+    if(data.movimentacoes_recentes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 1rem 0; color: var(--gray-500); text-align:center;">Nenhuma movimentação</td></tr>`;
+    } else {
+        tbody.innerHTML = data.movimentacoes_recentes.map(m => {
+            const dataFormatada = m.data.split("-").reverse().slice(0,2).join("/"); // dd/mm
+            const color = m.tipo === "ENTRADA" ? "var(--green-600)" : "var(--red-600)";
+            const sinal = m.tipo === "ENTRADA" ? "↑" : "↓";
+            return `
+            <tr style="border-bottom: 1px solid var(--gray-50);">
+                <td style="padding: 0.75rem 0; color: var(--gray-500); font-size: 0.875rem;">${dataFormatada}</td>
+                <td style="padding: 0.75rem 0; color: var(--gray-900); font-size: 0.875rem; font-weight:500;">
+                    ${m.produto} <br><small style="color:var(--gray-400); font-weight:400;">${m.motivo}</small>
+                </td>
+                <td style="padding: 0.75rem 0; text-align: right; color: ${color}; font-size: 0.875rem; font-weight:600;">
+                    ${sinal} ${m.quantidade} <span style="font-size:0.7rem; font-weight:400;">${m.unidade}</span>
+                </td>
+            </tr>
+            `;
+        }).join("");
+    }
+}
 
 async function carregarEstoque() {
     try {
@@ -28,10 +187,7 @@ async function carregarEstoque() {
         const data = await res.json();
         if (data.ok) {
             produtosGlobal = data.produtos;
-            atualizarKPIs();
             renderizarProdutos(produtosGlobal);
-        } else {
-            showToast(data.message || "Erro ao carregar produtos.", "error");
         }
     } catch (e) {
         showToast("Falha de conexão.", "error");
@@ -43,7 +199,6 @@ async function carregarMovimentacoes() {
         const res = await fetch("/api/estoque/movimentacoes/");
         const data = await res.json();
         if (data.ok) {
-            movimentacoesGlobal = data.movimentacoes;
             renderizarMovimentacoes(data.movimentacoes);
         }
     } catch (e) {
@@ -52,7 +207,6 @@ async function carregarMovimentacoes() {
 }
 
 async function carregarTalhoes() {
-    // Reutilizar o endpoint de talhões para o select de saída
     try {
         const res = await fetch("/api/state/");
         const data = await res.json();
@@ -67,16 +221,10 @@ async function carregarTalhoes() {
     }
 }
 
-function atualizarKPIs() {
-    document.getElementById("kpiTotalProdutos").innerText = produtosGlobal.length;
-    document.getElementById("kpiEstoqueBaixo").innerText = produtosGlobal.filter(p => p.status === "warning").length;
-    document.getElementById("kpiSemEstoque").innerText = produtosGlobal.filter(p => p.status === "danger").length;
-}
-
 function renderizarProdutos(lista) {
     const container = document.getElementById("listaProdutos");
     if (lista.length === 0) {
-        container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--gray-500); background: white; border-radius: 12px; border: 1px solid var(--gray-200);">Nenhum produto encontrado.</div>`;
+        container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--gray-500); background: white; border-radius: 12px; border: 1px solid var(--gray-200);">Você ainda não possui produtos cadastrados.<br><br><button class="btn-primary" onclick="abrirModalNovoProduto()">Cadastrar primeiro produto</button></div>`;
         return;
     }
 
@@ -94,23 +242,23 @@ function renderizarProdutos(lista) {
                 </div>
                 <span class="status-badge status-${p.status}">${statusLabel}</span>
             </div>
-            
             <div class="produto-qtd">
                 ${p.quantidade_atual.toLocaleString("pt-BR")} <span class="produto-unidade">${p.unidade}</span>
             </div>
-            
             ${p.estoque_minimo > 0 ? `<div style="font-size:0.75rem; color:var(--gray-500);">Estoque Mínimo: ${p.estoque_minimo}</div>` : ""}
-            
             <div class="produto-actions">
                 <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--green-600)" onclick="abrirModalEntrada(${p.id}, '${p.nome}', '${p.unidade}')">+ Entrada</button>
                 <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--red-600)" onclick="abrirModalSaida(${p.id}, '${p.nome}', '${p.unidade}', ${p.quantidade_atual})">- Saída</button>
             </div>
+        </div>
         `;
     }).join("");
 }
 
 function filtrarProdutos() {
-    const categoria = document.querySelector(".tab-btn.active").getAttribute("data-categoria");
+    const btn = document.querySelector(".tab-btn.active");
+    if (!btn) return;
+    const categoria = btn.getAttribute("data-categoria");
     const busca = document.getElementById("buscaProduto").value.toLowerCase();
     
     let filtrados = produtosGlobal;
@@ -125,9 +273,9 @@ function filtrarProdutos() {
 }
 
 function renderizarMovimentacoes(lista) {
-    const tbody = document.getElementById("listaMovimentacoes");
+    const tbody = document.getElementById("listaMovimentacoesCompleta");
     if (lista.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding: 2rem; text-align: center; color: var(--gray-500);">Nenhuma movimentação registrada.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="padding: 2rem; text-align: center; color: var(--gray-500);">Não há movimentações registradas.</td></tr>`;
         return;
     }
 
@@ -145,6 +293,7 @@ function renderizarMovimentacoes(lista) {
             <td style="padding: 1rem; text-align: right; font-weight: 600; color: ${color}; font-size: 0.875rem;">${qtdStr}</td>
             <td style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.motivo}</td>
             <td style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.talhao_nome || '-'}</td>
+            <td style="padding: 1rem; color: var(--gray-400); font-size: 0.75rem;">${m.usuario}</td>
         </tr>
         `;
     }).join("");
@@ -207,7 +356,7 @@ async function salvarNovoProduto() {
             showToast("Produto cadastrado com sucesso!");
             fecharModalNovoProduto();
             carregarEstoque();
-            carregarMovimentacoes();
+            carregarDashboard();
         } else {
             showToast(data.message, "error");
         }
@@ -216,11 +365,20 @@ async function salvarNovoProduto() {
     }
 }
 
-function abrirModalEntrada(id, nome, unidade) {
+async function atualizarSelectProdutos(selectId, setVal = null) {
+    if (produtosGlobal.length === 0) {
+        await carregarEstoque();
+    }
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">Selecione um produto...</option>' + 
+        produtosGlobal.map(p => `<option value="${p.id}" data-qtd="${p.quantidade_atual}" data-und="${p.unidade}">${p.nome} (${p.unidade})</option>`).join("");
+    if(setVal) select.value = setVal;
+}
+
+function abrirModalEntrada(id=null, nome=null, unidade=null) {
     document.getElementById("formEntrada").reset();
-    document.getElementById("entProdutoId").value = id;
-    document.getElementById("entProdutoNome").value = `${nome} (${unidade})`;
     document.getElementById("entData").value = new Date().toISOString().split("T")[0];
+    atualizarSelectProdutos("entProdutoId", id);
     document.getElementById("modalEntrada").style.display = "flex";
 }
 
@@ -234,17 +392,17 @@ async function salvarEntrada() {
     const motivo = document.getElementById("entMotivo").value;
     const dataMov = document.getElementById("entData").value;
     
+    if(!produto_id) {
+        showToast("Selecione um produto.", "error");
+        return;
+    }
     if(!quantidade || quantidade <= 0) {
         showToast("Informe uma quantidade válida.", "error");
         return;
     }
 
     const payload = {
-        produto_id,
-        tipo: "ENTRADA",
-        quantidade,
-        motivo,
-        data: dataMov,
+        produto_id, tipo: "ENTRADA", quantidade, motivo, data: dataMov,
         observacao: document.getElementById("entObs").value
     };
 
@@ -260,6 +418,7 @@ async function salvarEntrada() {
             fecharModalEntrada();
             carregarEstoque();
             carregarMovimentacoes();
+            carregarDashboard();
         } else {
             showToast(data.message, "error");
         }
@@ -268,15 +427,26 @@ async function salvarEntrada() {
     }
 }
 
-function abrirModalSaida(id, nome, unidade, maxQtd) {
+function atualizarMaxSaida() {
+    const select = document.getElementById("saiProdutoId");
+    if(select.selectedIndex > 0) {
+        const opt = select.options[select.selectedIndex];
+        const maxQtd = opt.getAttribute("data-qtd");
+        document.getElementById("saiQtdMax").innerText = `Disponível: ${maxQtd}`;
+        document.getElementById("saiQtd").max = maxQtd;
+    } else {
+        document.getElementById("saiQtdMax").innerText = "";
+        document.getElementById("saiQtd").max = "";
+    }
+}
+
+function abrirModalSaida(id=null, nome=null, unidade=null, maxQtd=null) {
     document.getElementById("formSaida").reset();
-    document.getElementById("saiProdutoId").value = id;
-    document.getElementById("saiProdutoNome").value = `${nome} (${unidade})`;
-    document.getElementById("saiQtdMax").innerText = `Disponível: ${maxQtd}`;
-    document.getElementById("saiQtd").max = maxQtd;
     document.getElementById("saiData").value = new Date().toISOString().split("T")[0];
-    carregarTalhoes();
     toggleTalhaoSelect();
+    atualizarSelectProdutos("saiProdutoId", id).then(() => {
+        if(id) atualizarMaxSaida();
+    });
     document.getElementById("modalSaida").style.display = "flex";
 }
 
@@ -302,23 +472,21 @@ async function salvarSaida() {
     const dataMov = document.getElementById("saiData").value;
     const talhao_id = document.getElementById("saiTalhao").value;
     
+    if(!produto_id) {
+        showToast("Selecione um produto.", "error");
+        return;
+    }
     if(!quantidade || quantidade <= 0) {
         showToast("Informe uma quantidade válida.", "error");
         return;
     }
-    
     if(motivo === "Aplicação" && !talhao_id) {
         showToast("Selecione um talhão para a aplicação.", "error");
         return;
     }
 
     const payload = {
-        produto_id,
-        tipo: "SAIDA",
-        quantidade,
-        motivo,
-        data: dataMov,
-        talhao_id,
+        produto_id, tipo: "SAIDA", quantidade, motivo, data: dataMov, talhao_id,
         observacao: document.getElementById("saiObs").value
     };
 
@@ -334,6 +502,7 @@ async function salvarSaida() {
             fecharModalSaida();
             carregarEstoque();
             carregarMovimentacoes();
+            carregarDashboard();
         } else {
             showToast(data.message, "error");
         }
@@ -344,120 +513,85 @@ async function salvarSaida() {
 
 // ================= RELATÓRIO PDF ================= //
 
-function abrirModalRelatorio() {
-    document.getElementById("modalRelatorio").style.display = "flex";
-}
-
-function fecharModalRelatorio() {
-    document.getElementById("modalRelatorio").style.display = "none";
-}
-
-function escaparHtmlRelatorio(valor) {
-    return String(valor ?? "").replace(/[&<>"']/g, caractere => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    })[caractere]);
-}
-
 function imprimirRelatorio(tipo) {
-    fecharModalRelatorio();
-    
     const div = document.createElement("div");
     div.className = "print-area";
-    const agora = new Date();
-    const geradoEm = agora.toLocaleString("pt-BR");
-    const logo = document.querySelector(".estoque-page")?.dataset.reportLogo || "";
-    const produtos = tipo === "baixo"
-        ? produtosGlobal.filter(p => p.status !== "success")
-        : produtosGlobal;
+    div.style.background = "white";
+    div.style.padding = "20px";
+    
+    const dataHoje = new Date().toLocaleDateString("pt-BR");
     let html = `
-        <header class="report-heading">
-            ${logo ? `<img class="report-logo" src="${escaparHtmlRelatorio(logo)}" alt="GoldCrop">` : ""}
-            <div>
-                <h1>GoldCrop — Relatório de Estoque</h1>
-                <p class="report-generated">Gerado em ${escaparHtmlRelatorio(geradoEm)}</p>
-            </div>
-        </header>
+        <div style="text-align:center; margin-bottom: 2rem;">
+            <h2>GOLDCROP - RELATÓRIO DE ESTOQUE</h2>
+            <p>Data de geração: ${dataHoje}</p>
+        </div>
     `;
     
     if (tipo === "atual" || tipo === "baixo") {
         html += `
-            <h2>${tipo === "baixo" ? "Produtos com estoque baixo ou zerado" : "Estoque atual"}</h2>
-            ${produtos.length ? `
-            <table class="report-table">
-                <thead><tr>
-                    <th>Produto</th><th>Categoria</th><th class="numeric">Quantidade</th>
-                    <th>Unidade</th><th class="numeric">Estoque mínimo</th><th>Status</th>
-                </tr></thead>
-                <tbody>
-                    ${produtos.map(p => {
-                        const status = p.status === "danger" ? "Sem estoque" : p.status === "warning" ? "Estoque baixo" : "Normal";
-                        return `<tr>
-                            <td>${escaparHtmlRelatorio(p.nome)}</td>
-                            <td>${escaparHtmlRelatorio(p.categoria)}</td>
-                            <td class="numeric">${Number(p.quantidade_atual).toLocaleString("pt-BR")}</td>
-                            <td>${escaparHtmlRelatorio(p.unidade)}</td>
-                            <td class="numeric">${Number(p.estoque_minimo).toLocaleString("pt-BR")}</td>
-                            <td>${status}</td>
-                        </tr>`;
-                    }).join("")}
-                </tbody>
-            </table>` : '<p class="report-empty">Nenhum produto corresponde a este relatório.</p>'}
-        </div>
+            <h3>Produtos</h3>
+            <table style="width:100%; border-collapse:collapse; margin-top:1rem;">
+                <tr style="border-bottom:1px solid #000; text-align:left;">
+                    <th style="padding:8px">Produto</th>
+                    <th style="padding:8px">Categoria</th>
+                    <th style="padding:8px; text-align:right;">Qtd</th>
+                    <th style="padding:8px">Und</th>
+                    <th style="padding:8px">Status</th>
+                </tr>
         `;
+        
+        produtosGlobal.forEach(p => {
+            if (tipo === "baixo" && p.status === "success") return;
+            let st = p.status === "danger" ? "Sem Estoque" : (p.status === "warning" ? "Baixo" : "Normal");
+            html += `
+                <tr style="border-bottom:1px solid #ccc;">
+                    <td style="padding:8px">${p.nome}</td>
+                    <td style="padding:8px">${p.categoria}</td>
+                    <td style="padding:8px; text-align:right;">${p.quantidade_atual}</td>
+                    <td style="padding:8px">${p.unidade}</td>
+                    <td style="padding:8px">${st}</td>
+                </tr>
+            `;
+        });
+        html += `</table>`;
     } else if (tipo === "movimentacoes") {
         html += `
-            <h2>Histórico recente de movimentações</h2>
-            ${movimentacoesGlobal.length ? `
-            <table class="report-table">
-                <thead><tr>
-                    <th>Data</th><th>Produto</th><th>Tipo</th><th class="numeric">Quantidade</th>
-                    <th>Motivo</th><th>Talhão</th>
-                </tr></thead>
-                <tbody>
-                    ${movimentacoesGlobal.map(m => {
-                        const data = new Date(`${m.data}T12:00:00`).toLocaleDateString("pt-BR");
-                        const sinal = m.tipo === "ENTRADA" ? "+" : "-";
-                        const quantidade = `${sinal}${Number(m.quantidade).toLocaleString("pt-BR")} ${escaparHtmlRelatorio(m.produto_unidade)}`;
-                        return `<tr>
-                            <td>${escaparHtmlRelatorio(data)}</td>
-                            <td>${escaparHtmlRelatorio(m.produto_nome)}</td>
-                            <td>${escaparHtmlRelatorio(m.tipo)}</td>
-                            <td class="numeric">${quantidade}</td>
-                            <td>${escaparHtmlRelatorio(m.motivo)}</td>
-                            <td>${escaparHtmlRelatorio(m.talhao_nome || "-")}</td>
-                        </tr>`;
-                    }).join("")}
-                </tbody>
-            </table>` : '<p class="report-empty">Nenhuma movimentação registrada.</p>'}
+            <h3>Histórico de Movimentações</h3>
+            <table style="width:100%; border-collapse:collapse; margin-top:1rem;">
+                <tr style="border-bottom:1px solid #000; text-align:left;">
+                    <th style="padding:8px">Data</th>
+                    <th style="padding:8px">Produto</th>
+                    <th style="padding:8px">Tipo</th>
+                    <th style="padding:8px; text-align:right;">Qtd</th>
+                    <th style="padding:8px">Motivo</th>
+                    <th style="padding:8px">Talhão</th>
+                </tr>
         `;
+        
+        const tbody = document.getElementById("listaMovimentacoesCompleta");
+        const rows = tbody.querySelectorAll("tr");
+        rows.forEach(r => {
+            if(r.cells.length > 1) {
+                html += `
+                    <tr style="border-bottom:1px solid #ccc;">
+                        <td style="padding:8px">${r.cells[0].innerText}</td>
+                        <td style="padding:8px">${r.cells[1].innerText}</td>
+                        <td style="padding:8px">${r.cells[2].innerText}</td>
+                        <td style="padding:8px; text-align:right;">${r.cells[3].innerText}</td>
+                        <td style="padding:8px">${r.cells[4].innerText}</td>
+                        <td style="padding:8px">${r.cells[5].innerText}</td>
+                    </tr>
+                `;
+            }
+        });
+        html += `</table>`;
     }
     
     div.innerHTML = html;
-    document.body.classList.add("printing-report");
     document.body.appendChild(div);
-
-    let cleanedUp = false;
-    const cleanup = () => {
-        cleanedUp = true;
-        document.body.classList.remove("printing-report");
-        div.remove();
-    };
-    window.addEventListener("afterprint", cleanup, { once: true });
-    window.setTimeout(() => {
-        const logoImage = div.querySelector("img");
-        const print = () => {
-            if (!cleanedUp) window.print();
-        };
-        if (logoImage && !logoImage.complete) {
-            logoImage.addEventListener("load", print, { once: true });
-            logoImage.addEventListener("error", print, { once: true });
-        } else {
-            print();
-        }
-    }, 100);
-    window.setTimeout(cleanup, 60000);
+    
+    setTimeout(() => {
+        window.print();
+        document.body.removeChild(div);
+    }, 500);
 }
