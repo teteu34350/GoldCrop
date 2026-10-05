@@ -551,7 +551,9 @@ Banco de dados em produção (Vercel):
 - Defina SECRET_KEY como variável de ambiente secreta na Vercel. DEBUG fica
   desativado por padrão nesse ambiente.
 - As migrações Django são executadas automaticamente durante cada build da Vercel
-  pela configuração `[tool.vercel.scripts]` em pyproject.toml.
+  pelo `buildCommand` em vercel.json. Essa configuração prevalece sobre o
+  comando definido no painel da Vercel e sobre `[tool.vercel.scripts]` em
+  pyproject.toml.
 - A base PostgreSQL será nova e não receberá automaticamente os dados do arquivo
   SQLite local; exporte/import seus dados separadamente se precisar deles.
 
