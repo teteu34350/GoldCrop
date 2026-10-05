@@ -37,6 +37,15 @@ assert.strictEqual(vm.runInContext('calMonth.getMonth()', context), new Date().g
 const elements = {};
 const maps = [];
 context.document.getElementById = id => elements[id] || null;
+for (const id of ['sidebarAvatar', 'sidebarUserName', 'sidebarUserFarm', 'topbarAvatar', 'topbarUserName',
+  'dropdownAvatar', 'dropdownUserName', 'dropdownUserEmail', 'dropdownUserRole']) {
+  elements[id] = { textContent: '', title: '' };
+}
+vm.runInContext("USER_DATA.name = 'Maria Aparecida da Silva Santos'; updateProfileDOM()", context);
+assert.strictEqual(elements.sidebarUserName.textContent, 'Maria Santos', 'sidebar should display only first and last name');
+assert.strictEqual(elements.topbarUserName.textContent, 'Maria Santos', 'topbar should display only first and last name');
+assert.strictEqual(elements.dropdownUserName.textContent, 'Maria Aparecida da Silva Santos', 'profile dropdown should preserve full name');
+assert.strictEqual(elements.topbarUserName.title, 'Maria Aparecida da Silva Santos', 'full name should remain available as a tooltip');
 const currentMonthClasses = new Set();
 elements.calGrid = {
   innerHTML: '',

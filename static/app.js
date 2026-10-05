@@ -2311,19 +2311,29 @@ async function saveProfileChanges() {
 
 function updateProfileDOM() {
   USER_DATA.initials = initialsFromName(USER_DATA.name);
+  const nameParts = USER_DATA.name.trim().split(/\s+/).filter(Boolean);
+  const profileDisplayName = nameParts.length > 1
+    ? `${nameParts[0]} ${nameParts[nameParts.length - 1]}`
+    : nameParts[0] || 'Usuário';
   // Sidebar elements
   const sidebarAvatar = document.getElementById('sidebarAvatar');
   const sidebarUserName = document.getElementById('sidebarUserName');
   const sidebarUserFarm = document.getElementById('sidebarUserFarm');
   if (sidebarAvatar) sidebarAvatar.textContent = USER_DATA.initials;
-  if (sidebarUserName) sidebarUserName.textContent = USER_DATA.name;
+  if (sidebarUserName) {
+    sidebarUserName.textContent = profileDisplayName;
+    sidebarUserName.title = USER_DATA.name;
+  }
   if (sidebarUserFarm) sidebarUserFarm.textContent = USER_DATA.farm;
 
   // Topbar elements
   const topbarAvatar = document.getElementById('topbarAvatar');
   const topbarUserName = document.getElementById('topbarUserName');
   if (topbarAvatar) topbarAvatar.textContent = USER_DATA.initials;
-  if (topbarUserName) topbarUserName.textContent = USER_DATA.name;
+  if (topbarUserName) {
+    topbarUserName.textContent = profileDisplayName;
+    topbarUserName.title = USER_DATA.name;
+  }
 
   // Dropdown elements
   const dropdownAvatar = document.getElementById('dropdownAvatar');

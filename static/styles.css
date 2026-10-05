@@ -3862,9 +3862,13 @@ body {
 }
 
 .user-name-topbar {
+  max-width: min(32vw, 10rem);
   font-size: .85rem;
   font-weight: 600;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar-chevron {
