@@ -88,6 +88,11 @@ body.sidebar-open {
   }
 }
 
+.estoque-page,
+.estoque-page * {
+  box-sizing: border-box;
+}
+
 .estoque-page {
   box-sizing: border-box;
   width: 100%;
@@ -284,6 +289,12 @@ body.sidebar-open {
     font-size: 1.5rem !important;
   }
 
+  .estoque-page .estoque-header > div:first-child,
+  .estoque-page .estoque-header > div:first-child p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .estoque-page .estoque-header p {
     line-height: 1.45;
   }
@@ -322,9 +333,41 @@ body.sidebar-open {
     justify-content: flex-start;
   }
 
+  .estoque-page .estoque-chart-total {
+    padding: .35rem .55rem;
+    font-size: .72rem;
+  }
+
   .estoque-page .estoque-movement-chart {
     height: 170px;
     gap: .3rem;
+  }
+
+  .estoque-page #listaAlertas {
+    gap: .75rem !important;
+  }
+
+  .estoque-page .estoque-alert-item {
+    align-items: flex-start !important;
+    gap: .65rem;
+  }
+
+  .estoque-page .estoque-alert-info {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .estoque-page .estoque-alert-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .4rem;
+  }
+
+  .estoque-page .estoque-alert-actions .btn-ghost {
+    min-height: 40px;
   }
 
   .estoque-page .estoque-main-tabs {
@@ -387,6 +430,11 @@ body.sidebar-open {
 
   .estoque-page .produto-header {
     gap: .5rem;
+  }
+
+  .estoque-page .produto-header > div {
+    flex: 1;
+    min-width: 0;
   }
 
   .estoque-page .produto-nome {
@@ -603,5 +651,44 @@ body.sidebar-open {
 
   .estoque-modal-overlay .estoque-modal .modal-footer {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .estoque-page .kpi-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: .65rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .estoque-page .kpi-card {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .8rem .9rem !important;
+  }
+
+  .estoque-page .kpi-card > div:first-child {
+    margin-bottom: 0 !important;
+    font-size: .8rem !important;
+  }
+
+  .estoque-page .kpi-card > div:last-child {
+    flex: 0 0 auto;
+    font-size: 1.5rem !important;
+  }
+
+  .estoque-page .estoque-chart-heading h3 {
+    font-size: 1rem !important;
+  }
+
+  .estoque-page .estoque-movement-chart {
+    height: 155px;
+  }
+
+  .estoque-page .estoque-chart-legend {
+    gap: .75rem;
+    font-size: .75rem;
   }
 }

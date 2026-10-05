@@ -65,14 +65,14 @@ function renderizarDashboard(data) {
         listaAlertas.innerHTML = `<div style="text-align:center; color:var(--gray-500); padding: 1rem 0;">Tudo certo!<br><small>Nenhum produto precisa de reposição no momento.</small></div>`;
     } else {
         listaAlertas.innerHTML = data.alertas.map(a => `
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem;">
-                <div>
+            <div class="estoque-alert-item" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-100); padding-bottom:0.5rem;">
+                <div class="estoque-alert-info">
                     <div style="font-weight:600; font-size:0.875rem; color:var(--gray-900);">${a.produto}</div>
                     <div style="font-size:0.75rem; color:var(--gray-500);">
                         ${a.quantidade} ${a.unidade} (Mín: ${a.estoque_minimo})
                     </div>
                 </div>
-                <div>
+                <div class="estoque-alert-actions">
                     ${a.situacao === 'danger' ? '<span style="color:var(--red-600); font-size:0.75rem; font-weight:700; margin-right:0.5rem;">SEM ESTOQUE</span>' : ''}
                     <button class="btn-ghost" style="font-size:0.75rem; padding:0.25rem 0.5rem;" onclick="abrirModalEntrada(${a.produto_id}, '${a.produto}', '${a.unidade}')">Repor</button>
                 </div>
