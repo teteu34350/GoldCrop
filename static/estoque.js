@@ -126,32 +126,43 @@ function renderizarDashboard(data) {
     const dictSaidas = {};
     data.movimentacoes_periodo.entradas.forEach(e => dictEntradas[e.data] = e.total);
     data.movimentacoes_periodo.saidas.forEach(s => dictSaidas[s.data] = s.total);
-    
-    const dates = [...new Set([...Object.keys(dictEntradas), ...Object.keys(dictSaidas)])].sort();
-    if(dates.length === 0) {
-        chartMov.innerHTML = `<div style="color:var(--gray-500); font-size:0.875rem; width:100%; text-align:center;">Sem movimentações nos últimos 30 dias.</div>`;
+    const totalEntradas = Object.values(dictEntradas).reduce((total, quantidade) => total + Number(quantidade || 0), 0);
+    const totalSaidas = Object.values(dictSaidas).reduce((total, quantidade) => total + Number(quantidade || 0), 0);
+    document.getElementById("chartTotalEntradas").innerText = totalEntradas.toLocaleString("pt-BR");
+    document.getElementById("chartTotalSaidas").innerText = totalSaidas.toLocaleString("pt-BR");
+
+    const hoje = new Date();
+    hoje.setHours(12, 0, 0, 0);
+    const ultimos30Dias = Array.from({ length: 30 }, (_, index) => {
+        const dia = new Date(hoje);
+        dia.setDate(hoje.getDate() - 29 + index);
+        return [
+            `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, "0")}-${String(dia.getDate()).padStart(2, "0")}`,
+            dia,
+        ];
+    });
+    const maxVal = Math.max(
+        1,
+        ...ultimos30Dias.map(([data]) => Math.max(Number(dictEntradas[data] || 0), Number(dictSaidas[data] || 0)))
+    );
+
+    if (totalEntradas === 0 && totalSaidas === 0) {
+        chartMov.innerHTML = `<div class="estoque-chart-empty">Sem movimentações nos últimos 30 dias.</div>`;
     } else {
-        // Pega no máximo os últimos 15 dias com movimento para não espremer muito
-        const recentDates = dates.slice(-15);
-        let maxVal = 1;
-        recentDates.forEach(d => {
-            if(dictEntradas[d] > maxVal) maxVal = dictEntradas[d];
-            if(dictSaidas[d] > maxVal) maxVal = dictSaidas[d];
-        });
-        
-        chartMov.innerHTML = recentDates.map(d => {
-            const ent = dictEntradas[d] || 0;
-            const sai = dictSaidas[d] || 0;
-            const hEnt = (ent / maxVal) * 100;
-            const hSai = (sai / maxVal) * 100;
-            const dayStr = d.split("-")[2] + "/" + d.split("-")[1];
+        chartMov.innerHTML = ultimos30Dias.map(([data, dia], index) => {
+            const ent = Number(dictEntradas[data] || 0);
+            const sai = Number(dictSaidas[data] || 0);
+            const hEnt = ent ? Math.max((ent / maxVal) * 100, 4) : 0;
+            const hSai = sai ? Math.max((sai / maxVal) * 100, 4) : 0;
+            const dayStr = `${String(dia.getDate()).padStart(2, "0")}/${String(dia.getMonth() + 1).padStart(2, "0")}`;
+            const label = index % 5 === 0 || index === 29 ? dayStr : "";
             return `
-            <div class="v-bar-col" title="Dia ${dayStr}\nEntrada: ${ent}\nSaída: ${sai}">
+            <div class="v-bar-col" title="${dayStr} · Entradas: ${ent} · Saídas: ${sai}" aria-label="${dayStr}: ${ent} entradas e ${sai} saídas">
                 <div class="v-bar-container">
                     <div class="v-bar-in" style="height: ${hEnt}%"></div>
                     <div class="v-bar-out" style="height: ${hSai}%"></div>
                 </div>
-                <div class="v-bar-label">${dayStr}</div>
+                <div class="v-bar-label">${label}</div>
             </div>
             `;
         }).join("");
@@ -168,11 +179,11 @@ function renderizarDashboard(data) {
             const sinal = m.tipo === "ENTRADA" ? "↑" : "↓";
             return `
             <tr style="border-bottom: 1px solid var(--gray-50);">
-                <td style="padding: 0.75rem 0; color: var(--gray-500); font-size: 0.875rem;">${dataFormatada}</td>
-                <td style="padding: 0.75rem 0; color: var(--gray-900); font-size: 0.875rem; font-weight:500;">
+                <td data-label="Data" style="padding: 0.75rem 0; color: var(--gray-500); font-size: 0.875rem;">${dataFormatada}</td>
+                <td data-label="Produto" style="padding: 0.75rem 0; color: var(--gray-900); font-size: 0.875rem; font-weight:500;">
                     ${m.produto} <br><small style="color:var(--gray-400); font-weight:400;">${m.motivo}</small>
                 </td>
-                <td style="padding: 0.75rem 0; text-align: right; color: ${color}; font-size: 0.875rem; font-weight:600;">
+                <td data-label="Quantidade" style="padding: 0.75rem 0; text-align: right; color: ${color}; font-size: 0.875rem; font-weight:600;">
                     ${sinal} ${m.quantidade} <span style="font-size:0.7rem; font-weight:400;">${m.unidade}</span>
                 </td>
             </tr>
@@ -248,7 +259,7 @@ function renderizarProdutos(lista) {
             ${p.estoque_minimo > 0 ? `<div style="font-size:0.75rem; color:var(--gray-500);">Estoque Mínimo: ${p.estoque_minimo}</div>` : ""}
             <div class="produto-actions">
                 <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--green-600)" onclick="abrirModalEntrada(${p.id}, '${p.nome}', '${p.unidade}')">+ Entrada</button>
-                <button class="btn-ghost" style="flex:1; padding:0.5rem; justify-content:center; color:var(--red-600)" onclick="abrirModalSaida(${p.id}, '${p.nome}', '${p.unidade}', ${p.quantidade_atual})">- Saída</button>
+                <button class="btn-primary estoque-btn-saida" style="flex:1; padding:0.5rem; justify-content:center" onclick="abrirModalSaida(${p.id}, '${p.nome}', '${p.unidade}', ${p.quantidade_atual})">- Saída</button>
             </div>
         </div>
         `;
@@ -287,13 +298,13 @@ function renderizarMovimentacoes(lista) {
         
         return `
         <tr style="border-bottom: 1px solid var(--gray-100);">
-            <td style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${dataFormatada}</td>
-            <td style="padding: 1rem; font-weight: 500; color: var(--gray-900); font-size: 0.875rem;">${m.produto_nome}</td>
-            <td style="padding: 1rem;"><span class="status-badge" style="background:${isEntrada ? 'var(--green-50)' : 'var(--red-50)'}; color:${color};">${m.tipo}</span></td>
-            <td style="padding: 1rem; text-align: right; font-weight: 600; color: ${color}; font-size: 0.875rem;">${qtdStr}</td>
-            <td style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.motivo}</td>
-            <td style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.talhao_nome || '-'}</td>
-            <td style="padding: 1rem; color: var(--gray-400); font-size: 0.75rem;">${m.usuario}</td>
+            <td data-label="Data" style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${dataFormatada}</td>
+            <td data-label="Produto" style="padding: 1rem; font-weight: 500; color: var(--gray-900); font-size: 0.875rem;">${m.produto_nome}</td>
+            <td data-label="Tipo" style="padding: 1rem;"><span class="status-badge" style="background:${isEntrada ? 'var(--green-50)' : 'var(--red-50)'}; color:${color};">${m.tipo}</span></td>
+            <td data-label="Quantidade" style="padding: 1rem; text-align: right; font-weight: 600; color: ${color}; font-size: 0.875rem;">${qtdStr}</td>
+            <td data-label="Motivo" style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.motivo}</td>
+            <td data-label="Talhão" style="padding: 1rem; color: var(--gray-600); font-size: 0.875rem;">${m.talhao_nome || '-'}</td>
+            <td data-label="Usuário" style="padding: 1rem; color: var(--gray-400); font-size: 0.75rem;">${m.usuario}</td>
         </tr>
         `;
     }).join("");

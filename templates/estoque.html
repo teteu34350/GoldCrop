@@ -16,7 +16,7 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Entrada
       </button>
-      <button class="btn-primary" style="background: var(--red-600); border-color: var(--red-600);" onclick="abrirModalSaida()">
+      <button class="btn-primary estoque-btn-saida" onclick="abrirModalSaida()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Saída
       </button>
@@ -75,14 +75,23 @@
     </div>
 
     <!-- MOVIMENTACOES 30D -->
-    <div class="dash-panel" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 1.5rem; margin-bottom: 1.5rem;">
-      <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 1.5rem;">Movimentações (Últimos 30 dias)</h3>
-      <div id="chartMovimentacoes" style="display: flex; align-items: flex-end; gap: 0.5rem; height: 150px; border-bottom: 1px solid var(--gray-200); padding-bottom: 0.5rem;">
+    <div class="dash-panel estoque-chart-panel" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); padding: 1.5rem; margin-bottom: 1.5rem;">
+      <div class="estoque-chart-heading">
+        <div>
+          <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--gray-900); margin-bottom: 0.25rem;">Movimentações (Últimos 30 dias)</h3>
+          <p class="estoque-chart-caption">Quantidade movimentada por dia</p>
+        </div>
+        <div class="estoque-chart-summary" aria-label="Totais de entradas e saídas no período">
+          <span class="estoque-chart-total estoque-chart-total-in"><strong id="chartTotalEntradas">0</strong> entradas</span>
+          <span class="estoque-chart-total estoque-chart-total-out"><strong id="chartTotalSaidas">0</strong> saídas</span>
+        </div>
+      </div>
+      <div id="chartMovimentacoes" class="estoque-movement-chart" role="img" aria-label="Gráfico de entradas e saídas dos últimos 30 dias">
          <!-- preenchido via js -->
       </div>
-      <div style="display: flex; gap: 1.5rem; margin-top: 1rem; font-size: 0.875rem;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 12px; height: 12px; background: var(--green-500); border-radius: 2px;"></div> Entradas</div>
-        <div style="display: flex; align-items: center; gap: 0.5rem;"><div style="width: 12px; height: 12px; background: var(--red-500); border-radius: 2px;"></div> Saídas</div>
+      <div class="estoque-chart-legend">
+        <div><span class="estoque-chart-legend-swatch estoque-chart-legend-in"></span>Entradas</div>
+        <div><span class="estoque-chart-legend-swatch estoque-chart-legend-out"></span>Saídas</div>
       </div>
     </div>
 
@@ -102,7 +111,7 @@
           <button class="btn-text" style="color: var(--green-600); font-weight: 500; font-size: 0.875rem; background: none; border: none; cursor: pointer;" onclick="switchTab('movimentacoes')">Ver todas →</button>
         </div>
         <div class="estoque-recent-table-wrap" style="overflow-x: auto;">
-          <table style="width: 100%; border-collapse: collapse; min-width: 400px;">
+          <table class="estoque-recent-table" style="width: 100%; border-collapse: collapse; min-width: 400px;">
             <thead>
               <tr style="border-bottom: 1px solid var(--gray-100); color: var(--gray-500); font-size: 0.75rem;">
                 <th style="padding: 0.5rem 0; text-align: left; font-weight: 600;">Data</th>
@@ -144,7 +153,7 @@
   <!-- TAB: MOVIMENTACOES -->
   <div id="tab-movimentacoes" class="tab-content" style="display: none;">
     <div class="estoque-movements-table-wrap" role="region" aria-label="Tabela de movimentações de estoque" tabindex="0" style="background: white; border-radius: 12px; border: 1px solid var(--gray-200); overflow-x: auto;">
-      <table style="width: 100%; border-collapse: collapse; min-width: 700px;">
+      <table class="estoque-movements-table" style="width: 100%; border-collapse: collapse; min-width: 700px;">
         <thead>
           <tr style="border-bottom: 1px solid var(--gray-200); background: var(--gray-50);">
             <th style="padding: 1rem; text-align: left; color: var(--gray-500); font-size: 0.75rem; text-transform: uppercase; font-weight: 600;">Data</th>
@@ -348,12 +357,12 @@
     </form>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="fecharModalSaida()">Cancelar</button>
-      <button class="btn-primary" style="background: var(--red-600); border-color: var(--red-600);" onclick="salvarSaida()">Confirmar</button>
+      <button class="btn-primary estoque-btn-saida" onclick="salvarSaida()">Confirmar</button>
     </div>
   </div>
 </div>
 
-<script src="{% static 'estoque.js' %}?v=2"></script>
+<script src="{% static 'estoque.js' %}?v=4"></script>
 <style>
   .tab-main-btn {
     padding: 0.5rem 0;
@@ -418,20 +427,12 @@
   .bar-value { width: 40px; text-align: right; font-weight: 600; }
 
   /* VERTICAL BAR CHART */
-  .v-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 0.25rem; height: 100%; min-width: 20px;}
-  .v-bar-container { width: 100%; height: 100%; display: flex; align-items: flex-end; gap: 2px; }
-  .v-bar-in { background: var(--green-400); width: 50%; border-radius: 2px 2px 0 0; }
-  .v-bar-out { background: var(--red-400); width: 50%; border-radius: 2px 2px 0 0; }
-  .v-bar-label { font-size: 0.65rem; color: var(--gray-500); }
+  .v-bar-col { flex: 0 0 24px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 24px;}
+  .v-bar-container { width: 100%; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 3px; }
+  .v-bar-in { background: var(--green-500); width: 50%; border-radius: 3px 3px 0 0; }
+  .v-bar-out { background: var(--red-500); width: 50%; border-radius: 3px 3px 0 0; }
+  .v-bar-label { height: 18px; font-size: 0.6rem; line-height: 18px; color: var(--gray-500); white-space: nowrap; }
   
-  @media (max-width: 768px) {
-    .dashboard-grid { grid-template-columns: 1fr !important; }
-    .kpi-grid { grid-template-columns: 1fr !important; }
-    .estoque-header { flex-direction: column; align-items: stretch !important; }
-    .estoque-header > div:last-child { width: 100%; display: flex; flex-direction: column; }
-    .estoque-header > div:last-child button { width: 100%; justify-content: center; }
-  }
-
   @media print {
     body * { visibility: hidden; }
     .print-area, .print-area * { visibility: visible; }
