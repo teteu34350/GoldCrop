@@ -1,10 +1,29 @@
 from django.contrib import admin
 
 from .models import (
-    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
+    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
     MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, PerfilProdutor, Produto,
     RecomendacaoJanela, SensorIoT, Talhao,
 )
+
+
+@admin.register(AcessoSistema)
+class AcessoSistemaAdmin(admin.ModelAdmin):
+    list_display = ("usuario", "fazenda", "acessado_em")
+    list_filter = ("fazenda", "acessado_em")
+    search_fields = ("usuario__username", "usuario__email", "fazenda__nome")
+    list_select_related = ("usuario", "fazenda")
+    date_hierarchy = "acessado_em"
+    readonly_fields = ("usuario", "fazenda", "acessado_em")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(PerfilProdutor)

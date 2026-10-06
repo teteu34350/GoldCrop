@@ -88,6 +88,12 @@ Fluxo principal:
 - Django valida credenciais no backend
 - em caso de sucesso, chama login(request, user)
 - a sessão é criada e o usuário é redirecionado para /dashboard/
+- cada login bem-sucedido e cada cadastro que autentica o usuário gera um
+  registro em AcessoSistema com usuário, fazenda ativa (quando houver) e data/hora
+
+Os registros de acesso podem ser consultados no Django Admin. O horário é
+armazenado com fuso horário; se o usuário ainda não tiver uma fazenda, esse campo
+fica vazio. A tabela é criada pela migração dashboard.0011_acessosistema.
 
 Páginas protegidas:
 - /dashboard/

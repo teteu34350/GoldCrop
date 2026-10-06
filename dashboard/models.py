@@ -106,6 +106,33 @@ class MembroFazenda(models.Model):
         return f"{self.usuario} — {self.fazenda} ({self.get_funcao_display()})"
 
 
+class AcessoSistema(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acessos_sistema",
+    )
+    fazenda = models.ForeignKey(
+        Fazenda,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="acessos_sistema",
+    )
+    acessado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-acessado_em", "-id"]
+        indexes = [models.Index(fields=["-acessado_em"])]
+
+    def __str__(self):
+        usuario = self.usuario or "Usuário removido"
+        fazenda = self.fazenda or "Sem fazenda"
+        return f"{usuario} — {fazenda} — {self.acessado_em:%d/%m/%Y %H:%M}"
+
+
 class NotificacaoFazenda(models.Model):
     class Tipo(models.TextChoices):
         RECOMENDACAO = "RECOMMENDATION", "Nova recomendação"

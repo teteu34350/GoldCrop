@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import (
-    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
@@ -106,6 +106,13 @@ def _farm_landing_url(request):
     if farm:
         return reverse("dashboard:dashboard")
     return reverse("dashboard:farm_onboarding")
+
+
+def _record_system_access(request):
+    AcessoSistema.objects.create(
+        usuario=request.user,
+        fazenda=_current_farm(request),
+    )
 
 
 def _current_farm(request):
@@ -1073,7 +1080,9 @@ def login_api(request):
     login(request, user)
     if not data.get("remember_me"):
         request.session.set_expiry(0)
-    return JsonResponse({"ok": True, "redirect_url": _farm_landing_url(request)})
+    redirect_url = _farm_landing_url(request)
+    _record_system_access(request)
+    return JsonResponse({"ok": True, "redirect_url": redirect_url})
 
 
 @require_POST
@@ -1141,6 +1150,7 @@ def cadastro_api(request):
     except IntegrityError:
         return _error("Já existe uma conta com este e-mail.")
     login(request, user)
+    _record_system_access(request)
     return JsonResponse({"ok": True, "redirect_url": reverse("dashboard:farm_onboarding")}, status=201)
 
 

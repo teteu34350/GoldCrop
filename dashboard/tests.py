@@ -7,7 +7,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import (
-    ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     Produto, Talhao,
 )
@@ -81,6 +81,38 @@ class CadastroELoginApiTests(TestCase):
         response = self.client.post(reverse("dashboard:login_api"), {"email": self.payload["email"], "password": self.payload["senha"], "remember_me": True}, content_type="application/json")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["redirect_url"], reverse("dashboard:farm_onboarding"))
+        access = AcessoSistema.objects.filter(
+            usuario__username=self.payload["email"],
+        ).latest("id")
+        self.assertIsNone(access.fazenda)
+        self.assertIsNotNone(access.acessado_em)
+
+    def test_login_registra_usuario_fazenda_e_horario_de_acesso(self):
+        self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
+        user = User.objects.get(username=self.payload["email"])
+        farm = Fazenda.objects.create(
+            produtor=user,
+            nome="Fazenda de Acesso",
+            cep="37000000",
+            estado="MG",
+            cidade="Varginha",
+            bairro="Zona Rural",
+            area_hectares=10,
+            quantidade_talhoes=1,
+            culturas=["Café"],
+        )
+        self.client.logout()
+
+        response = self.client.post(
+            reverse("dashboard:login_api"),
+            {"email": self.payload["email"], "password": self.payload["senha"], "remember_me": True},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        access = AcessoSistema.objects.filter(usuario=user).latest("id")
+        self.assertEqual(access.fazenda, farm)
+        self.assertIsNotNone(access.acessado_em)
 
 
 class PersistenciaSistemaTests(TestCase):
