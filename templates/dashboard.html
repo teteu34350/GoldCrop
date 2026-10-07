@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
+{% load static %}
 
+{% block extra_head %}<link rel="stylesheet" href="{% static 'pecuaria.css' %}?v=2" />{% endblock %}
 {% block content %}
 
 <!-- ===================== PAGE: DASHBOARD ===================== -->
@@ -78,6 +80,21 @@
         </div>
       </div>
     </div>
+
+    <section class="pecuaria-farm-summary" aria-labelledby="farmLivestockHeading">
+      <div>
+        <p class="pecuaria-eyebrow">Resumo da criação</p>
+        <h2 id="farmLivestockHeading">Pecuária</h2>
+      </div>
+      <div class="pecuaria-farm-summary-stats">
+        <div><strong id="farmLivestockCount">—</strong><span>animais</span></div>
+        <div><strong id="farmMilkToday">—</strong><span>litros hoje</span></div>
+        <div><strong id="farmMilkAverage">—</strong><span>L/vaca/dia</span></div>
+        <div><strong id="farmLivestockAlerts">—</strong><span>alertas</span></div>
+      </div>
+      <a href="{% url 'pecuaria:dashboard' %}">Abrir Pecuária <span aria-hidden="true">→</span></a>
+      <p class="pecuaria-farm-summary-error" id="farmLivestockError" hidden>Não foi possível carregar o resumo da pecuária.</p>
+    </section>
 
     <!-- GOLDEN WINDOW SECTION -->
     <div class="golden-window-section">
@@ -250,5 +267,5 @@
 
   </div>
 </section>
-
+<script src="{% static 'pecuaria-dashboard.js' %}?v=1" defer></script>
 {% endblock %}

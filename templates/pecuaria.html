@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'pecuaria.css' %}?v=2" />{% endblock %}
+{% block breadcrumb %}Pecuária{% endblock %}
+
+{% block content %}
+<div class="pecuaria-page" id="pecuariaApp">
+  <header class="pecuaria-heading">
+    <div>
+      <p class="pecuaria-eyebrow">Criação da fazenda</p>
+      <h1>Pecuária</h1>
+      <p class="pecuaria-subtitle">Acompanhe seu rebanho, a produção e os manejos em um só lugar.</p>
+      <div class="pecuaria-farm"><span aria-hidden="true">⌂</span><span id="farmName">Carregando fazenda…</span></div>
+    </div>
+    <button class="btn-primary" type="button" data-action="new-animal">＋ <span>Adicionar animal</span></button>
+  </header>
+
+  <nav class="pecuaria-tabs" aria-label="Seções da pecuária">
+    <button class="pecuaria-tab active" type="button" data-tab="overview">Visão geral</button>
+    <button class="pecuaria-tab" type="button" data-tab="animals">Animais</button>
+    <button class="pecuaria-tab" type="button" data-tab="milk">Produção de leite</button>
+    <button class="pecuaria-tab" type="button" data-tab="management">Manejo</button>
+    <button class="pecuaria-tab" type="button" data-tab="reproduction">Reprodução</button>
+    <button class="pecuaria-tab" type="button" data-tab="feeding">Alimentação</button>
+  </nav>
+
+  <div class="pecuaria-message" id="pecuariaMessage" role="status" hidden></div>
+  <section class="pecuaria-panel active" data-panel="overview">
+    <div class="pecuaria-section-heading">
+      <div><h2>Resumo do rebanho</h2><p>Indicadores da fazenda selecionada</p></div>
+    </div>
+    <div class="pecuaria-stats" id="herdStats" aria-live="polite"><div class="pecuaria-loading">Carregando indicadores…</div></div>
+    <div class="pecuaria-dashboard-grid">
+      <article class="pecuaria-card pecuaria-chart-card">
+        <div class="pecuaria-card-heading">
+          <div><h3>Produção de leite</h3><p id="productionChartRange">Últimos 14 dias</p></div>
+          <div class="pecuaria-chart-controls" aria-label="Intervalo do gráfico">
+            <button type="button" class="active" data-chart="dia">Dia</button>
+            <button type="button" data-chart="semana">Semana</button>
+            <button type="button" data-chart="mes">Mês</button>
+          </div>
+        </div>
+        <div class="pecuaria-chart" id="productionChart" aria-label="Gráfico da produção de leite dos últimos 14 dias"></div>
+        <div class="pecuaria-chart-legend"><span></span> Litros por dia</div>
+      </article>
+      <article class="pecuaria-card">
+        <div class="pecuaria-card-heading"><div><h3>Rebanho por categoria</h3><p>Animais ativos</p></div></div>
+        <div class="pecuaria-category-list" id="categoryList"></div>
+      </article>
+      <article class="pecuaria-card">
+        <div class="pecuaria-card-heading"><div><h3>Alertas importantes</h3><p>Estoque e manejo</p></div></div>
+        <div class="pecuaria-item-list" id="alertList"></div>
+      </article>
+      <article class="pecuaria-card">
+        <div class="pecuaria-card-heading"><div><h3>Próximos eventos</h3><p>Previsões de parto</p></div></div>
+        <div class="pecuaria-item-list" id="upcomingList"></div>
+      </article>
+      <article class="pecuaria-card">
+        <div class="pecuaria-card-heading"><div><h3>Estoque da pecuária</h3><p>Insumos e autonomia estimada</p></div></div>
+        <div class="pecuaria-item-list" id="livestockStockList"></div>
+      </article>
+    </div>
+    <div class="pecuaria-quick-actions">
+      <button type="button" class="btn-ghost" data-action="new-animal">＋ Animal</button>
+      <button type="button" class="btn-ghost" data-action="new-production">＋ Produção</button>
+      <button type="button" class="btn-ghost" data-action="new-management">＋ Manejo</button>
+      <button type="button" class="btn-ghost" data-action="new-reproduction">＋ Reprodução</button>
+      <button type="button" class="btn-ghost" data-action="new-feeding">＋ Alimentação</button>
+    </div>
+  </section>
+
+  <section class="pecuaria-panel" data-panel="animals" hidden>
+    <div class="pecuaria-section-heading">
+      <div><h2>Animais</h2><p>Cadastro, situação e histórico individual</p></div>
+      <button class="btn-primary" type="button" data-action="new-animal">＋ Animal</button>
+    </div>
+    <div class="pecuaria-filters">
+      <label class="pecuaria-search">Buscar animal<input id="animalSearch" type="search" placeholder="Brinco ou nome" autocomplete="off"></label>
+      <label>Categoria<select id="animalCategory"><option value="">Todas</option></select></label>
+      <label>Status<select id="animalStatus"><option value="">Todos</option></select></label>
+      <label>Raça<input id="animalBreed" type="search" placeholder="Todas"></label>
+    </div>
+    <div class="pecuaria-record-list" id="animalList"><div class="pecuaria-loading">Carregando animais…</div></div>
+  </section>
+
+  <section class="pecuaria-panel" data-panel="milk" hidden>
+    <div class="pecuaria-section-heading">
+      <div><h2>Produção de leite</h2><p>Registre ordenhas e acompanhe os totais por período</p></div>
+      <button class="btn-primary" type="button" data-action="new-production">＋ Registrar produção</button>
+    </div>
+    <div class="pecuaria-period-filter">
+      <label>De<input id="milkStart" type="date"></label>
+      <label>Até<input id="milkEnd" type="date"></label>
+      <button class="btn-ghost" id="filterMilk" type="button">Consultar período</button>
+    </div>
+    <div class="pecuaria-period-summary" id="milkSummary"></div>
+    <article class="pecuaria-card pecuaria-period-card">
+      <h3>Produção por animal no período</h3>
+      <div class="pecuaria-category-list" id="milkByAnimal"></div>
+    </article>
+    <div class="pecuaria-record-list" id="productionList"><div class="pecuaria-loading">Carregando produções…</div></div>
+  </section>
+
+  <section class="pecuaria-panel" data-panel="management" hidden>
+    <div class="pecuaria-section-heading">
+      <div><h2>Manejo</h2><p>Vacinas, tratamentos, pesagens e outras ocorrências</p></div>
+      <button class="btn-primary" type="button" data-action="new-management">＋ Registrar manejo</button>
+    </div>
+    <div class="pecuaria-record-list" id="managementList"><div class="pecuaria-loading">Carregando manejos…</div></div>
+  </section>
+
+  <section class="pecuaria-panel" data-panel="reproduction" hidden>
+    <div class="pecuaria-section-heading">
+      <div><h2>Reprodução</h2><p>Acompanhe inseminações, diagnósticos e partos</p></div>
+      <button class="btn-primary" type="button" data-action="new-reproduction">＋ Registrar evento</button>
+    </div>
+    <div class="pecuaria-record-list" id="reproductionList"><div class="pecuaria-loading">Carregando registros…</div></div>
+  </section>
+
+  <section class="pecuaria-panel" data-panel="feeding" hidden>
+    <div class="pecuaria-section-heading">
+      <div><h2>Alimentação</h2><p>O consumo associado a um produto baixa o saldo do estoque automaticamente</p></div>
+      <button class="btn-primary" type="button" data-action="new-feeding">＋ Registrar consumo</button>
+    </div>
+    <div class="pecuaria-record-list" id="feedingList"><div class="pecuaria-loading">Carregando alimentação…</div></div>
+  </section>
+</div>
+
+<div class="pecuaria-modal" id="pecuariaModal" hidden>
+  <div class="pecuaria-modal-backdrop" data-action="close-modal"></div>
+  <section class="pecuaria-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <header><h2 id="modalTitle"></h2><button type="button" class="pecuaria-modal-close" data-action="close-modal" aria-label="Fechar">×</button></header>
+    <div class="pecuaria-modal-content" id="modalContent"></div>
+  </section>
+</div>
+<script src="{% static 'pecuaria.js' %}?v=1" defer></script>
+{% endblock %}

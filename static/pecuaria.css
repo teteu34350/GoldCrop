@@ -1,0 +1,92 @@
+.pecuaria-page,.pecuaria-page *{box-sizing:border-box}
+.pecuaria-page{width:100%;max-width:1260px;min-width:0;margin:0 auto;padding:1.5rem;color:var(--gray-900,#17251d)}
+.pecuaria-heading,.pecuaria-section-heading,.pecuaria-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem}
+.pecuaria-heading{margin-bottom:1.4rem}
+.pecuaria-heading h1{margin:.1rem 0 .3rem;font-family:'Outfit',sans-serif;font-size:1.8rem;line-height:1.2}
+.pecuaria-eyebrow{margin:0;color:var(--green-600,#267348);font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.pecuaria-subtitle,.pecuaria-section-heading p,.pecuaria-card-heading p{margin:.25rem 0 0;color:var(--gray-500,#758078);font-size:.86rem}
+.pecuaria-farm{display:inline-flex;gap:.45rem;align-items:center;margin-top:.75rem;color:var(--green-700,#266643);font-size:.8rem;font-weight:700}
+.pecuaria-tabs{display:flex;gap:.35rem;overflow:auto;margin:0 0 1.25rem;border-bottom:1px solid var(--gray-200,#e4e9e5);scrollbar-width:thin}
+.pecuaria-tab{flex:0 0 auto;padding:.75rem .9rem;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--gray-600,#647169);font:600 .84rem Inter,sans-serif;cursor:pointer}
+.pecuaria-tab.active{border-bottom-color:var(--green-600,#267348);color:var(--green-700,#266643)}
+.pecuaria-panel{min-width:0}
+.pecuaria-section-heading{align-items:center;margin:1.25rem 0}
+.pecuaria-section-heading h2,.pecuaria-card h3{margin:0;font-family:'Outfit',sans-serif;font-size:1.12rem}
+.pecuaria-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;margin-bottom:1rem}
+.pecuaria-stat,.pecuaria-card{min-width:0;border:1px solid var(--gray-200,#e4e9e5);border-radius:14px;background:#fff;box-shadow:0 2px 8px rgba(21,45,31,.04)}
+.pecuaria-stat{padding:1rem}
+.pecuaria-stat span,.pecuaria-stat strong{display:block}
+.pecuaria-stat span{color:var(--gray-500,#758078);font-size:.76rem;font-weight:600}
+.pecuaria-stat strong{margin-top:.4rem;color:var(--green-800,#1a3d2b);font-family:'Outfit',sans-serif;font-size:1.5rem;line-height:1.15;overflow-wrap:anywhere}
+.pecuaria-dashboard-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+.pecuaria-card{padding:1.1rem}
+.pecuaria-card-heading{align-items:flex-start;margin-bottom:1rem}
+.pecuaria-card-heading strong{white-space:nowrap;color:var(--green-700,#266643);font-size:.9rem}
+.pecuaria-chart{width:100%;min-height:190px;overflow:hidden}
+.pecuaria-chart svg{display:block;width:100%;height:auto;overflow:visible}
+.pecuaria-chart-controls{display:flex;flex:0 0 auto;gap:.15rem;padding:.2rem;border-radius:8px;background:#f1f5f1}
+.pecuaria-chart-controls button{padding:.38rem .5rem;border:0;border-radius:6px;background:transparent;color:var(--gray-600,#647169);font:600 .68rem Inter,sans-serif;cursor:pointer}
+.pecuaria-chart-controls button.active{background:#fff;color:var(--green-700,#266643);box-shadow:0 1px 3px rgba(0,0,0,.09)}
+.pecuaria-chart-legend{display:flex;align-items:center;gap:.4rem;color:var(--gray-500,#758078);font-size:.72rem}
+.pecuaria-chart-legend span{width:9px;height:9px;border-radius:50%;background:#26834f}
+.pecuaria-category-list,.pecuaria-item-list{display:grid;gap:.65rem}
+.pecuaria-category-row,.pecuaria-item,.pecuaria-record-card{display:flex;justify-content:space-between;align-items:center;gap:.7rem;min-width:0;padding:.7rem;border:1px solid var(--gray-100,#eff2ef);border-radius:10px;background:#fbfcfb}
+.pecuaria-category-row span,.pecuaria-item span{min-width:0;overflow-wrap:anywhere;font-size:.82rem}
+.pecuaria-category-row strong{color:var(--green-700,#266643)}
+.pecuaria-item{align-items:flex-start;justify-content:flex-start}
+.pecuaria-item .pecuaria-alert-dot{flex:0 0 9px;width:9px;height:9px;margin-top:.3rem;border-radius:50%;background:#d69b22}
+.pecuaria-item .pecuaria-alert-dot.danger{background:#c84b45}
+.pecuaria-empty,.pecuaria-loading{padding:1rem;color:var(--gray-500,#758078);font-size:.83rem;text-align:center}
+.pecuaria-quick-actions{display:flex;flex-wrap:wrap;gap:.55rem;margin:1rem 0}
+.pecuaria-filters{display:grid;grid-template-columns:minmax(180px,2fr) repeat(3,minmax(130px,1fr));gap:.7rem;margin:1rem 0}
+.pecuaria-filters label,.pecuaria-form label{display:grid;gap:.35rem;color:var(--gray-600,#647169);font-size:.75rem;font-weight:700}
+.pecuaria-page input,.pecuaria-page select,.pecuaria-modal input,.pecuaria-modal select,.pecuaria-modal textarea{width:100%;min-width:0;min-height:42px;padding:.65rem .7rem;border:1px solid var(--gray-300,#d4ddd6);border-radius:8px;background:#fff;color:var(--gray-900,#17251d);font:400 .86rem Inter,sans-serif}
+.pecuaria-modal textarea{min-height:82px;resize:vertical}
+.pecuaria-record-list{display:grid;gap:.65rem}
+.pecuaria-record-card{align-items:flex-start}
+.pecuaria-record-main{min-width:0;flex:1}
+.pecuaria-record-main strong,.pecuaria-record-main span,.pecuaria-record-main small{display:block;overflow-wrap:anywhere}
+.pecuaria-record-main strong{color:var(--gray-900,#17251d);font-size:.88rem}
+.pecuaria-record-main span{margin-top:.2rem;color:var(--gray-600,#647169);font-size:.79rem}
+.pecuaria-record-main small{margin-top:.25rem;color:var(--gray-500,#758078);font-size:.72rem}
+.pecuaria-record-actions{display:flex;flex:0 0 auto;gap:.4rem}
+.pecuaria-record-actions button,.pecuaria-record-actions a,.pecuaria-text-button{border:0;background:transparent;color:var(--green-700,#266643);font:700 .78rem Inter,sans-serif;cursor:pointer;text-decoration:none}
+.pecuaria-period-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.7rem;margin-bottom:1rem}
+.pecuaria-period-summary .pecuaria-stat{padding:.8rem}
+.pecuaria-period-summary .pecuaria-stat strong{font-size:1.15rem}
+.pecuaria-period-filter{display:flex;align-items:end;gap:.65rem;margin:1rem 0}
+.pecuaria-period-filter label{display:grid;gap:.35rem;color:var(--gray-600,#647169);font-size:.75rem;font-weight:700}
+.pecuaria-period-filter input{min-height:42px;padding:.6rem;border:1px solid var(--gray-300,#d4ddd6);border-radius:8px}
+.pecuaria-period-card{margin-bottom:1rem}
+.pecuaria-modal[hidden]{display:none}
+.pecuaria-modal{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:1rem}
+.pecuaria-modal-backdrop{position:absolute;inset:0;background:rgba(14,25,18,.56)}
+.pecuaria-modal-dialog{position:relative;width:min(100%,650px);max-height:min(92vh,850px);overflow:auto;border-radius:16px;background:#fff;box-shadow:0 18px 55px rgba(0,0,0,.2)}
+.pecuaria-modal-dialog>header{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.15rem;border-bottom:1px solid var(--gray-200,#e4e9e5);background:#fff}
+.pecuaria-modal-dialog>header h2{margin:0;font:700 1.1rem Outfit,sans-serif}
+.pecuaria-modal-close{width:38px;height:38px;border:0;border-radius:8px;background:var(--gray-100,#eff2ef);font-size:1.5rem;cursor:pointer}
+.pecuaria-modal-content{padding:1.1rem}
+.pecuaria-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}
+.pecuaria-form .full{grid-column:1/-1}
+.pecuaria-form-actions{display:flex;justify-content:flex-end;gap:.6rem;margin-top:.2rem}
+.pecuaria-form-error{grid-column:1/-1;padding:.7rem;border-radius:8px;background:#fff1ef;color:#a43b35;font-size:.8rem}
+.pecuaria-timeline{display:grid;gap:.65rem;margin-top:1rem}
+.pecuaria-timeline article{position:relative;padding:.7rem .8rem .7rem 1rem;border-left:2px solid #acd0b6;background:#f8faf8}
+.pecuaria-timeline strong,.pecuaria-timeline span,.pecuaria-timeline small{display:block}
+.pecuaria-timeline strong{font-size:.83rem}
+.pecuaria-timeline span{margin-top:.2rem;color:var(--gray-600,#647169);font-size:.78rem}
+.pecuaria-timeline small{margin-top:.2rem;color:var(--gray-500,#758078);font-size:.72rem}
+.pecuaria-message{margin:.5rem 0;padding:.8rem 1rem;border-radius:9px;background:#eff8f0;color:#245b38;font-size:.83rem}
+.pecuaria-message.error{background:#fff1ef;color:#a43b35}
+.pecuaria-farm-summary{display:grid;grid-template-columns:minmax(140px,.7fr) minmax(0,2fr) auto;align-items:center;gap:1rem;margin:1.25rem 0;padding:1rem 1.15rem;border:1px solid var(--gray-200,#e4e9e5);border-radius:14px;background:#fff;box-shadow:0 2px 8px rgba(21,45,31,.04)}
+.pecuaria-farm-summary h2{margin:.2rem 0 0;font:700 1.05rem Outfit,sans-serif}
+.pecuaria-farm-summary-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
+.pecuaria-farm-summary-stats div{display:grid;gap:.2rem;min-width:0}
+.pecuaria-farm-summary-stats strong{font:700 1.15rem Outfit,sans-serif;color:var(--green-800,#1a3d2b);overflow-wrap:anywhere}
+.pecuaria-farm-summary-stats span{font-size:.68rem;color:var(--gray-500,#758078)}
+.pecuaria-farm-summary>a{color:var(--green-700,#266643);font-size:.78rem;font-weight:700;text-decoration:none;white-space:nowrap}
+.pecuaria-farm-summary-error{grid-column:1/-1;margin:0;color:#a43b35;font-size:.76rem}
+@media(max-width:900px){.pecuaria-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.pecuaria-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1100px){.pecuaria-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.pecuaria-tab{white-space:normal}}
+@media(max-width:640px){.pecuaria-page{padding:1rem}.pecuaria-heading{align-items:stretch;flex-direction:column}.pecuaria-heading>.btn-primary{width:100%;justify-content:center}.pecuaria-heading h1{font-size:1.55rem}.pecuaria-dashboard-grid{grid-template-columns:minmax(0,1fr)}.pecuaria-section-heading{align-items:stretch;flex-direction:column}.pecuaria-section-heading>.btn-primary{width:100%;justify-content:center}.pecuaria-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.pecuaria-tab{padding:.65rem .35rem;white-space:normal}.pecuaria-filters{grid-template-columns:minmax(0,1fr)}.pecuaria-period-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.pecuaria-period-filter{align-items:stretch;flex-direction:column}.pecuaria-period-filter>*{width:100%}.pecuaria-modal{align-items:end;padding:0}.pecuaria-modal-dialog{width:100%;max-height:94dvh;border-radius:16px 16px 0 0}.pecuaria-form{grid-template-columns:minmax(0,1fr)}.pecuaria-form .full{grid-column:auto}.pecuaria-record-card{flex-wrap:wrap}.pecuaria-record-actions{width:100%;justify-content:flex-end}.pecuaria-quick-actions>*{flex:1 1 calc(50% - .55rem);justify-content:center}.pecuaria-farm-summary{grid-template-columns:minmax(0,1fr) auto}.pecuaria-farm-summary-stats{grid-column:1/-1;grid-row:2;grid-template-columns:repeat(2,minmax(0,1fr));row-gap:.8rem}.pecuaria-farm-summary>a{grid-column:2;grid-row:1}}
+@media(max-width:360px){.pecuaria-stats{gap:.55rem}.pecuaria-stat{padding:.75rem}.pecuaria-stat strong{font-size:1.28rem}.pecuaria-card{padding:.85rem}.pecuaria-tabs{margin-inline:-.2rem}}

@@ -38,6 +38,21 @@
   }
 }
 
+@media (max-width: 400px) {
+  .topbar-right {
+    min-width: 0;
+    gap: .35rem;
+  }
+
+  .user-name-topbar {
+    display: none;
+  }
+
+  .topbar-user-btn {
+    padding: .3rem;
+  }
+}
+
 /* Ensure modal overlays appear above all other elements */
 .modal-overlay, .modal {
   z-index: 2000;

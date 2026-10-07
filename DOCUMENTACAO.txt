@@ -55,6 +55,10 @@ dashboard/
     views.py: controle das páginas, autenticação e endpoints de API.
     urls.py: rotas da aplicação e endpoints do sistema.
 
+pecuaria/
+    Aplicação de pecuária: modelos do rebanho, produção, manejo, reprodução,
+    alimentação, APIs, administração e testes próprios.
+
 templates/
     Estrutura de páginas do sistema:
     - base.html
@@ -66,6 +70,8 @@ templates/
     - aplicacoes.html
     - historico.html
     - configuracoes.html
+    - estoque.html
+    - pecuaria.html
     - login.html
     - cadastro.html
 
@@ -104,6 +110,7 @@ Páginas protegidas:
 - /aplicacoes/
 - /historico/
 - /configuracoes/
+- /pecuaria/
 
 Se não estiver autenticado, o sistema redireciona para /login/?next=... .
 
@@ -249,6 +256,44 @@ Funcionalidades:
 - módulo de IA e fonte de dados meteorológicos
 - painel de status do sensor
 - opções visuais de ajuste do sistema
+
+5.11. Pecuária
+Rota: /pecuaria/
+Arquivos: templates/pecuaria.html, static/pecuaria.js e static/pecuaria.css
+
+O módulo é uma aplicação Django própria, instalada em `pecuaria/`, com dados
+persistidos nas migrações `pecuaria.0001_initial` e `pecuaria.0002_manejo_quantidade_produto`.
+Os registros são vinculados à fazenda ativa e as APIs verificam autenticação,
+vínculo com a fazenda e permissão antes de ler ou alterar dados.
+
+Seções:
+- resumo do rebanho por categoria, produção dos últimos 14 dias, alertas e
+  próximos partos;
+- cadastro, edição, pesquisa, filtros, ficha individual e arquivamento de
+  animais sem apagar seu histórico;
+- ficha acessível em `/pecuaria/animais/<id>/`, com linha do tempo de produção,
+  manejo, reprodução, alimentação, pesagens e mudança de categoria;
+- produção de leite por data, animal/lote e ordenha, com totais por período e
+  produção agrupada por animal;
+- manejo, reprodução e alimentação;
+- estoque existente da fazenda, sem cadastro duplicado de insumos; registrar
+  consumo de um produto em alimentação ou manejo gera saída de estoque com
+  motivo "Consumo na pecuária" na mesma transação que registra o evento;
+- autonomia de estoque estimada usando os consumos dos últimos 30 dias.
+
+APIs do módulo:
+- GET `/pecuaria/api/dashboard/`
+- GET `/pecuaria/animais/<id>/` (ficha com histórico)
+- GET/POST `/pecuaria/api/animais/`
+- GET/PATCH/DELETE `/pecuaria/api/animais/<id>/` (DELETE arquiva)
+- GET/POST `/pecuaria/api/producao/` (filtros `inicio` e `fim`)
+- GET/POST `/pecuaria/api/manejo/`
+- GET/POST `/pecuaria/api/reproducao/`
+- GET/POST `/pecuaria/api/alimentacao/`
+
+Partos estimados são calculados em 283 dias após inseminação ou monta quando a
+data não é informada. Fotos não foram habilitadas: a instalação não possuía
+armazenamento/configuração de mídia nem a dependência de imagem.
 
 
 6. FUNCIONALIDADES DE NEGÓCIO E LÓGICA DO FRONTEND
@@ -524,6 +569,7 @@ substituir a resposta por registros inventados. Ele já possui:
 - seleção de fazendas vinculadas à conta e acesso completo por membro
 - código compartilhável de fazenda e notificações persistidas
 - recuperação de senha com token Django e envio por e-mail
+- módulo de pecuária com dados por fazenda e consumo integrado ao estoque
 
 Ainda há pontos a evoluir, como:
 - integração completa entre todos os módulos operacionais em tempo real
