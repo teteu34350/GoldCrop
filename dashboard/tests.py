@@ -932,6 +932,8 @@ class CalendarioDaFazendaApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Encontre o melhor momento para realizar suas aplicações")
         self.assertContains(response, 'id="calGrid"')
+        self.assertContains(response, 'id="dayPanel" aria-label="Análise da janela selecionada"')
+        self.assertContains(response, 'class="card day-panel gold-window-detail"')
         self.assertNotContains(response, 'id="farmCalendarMonth"')
         self.assertContains(response, 'id="nav-gold-window"')
         self.assertRegex(

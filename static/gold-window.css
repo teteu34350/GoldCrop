@@ -29,6 +29,12 @@
 .gold-window-days, .gold-window-detail { min-width: 0; }
 .gold-window-period-nav { display: flex; gap: .4rem; }
 .gold-window-detail { min-height: 320px; }
+#dayPanel.gold-window-detail {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
 .gold-window-detail .day-panel-empty { min-height: 270px; padding: 2rem 1.2rem; }
 .gold-window-detail .day-panel-empty strong { color: var(--text-primary); font-size: .95rem; }
 .gold-window-detail .day-panel-empty p { max-width: 250px; color: var(--text-secondary); line-height: 1.55; }
