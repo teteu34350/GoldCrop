@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block breadcrumb %}Janela de Ouro{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=1" />
+{% endblock %}
+
+{% block content %}
+<section class="page active" id="page-gold-window">
+  <div class="page-content">
+    <header class="page-header">
+      <div>
+        <p class="calendar-eyebrow">Decisão agrícola · análise inteligente</p>
+        <h1 class="page-title">Janela de Ouro</h1>
+        <p class="page-sub">Encontre o melhor momento para realizar suas aplicações com base nas condições da sua lavoura e na previsão do tempo.</p>
+      </div>
+      <div class="calendar-window-actions">
+        <label class="calendar-reference-select">
+          Talhão
+          <select id="calendarTalhaoSelect" class="form-input" disabled>
+            <option value="">Carregando talhões...</option>
+          </select>
+        </label>
+        <button class="btn-primary" type="button" onclick="openRegistrar()">
+          <span aria-hidden="true">＋</span> Registrar aplicação
+        </button>
+      </div>
+    </header>
+
+    <div class="gold-window-intro card">
+      <div class="gold-window-intro-mark" aria-hidden="true">✦</div>
+      <div>
+        <strong>Encontre o momento certo para agir.</strong>
+        <p>Analise as condições por talhão e compare chuva, temperatura, umidade e vento antes de decidir quando aplicar.</p>
+      </div>
+    </div>
+
+    <div class="calendar-layout gold-window-layout">
+      <section class="card calendar-card gold-window-days" aria-label="Dias analisados para aplicação">
+        <div class="cal-header">
+          <div>
+            <span class="calendar-eyebrow">Condições por dia</span>
+            <h2 class="cal-month" id="calMonthLabel">Carregando previsão...</h2>
+          </div>
+          <div class="gold-window-period-nav">
+            <button class="cal-nav-btn" id="calPrev" type="button" aria-label="Período anterior">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="cal-nav-btn" id="calNext" type="button" aria-label="Próximo período">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cal-legend">
+          <span class="cal-legend-item"><span class="cal-dot green"></span>Favorável</span>
+          <span class="cal-legend-item"><span class="cal-dot yellow"></span>Atenção</span>
+          <span class="cal-legend-item"><span class="cal-dot red"></span>Desfavorável</span>
+          <span class="cal-legend-item"><span class="cal-dot gray"></span>Dados insuficientes</span>
+        </div>
+        <div class="cal-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        </div>
+        <div class="cal-grid" id="calGrid"></div>
+      </section>
+      <aside class="card day-panel gold-window-detail" id="dayPanel" aria-label="Análise da janela selecionada">
+        <div class="day-panel-empty" id="dayPanelEmpty">
+          <span class="gold-window-empty-mark" aria-hidden="true">✦</span>
+          <strong>Descubra sua Janela de Ouro</strong>
+          <p>Selecione um dia para ver a recomendação e as condições previstas para o talhão.</p>
+        </div>
+        <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
+      </aside>
+    </div>
+  </div>
+</section>
+{% endblock %}

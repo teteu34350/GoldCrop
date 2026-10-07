@@ -57,7 +57,12 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
             </span>
             <span class="nav-label">Calendário</span>
-            <span class="nav-badge">3</span>
+          </a>
+          <a href="{% url 'dashboard:gold_window' %}" class="nav-item {% if request.resolver_match.url_name == 'gold_window' %}active{% endif %}" id="nav-gold-window">
+            <span class="nav-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3z"/></svg>
+            </span>
+            <span class="nav-label">Janela de Ouro</span>
           </a>
           <a href="{% url 'dashboard:talhoes' %}" class="nav-item {% if request.resolver_match.url_name == 'talhoes' %}active{% endif %}" id="nav-talhoes">
             <span class="nav-icon">
@@ -608,6 +613,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="{% static 'analysis/GoldCropAnalysisEngine.js' %}?v=1"></script>
-  <script src="{% static 'app.js' %}?v=21"></script>
+  <script src="{% static 'app.js' %}?v=23"></script>
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

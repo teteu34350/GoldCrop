@@ -3,7 +3,7 @@ from django.urls import reverse_lazy
 from django.contrib.auth import views as auth_views
 
 from .views import (
-    home, calendario_view, talhoes_view, fazenda_view,
+    home, calendario_view, janela_ouro_view, talhoes_view, fazenda_view,
     sensores_view, aplicacoes_view, historico_view, configuracoes_view,
     farm_onboarding_view,
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
@@ -14,6 +14,7 @@ from .views import (
     farm_settings_api, farm_team_api, farm_member_api,
     notifications_api, notification_read_api,
     estoque_view, estoque_dashboard_api, estoque_produtos_api, estoque_movimentacoes_api,
+    calendar_events_api, calendar_event_detail_api,
 )
 
 app_name = 'dashboard'
@@ -22,6 +23,7 @@ urlpatterns = [
     path('dashboard/', home, name='dashboard'),
     path('fazendas/boas-vindas/', farm_onboarding_view, name='farm_onboarding'),
     path('calendario/', calendario_view, name='calendar'),
+    path('janela-de-ouro/', janela_ouro_view, name='gold_window'),
     path('talhoes/', talhoes_view, name='talhoes'),
     path('fazenda/', fazenda_view, name='fazenda'),
     path('sensores/', sensores_view, name='sensores'),
@@ -42,6 +44,8 @@ urlpatterns = [
     path('api/planejamentos/', planejamento_create_api, name='planejamento_create_api'),
     path('api/planejamentos/<int:planejamento_id>/exec/', aplicacao_exec_api, name='aplicacao_exec_api'),
     path('api/analytics/', analytics_api, name='analytics_api'),
+    path('api/calendar/events/', calendar_events_api, name='calendar_events_api'),
+    path('api/calendar/events/<int:event_id>/', calendar_event_detail_api, name='calendar_event_detail_api'),
     path('api/talhoes/', talhao_create_api, name='talhao_create_api'),
     path('api/talhoes/<int:talhao_id>/', talhao_update_api, name='talhao_update_api'),
     path('api/talhoes/<int:talhao_id>/delete/', talhao_delete_api, name='talhao_delete_api'),

@@ -1,13 +1,15 @@
 from datetime import date, datetime, time
+from decimal import Decimal
 import re
 
 from django.core import mail
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
-    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    AcessoSistema, ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     Produto, Talhao,
 )
@@ -823,3 +825,236 @@ class MembershipTeamAndNotificationTests(TestCase):
         )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class CalendarioDaFazendaApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="agenda@example.com",
+            email="agenda@example.com",
+            password="Senha123",
+        )
+        self.farm = Fazenda.objects.create(
+            produtor=self.user,
+            nome="Fazenda Agenda",
+            cep="37000000",
+            estado="MG",
+            cidade="Varginha",
+            bairro="Zona Rural",
+            area_hectares=12,
+            quantidade_talhoes=1,
+            culturas=["Café"],
+        )
+        self.plot = Talhao.objects.create(
+            fazenda=self.farm,
+            nome="Talhão 03",
+            area_hectares=2.4,
+            cultura="Café",
+        )
+        self.product = Produto.objects.create(
+            fazenda=self.farm,
+            nome="NPK 20-05-20",
+            categoria="Fertilizante",
+            unidade="kg",
+            quantidade_atual=100,
+        )
+        self.client.force_login(self.user)
+        self.collection = ColetaMeteorologica.objects.create(
+            fazenda=self.farm,
+            talhao=self.plot,
+            coletada_em=timezone.make_aware(datetime(2026, 10, 6, 12, 0)),
+            latitude=Decimal("-20.900000"),
+            longitude=Decimal("-46.100000"),
+        )
+
+    def event_payload(self, **overrides):
+        payload = {
+            "title": "Aplicação de NPK",
+            "description": "Adubação do talhão",
+            "date": "2026-10-08",
+            "start_time": "07:00",
+            "end_time": "09:00",
+            "all_day": False,
+            "category": "APLICACAO",
+            "status": "PLANEJADA",
+            "priority": "ALTA",
+            "plot_id": self.plot.id,
+            "responsible": "Ana",
+            "notes": "Levar equipamento",
+            "product_id": self.product.id,
+            "product_quantity": "50",
+            "product_unit": "kg",
+            "application_id": None,
+            "recommendation_id": None,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_evento_persiste_e_aparece_na_fazenda_e_periodo_corretos(self):
+        response = self.client.post(
+            reverse("dashboard:calendar_events_api"),
+            self.event_payload(),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        event = EventoCalendario.objects.get()
+        self.assertEqual(event.fazenda, self.farm)
+        self.assertEqual(event.criado_por, self.user)
+        self.assertEqual(event.talhao, self.plot)
+        self.assertEqual(event.produto, self.product)
+        self.assertEqual(event.quantidade_produto, Decimal("50"))
+        self.assertEqual(response.json()["event"]["origin"], EventoCalendario.Origem.USUARIO)
+
+        listed = self.client.get(
+            reverse("dashboard:calendar_events_api"),
+            {"start": "2026-10-01", "end": "2026-10-31"},
+        )
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual([item["id"] for item in listed.json()["events"]], [event.id])
+        self.assertEqual(listed.json()["events"][0]["plot_name"], "Talhão 03")
+        self.assertEqual(listed.json()["events"][0]["product_name"], "NPK 20-05-20")
+        self.assertIn(f"talhao_id={self.plot.id}", listed.json()["events"][0]["plot_url"])
+
+    def test_pagina_calendario_exibe_apenas_agenda_operacional(self):
+        response = self.client.get(reverse("dashboard:calendar"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Organize atividades")
+        self.assertNotContains(response, 'id="calGrid"')
+        self.assertContains(response, 'id="farmCalendarMonth"')
+        self.assertContains(response, 'id="nav-calendar"')
+        self.assertRegex(
+            response.content.decode(),
+            r'class="nav-item active" id="nav-calendar"',
+        )
+
+    def test_janela_de_ouro_e_pagina_independente_no_menu(self):
+        response = self.client.get(reverse("dashboard:gold_window"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Encontre o melhor momento para realizar suas aplicações")
+        self.assertContains(response, 'id="calGrid"')
+        self.assertNotContains(response, 'id="farmCalendarMonth"')
+        self.assertContains(response, 'id="nav-gold-window"')
+        self.assertRegex(
+            response.content.decode(),
+            r'class="nav-item active" id="nav-gold-window"',
+        )
+
+    def test_evento_pode_ser_editado_concluido_e_excluido(self):
+        event = EventoCalendario.objects.create(
+            fazenda=self.farm,
+            criado_por=self.user,
+            titulo="Inspeção",
+            data=date(2026, 10, 8),
+            horario_inicial=time(10),
+            horario_final=time(11),
+            categoria=EventoCalendario.Categoria.INSPECAO,
+        )
+        detail_url = reverse("dashboard:calendar_event_detail_api", args=[event.id])
+        update_payload = self.event_payload(
+            title="Inspeção atualizada",
+            category="INSPECAO",
+            priority="MEDIA",
+            product_id=None,
+            product_quantity=None,
+            product_unit="",
+        )
+        updated = self.client.put(detail_url, update_payload, content_type="application/json")
+        self.assertEqual(updated.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual(event.titulo, "Inspeção atualizada")
+
+        completed = self.client.patch(
+            detail_url,
+            {"status": EventoCalendario.Status.CONCLUIDA},
+            content_type="application/json",
+        )
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(completed.json()["event"]["status"], EventoCalendario.Status.CONCLUIDA)
+        deleted = self.client.delete(detail_url)
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(EventoCalendario.objects.filter(pk=event.pk).exists())
+
+    def test_recomendacao_favoravel_pode_ser_convertida_sem_tornar_se_requisito(self):
+        recommendation = RecomendacaoJanela.objects.create(
+            fazenda=self.farm,
+            talhao=self.plot,
+            coleta=self.collection,
+            data=date(2026, 10, 8),
+            inicio=timezone.make_aware(datetime(2026, 10, 8, 10, 0)),
+            fim=timezone.make_aware(datetime(2026, 10, 8, 12, 0)),
+            adequacao=87,
+            classificacao="goldenWindow",
+            confianca=Decimal("0.8700"),
+            decisao="APPLY",
+        )
+        response = self.client.post(
+            reverse("dashboard:calendar_events_api"),
+            self.event_payload(
+                title="Aplicação recomendada",
+                start_time="10:00",
+                end_time="12:00",
+                from_recommendation=True,
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        event = EventoCalendario.objects.get()
+        self.assertEqual(event.recomendacao, recommendation)
+        self.assertEqual(event.origem, EventoCalendario.Origem.RECOMENDACAO)
+        self.assertEqual(event.status, EventoCalendario.Status.PLANEJADA)
+        self.assertEqual(response.json()["event"]["recommendation_date"], "2026-10-08")
+
+        rescheduled = self.client.put(
+            reverse("dashboard:calendar_event_detail_api", args=[event.id]),
+            self.event_payload(
+                date="2026-10-09",
+                title="Aplicação reagendada",
+                recommendation_id=recommendation.id,
+                from_recommendation=True,
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(rescheduled.status_code, 200)
+        event.refresh_from_db()
+        self.assertEqual(event.data, date(2026, 10, 9))
+        self.assertEqual(event.recomendacao, recommendation)
+
+    def test_validacao_de_horarios_e_referencias_de_outra_fazenda(self):
+        invalid_time = self.client.post(
+            reverse("dashboard:calendar_events_api"),
+            self.event_payload(start_time="10:00", end_time="09:00"),
+            content_type="application/json",
+        )
+        self.assertEqual(invalid_time.status_code, 400)
+
+        other_owner = User.objects.create_user(username="outra-agenda", password="Senha123")
+        other_farm = Fazenda.objects.create(
+            produtor=other_owner,
+            nome="Outra fazenda",
+            cep="37000001",
+            estado="MG",
+            cidade="Varginha",
+            bairro="Zona Rural",
+            area_hectares=3,
+            quantidade_talhoes=1,
+            culturas=["Café"],
+        )
+        other_plot = Talhao.objects.create(fazenda=other_farm, nome="Talhão externo")
+        cross_farm = self.client.post(
+            reverse("dashboard:calendar_events_api"),
+            self.event_payload(plot_id=other_plot.id),
+            content_type="application/json",
+        )
+        self.assertEqual(cross_farm.status_code, 404)
+        self.assertFalse(EventoCalendario.objects.exists())
+        other_event = EventoCalendario.objects.create(
+            fazenda=other_farm,
+            titulo="Evento privado",
+            data=date(2026, 10, 8),
+        )
+        hidden = self.client.put(
+            reverse("dashboard:calendar_event_detail_api", args=[other_event.id]),
+            self.event_payload(),
+            content_type="application/json",
+        )
+        self.assertEqual(hidden.status_code, 404)

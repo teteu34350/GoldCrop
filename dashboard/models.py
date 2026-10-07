@@ -370,3 +370,100 @@ class MovimentacaoEstoque(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.produto.nome} ({self.quantidade})"
+
+
+class EventoCalendario(models.Model):
+    class Categoria(models.TextChoices):
+        APLICACAO = "APLICACAO", "Aplicação"
+        PLANTIO = "PLANTIO", "Plantio"
+        COLHEITA = "COLHEITA", "Colheita"
+        ADUBACAO = "ADUBACAO", "Adubação"
+        IRRIGACAO = "IRRIGACAO", "Irrigação"
+        PULVERIZACAO = "PULVERIZACAO", "Pulverização"
+        MANEJO = "MANEJO", "Manejo"
+        INSPECAO = "INSPECAO", "Inspeção"
+        MANUTENCAO = "MANUTENCAO", "Manutenção"
+        COMPRA = "COMPRA", "Compra"
+        VENDA = "VENDA", "Venda"
+        REUNIAO = "REUNIAO", "Reunião"
+        VISITA_TECNICA = "VISITA_TECNICA", "Visita técnica"
+        TAREFA = "TAREFA", "Tarefa"
+        OUTRO = "OUTRO", "Outro"
+
+    class Status(models.TextChoices):
+        PLANEJADA = "PLANEJADA", "Planejada"
+        EM_ANDAMENTO = "EM_ANDAMENTO", "Em andamento"
+        CONCLUIDA = "CONCLUIDA", "Concluída"
+        CANCELADA = "CANCELADA", "Cancelada"
+
+    class Prioridade(models.TextChoices):
+        BAIXA = "BAIXA", "Baixa"
+        MEDIA = "MEDIA", "Média"
+        ALTA = "ALTA", "Alta"
+
+    class Origem(models.TextChoices):
+        USUARIO = "USUARIO", "Criado pelo usuário"
+        RECOMENDACAO = "RECOMENDACAO", "Recomendação GoldCrop"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="eventos_calendario")
+    criado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_calendario_criados",
+    )
+    titulo = models.CharField(max_length=160)
+    descricao = models.TextField(blank=True)
+    data = models.DateField()
+    horario_inicial = models.TimeField(null=True, blank=True)
+    horario_final = models.TimeField(null=True, blank=True)
+    dia_inteiro = models.BooleanField(default=False)
+    categoria = models.CharField(max_length=20, choices=Categoria.choices, default=Categoria.TAREFA)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PLANEJADA)
+    prioridade = models.CharField(max_length=10, choices=Prioridade.choices, default=Prioridade.MEDIA)
+    talhao = models.ForeignKey(
+        Talhao,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_calendario",
+    )
+    responsavel = models.CharField(max_length=150, blank=True)
+    observacoes = models.TextField(blank=True)
+    origem = models.CharField(max_length=20, choices=Origem.choices, default=Origem.USUARIO)
+    aplicacao = models.ForeignKey(
+        ExecucaoAplicacao,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_calendario",
+    )
+    produto = models.ForeignKey(
+        Produto,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_calendario",
+    )
+    quantidade_produto = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    unidade_produto = models.CharField(max_length=30, blank=True)
+    recomendacao = models.ForeignKey(
+        RecomendacaoJanela,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="eventos_calendario",
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["data", "dia_inteiro", "horario_inicial", "id"]
+        indexes = [
+            models.Index(fields=["fazenda", "data"]),
+            models.Index(fields=["fazenda", "categoria", "data"]),
+        ]
+
+    def __str__(self):
+        return f"{self.titulo} — {self.data:%d/%m/%Y}"

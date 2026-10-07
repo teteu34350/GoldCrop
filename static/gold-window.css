@@ -1,0 +1,52 @@
+.calendar-eyebrow { display: block; margin-bottom: .3rem; color: var(--green-700); font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.calendar-window-actions { display: flex; align-items: end; gap: .75rem; flex-wrap: wrap; }
+.calendar-reference-select { display: grid; gap: .35rem; color: var(--text-secondary); font-size: .75rem; font-weight: 650; }
+.calendar-reference-select select { min-width: 180px; }
+.gold-window-intro {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid rgba(58, 133, 84, .14);
+  background: linear-gradient(100deg, #f5f8f2, #fff);
+}
+.gold-window-intro-mark, .gold-window-empty-mark {
+  display: flex;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eaf1e5;
+  color: var(--green-700);
+  font-size: 1.2rem;
+}
+.gold-window-intro strong { color: var(--text-primary); font-size: .92rem; }
+.gold-window-intro p { margin: .2rem 0 0; color: var(--text-secondary); font-size: .8rem; line-height: 1.5; }
+.gold-window-layout { grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); }
+.gold-window-days, .gold-window-detail { min-width: 0; }
+.gold-window-period-nav { display: flex; gap: .4rem; }
+.gold-window-detail { min-height: 320px; }
+.gold-window-detail .day-panel-empty { min-height: 270px; padding: 2rem 1.2rem; }
+.gold-window-detail .day-panel-empty strong { color: var(--text-primary); font-size: .95rem; }
+.gold-window-detail .day-panel-empty p { max-width: 250px; color: var(--text-secondary); line-height: 1.55; }
+.gold-window-empty-mark { flex-basis: 52px; width: 52px; height: 52px; font-size: 1.5rem; }
+.gold-window-days .cal-grid { min-height: 250px; }
+.gold-window-days .cal-day { cursor: pointer; }
+.gold-window-days .cal-day.no-data { cursor: pointer; }
+.gold-window-days .cal-day-window { display: block; }
+@media (max-width: 900px) {
+  .gold-window-layout { grid-template-columns: minmax(0, 1fr); }
+  .gold-window-detail { position: static; }
+}
+@media (max-width: 640px) {
+  .calendar-window-actions { width: 100%; align-items: stretch; }
+  .calendar-reference-select { flex: 1 1 100%; }
+  .calendar-reference-select select { width: 100%; }
+  .calendar-window-actions .btn-primary { justify-content: center; width: 100%; }
+  .gold-window-intro { align-items: flex-start; padding: .85rem; }
+  .gold-window-intro-mark { flex-basis: 36px; width: 36px; height: 36px; }
+  .gold-window-days .cal-day-window { display: none; }
+}

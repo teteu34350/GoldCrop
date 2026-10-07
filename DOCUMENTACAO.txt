@@ -164,24 +164,31 @@ Funcionalidades:
 - leitura de temperatura, chuva, vento e condição meteorológica
 - estado de umidade bloqueado quando ainda não existe sensor habilitado
 
-5.4. Calendário inteligente
+5.4. Calendário
 Rota: /calendario/
 Arquivo: templates/calendario.html
 
 Funcionalidades:
-- calendário mensal com dias distribuídos por IEA
-- classificação de dias em:
-  - favorável
-  - moderado
-  - desfavorável
-  - sem dados
-- seleção de talhão para análise meteorológica independente
-- painel lateral de detalhes do dia selecionado
-- exibição de recomendação, chuva, temperatura, IEA e planejamento
-- exibição separada de "Aguardando dados" e "Dados insuficientes"
-- filtro dos planejamentos e aplicações pelo talhão selecionado
-- opção de registrar aplicação diretamente no calendário
-- integração com recomendação do motor GoldCropAnalysisEngine
+- agenda operacional da fazenda com visualizações mensal, semanal, diária e em lista
+- filtros por categoria, responsável e talhão
+- criação e edição de atividades com data, horário, prioridade, status e observações
+- vínculo opcional com talhão, execução de aplicação, produto de estoque e recomendação
+- eventos limitados à fazenda ativa; criação/edição usa a permissão de planejamento e exclusão usa gerenciamento
+- uma recomendação favorável só vira atividade após ação explícita do usuário na Janela de Ouro
+
+APIs da agenda:
+- GET/POST /api/calendar/events/ (a listagem recebe start e end em ISO: YYYY-MM-DD)
+- PUT/PATCH/DELETE /api/calendar/events/<id>/
+- PATCH atualiza o status; PUT substitui os dados editáveis do evento
+
+5.4.1. Janela de Ouro
+Rota: /janela-de-ouro/
+Arquivo: templates/janela_ouro.html
+
+Este módulo analítico é independente da agenda operacional e preserva o motor
+GoldCropAnalysisEngine, a seleção de talhão, a previsão e o painel de recomendação.
+Uma recomendação pode ser encaminhada ao formulário de atividade do Calendário,
+mas só é persistida como evento após confirmação explícita do usuário.
 
 5.5. Talhões
 Rota: /talhoes/
@@ -384,7 +391,7 @@ O processo é:
 - janelas com dados críticos ausentes (inclusive precipitação ou sua
   probabilidade) recebem INSUFFICIENT_DATA e não são exibidas
   nem persistidas como recomendação utilizável
-- a melhor janela disponível alimenta o dashboard e o calendário daquele talhão
+- a melhor janela disponível alimenta o dashboard e a Janela de Ouro daquele talhão
 
 A estimativa de umidade de solo meteorológica não é uma leitura de SensorIoT.
 Campos nulos continuam ausentes; não são convertidos em precipitação, temperatura
@@ -539,9 +546,9 @@ Um fluxo típico de uso é:
 2. acessa dashboard e o sistema carrega fazenda e talhões ativos
 3. seleciona um talhão (a seleção é mantida entre as abas)
 4. se houver coordenadas, o sistema consulta clima e analisa somente esse talhão
-5. dashboard e calendário mostram sua previsão e recomendação, ou declaram
+5. dashboard e Janela de Ouro mostram sua previsão e recomendação, ou declaram
    explicitamente que aguardam dados/que os dados são insuficientes
-6. planeja uma aplicação para esse talhão; o planejamento aparece no calendário
+6. planeja uma aplicação para esse talhão; o planejamento aparece no Calendário
 7. registra a execução planejada ou registra uma aplicação diretamente
 8. aplicação e histórico permanecem associados ao ID do talhão
 9. seleciona outro talhão para analisar seu próprio clima e operações, sem
@@ -562,7 +569,7 @@ substituir a resposta por registros inventados. Ele já possui:
 - onboarding para criar uma fazenda ou entrar pelo código
 - cadastro e manutenção de talhões
 - visualização de mapa georreferenciado
-- calendário com recomendações
+- Calendário para operações e atividades, separado da análise da Janela de Ouro
 - painel dashboard
 - painel de aplicações e histórico
 - controle de perfil e dados da fazenda

@@ -1,0 +1,38 @@
+{% load static %}
+<div class="modal-overlay farm-event-modal" id="farmEventModal" style="display:none">
+  <section class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="farmEventModalTitle">
+    <form id="farmEventForm">
+      <header class="modal-header">
+        <div>
+          <span class="calendar-eyebrow">Atividade da fazenda</span>
+          <h2 class="modal-title" id="farmEventModalTitle">Adicionar atividade</h2>
+        </div>
+        <button type="button" class="modal-close" id="farmEventClose" aria-label="Fechar">×</button>
+      </header>
+      <div class="modal-body farm-event-form">
+        <div class="farm-event-field full"><label for="farmEventTitle">O que você precisa fazer? *</label><input class="form-input" id="farmEventTitle" name="title" maxlength="160" required placeholder="Ex.: Aplicação de fertilizante"></div>
+        <div class="farm-event-field full"><label for="farmEventDescription">Descrição</label><textarea class="form-input" id="farmEventDescription" name="description" rows="2" placeholder="Detalhes da atividade"></textarea></div>
+        <div class="farm-event-field"><label for="farmEventDate">Data *</label><input class="form-input" id="farmEventDate" name="date" type="date" required></div>
+        <label class="farm-event-all-day"><input id="farmEventAllDay" name="all_day" type="checkbox"> Dia inteiro</label>
+        <div class="farm-event-field farm-event-time"><label for="farmEventStart">Horário inicial *</label><input class="form-input" id="farmEventStart" name="start_time" type="time" value="07:00" required></div>
+        <div class="farm-event-field farm-event-time"><label for="farmEventEnd">Horário final *</label><input class="form-input" id="farmEventEnd" name="end_time" type="time" value="08:00" required></div>
+        <div class="farm-event-field"><label for="farmEventCategory">Categoria *</label><select class="form-input" id="farmEventCategory" name="category" required></select></div>
+        <div class="farm-event-field"><label for="farmEventPlot">Talhão</label><select class="form-input" id="farmEventPlot" name="plot_id"><option value="">Sem talhão</option></select></div>
+        <div class="farm-event-field"><label for="farmEventResponsible">Responsável</label><input class="form-input" id="farmEventResponsible" name="responsible" maxlength="150" placeholder="Nome do responsável"></div>
+        <div class="farm-event-field"><label for="farmEventPriority">Prioridade</label><select class="form-input" id="farmEventPriority" name="priority"></select></div>
+        <div class="farm-event-field"><label for="farmEventStatus">Status</label><select class="form-input" id="farmEventStatus" name="status"></select></div>
+        <div class="farm-event-field"><label for="farmEventProduct">Produto / insumo do estoque</label><select class="form-input" id="farmEventProduct" name="product_id"><option value="">Nenhum produto vinculado</option></select></div>
+        <div class="farm-event-field"><label for="farmEventQuantity">Quantidade</label><div class="farm-event-quantity"><input class="form-input" id="farmEventQuantity" name="product_quantity" type="number" min="0.01" step="0.01" placeholder="0"><input class="form-input" id="farmEventUnit" name="product_unit" maxlength="30" placeholder="kg, L…"></div></div>
+        <div class="farm-event-field full"><label for="farmEventApplication">Aplicação registrada relacionada</label><select class="form-input" id="farmEventApplication" name="application_id"><option value="">Nenhuma aplicação vinculada</option></select></div>
+        <div class="farm-event-field full"><label for="farmEventNotes">Observações</label><textarea class="form-input" id="farmEventNotes" name="notes" rows="2" placeholder="Informações importantes para a equipe"></textarea></div>
+        <input type="hidden" id="farmEventRecommendation" name="recommendation_id">
+        <p class="farm-event-origin" id="farmEventOrigin" hidden>Atividade criada a partir de uma recomendação do GoldCrop; ela continua sendo uma recomendação, não uma tarefa obrigatória.</p>
+        <p class="farm-calendar-error full" id="farmEventFormError" role="alert" hidden></p>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn-ghost" id="farmEventCancel">Cancelar</button>
+        <button type="submit" class="btn-primary" id="farmEventSave">Salvar atividade</button>
+      </footer>
+    </form>
+  </section>
+</div>

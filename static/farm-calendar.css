@@ -1,0 +1,143 @@
+.calendar-page { max-width: 1440px; }
+.farm-calendar-month[hidden], .farm-calendar-week-scroll[hidden],
+.farm-calendar-day[hidden], .farm-calendar-agenda[hidden], .farm-calendar-detail[hidden] { display: none !important; }
+.farm-calendar-filters label {
+  display: grid;
+  gap: .35rem;
+  color: var(--text-secondary);
+  font-size: .75rem;
+  font-weight: 650;
+}
+.calendar-eyebrow { display: block; margin-bottom: .3rem; color: var(--green-700); font-size: .7rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.farm-calendar-header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin: .2rem 0 1.25rem; }
+.farm-calendar-header .page-title { margin-bottom: .25rem; }
+.farm-calendar-add { white-space: nowrap; }
+.farm-calendar-card { padding: 1.1rem; overflow: hidden; }
+.farm-calendar-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.farm-calendar-date-nav { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.farm-calendar-date-nav h2 { margin: 0 0 0 .45rem; color: var(--text-primary); font-family: 'Outfit', sans-serif; font-size: 1.2rem; font-weight: 700; }
+.farm-calendar-today { height: 34px; padding: 0 .75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; color: var(--text-primary); font: inherit; font-size: .8rem; font-weight: 650; cursor: pointer; }
+.farm-calendar-view-switch { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--gray-50); }
+.farm-calendar-view-switch button { padding: .42rem .65rem; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; }
+.farm-calendar-view-switch button.active { background: #fff; color: var(--green-700); box-shadow: var(--shadow-sm); }
+.farm-calendar-filters { display: flex; gap: .8rem; padding: .9rem 0; }
+.farm-calendar-filters select { min-width: 180px; height: 36px; padding: 0 .6rem; font-size: .78rem; }
+.farm-calendar-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.farm-calendar-weekday { min-height: 38px; padding: .65rem .5rem; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: .69rem; font-weight: 750; text-align: center; text-transform: uppercase; }
+.farm-calendar-cell { position: relative; min-width: 0; min-height: 118px; padding: .45rem; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #fff; text-align: left; cursor: pointer; }
+.farm-calendar-cell:hover { background: #fbfcfa; }
+.farm-calendar-cell.outside-month { background: #fafbfa; color: var(--text-muted); }
+.farm-calendar-cell.is-today .farm-calendar-day-number { display: inline-flex; width: 25px; height: 25px; align-items: center; justify-content: center; border-radius: 50%; background: var(--green-700); color: #fff; }
+.farm-calendar-day-number { display: inline-flex; min-width: 25px; height: 25px; align-items: center; justify-content: center; margin-bottom: .25rem; border-radius: 50%; color: var(--text-primary); font-size: .78rem; font-weight: 650; }
+.farm-calendar-cell-events { display: grid; gap: 3px; }
+.farm-calendar-event { display: flex; min-width: 0; gap: .3rem; align-items: baseline; padding: .25rem .35rem; border: 0; border-left: 3px solid var(--green-600); border-radius: 3px; background: var(--green-50); color: var(--green-800, #234b35); text-align: left; cursor: pointer; }
+.farm-calendar-event:hover { filter: brightness(.97); }
+.farm-calendar-event[data-category="COLHEITA"], .farm-calendar-event[data-category="PLANTIO"] { border-left-color: #bc9634; background: #fbf7e9; color: #675318; }
+.farm-calendar-event[data-category="MANUTENCAO"], .farm-calendar-event[data-category="INSPECAO"] { border-left-color: #6b8195; background: #f0f4f7; color: #3f5365; }
+.farm-calendar-event[data-origin="RECOMENDACAO"] { border-left-color: #748a66; background: #f3f6ef; }
+.farm-calendar-event.is-cancelled { opacity: .58; text-decoration: line-through; }
+.farm-calendar-event.is-done { opacity: .68; }
+.farm-calendar-event-time { flex: 0 0 auto; font-size: .63rem; font-weight: 750; }
+.farm-calendar-event-title { overflow: hidden; font-size: .68rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.farm-calendar-event-plot { overflow: hidden; color: var(--text-secondary); font-size: .6rem; text-overflow: ellipsis; white-space: nowrap; }
+.farm-calendar-priority { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; margin-right: .2rem; border-radius: 50%; background: #fbf2e8; color: #885a16; font-size: .62rem; }
+.farm-calendar-event-count { padding: .2rem .35rem; color: var(--text-secondary); font-size: .65rem; }
+.farm-calendar-event-count.mobile-count { display: none; }
+.farm-calendar-week-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.farm-calendar-week { min-width: 860px; }
+.farm-calendar-week-head, .farm-calendar-week-row { display: grid; grid-template-columns: 58px repeat(7, minmax(0, 1fr)); }
+.farm-calendar-week-head { position: sticky; top: 0; z-index: 2; background: #fff; }
+.farm-calendar-week-head div { padding: .65rem .35rem; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: .72rem; font-weight: 700; text-align: center; }
+.farm-calendar-week-head .week-day-head.is-today { color: var(--green-700); }
+.farm-calendar-week-row { min-height: 56px; }
+.farm-calendar-week-hour { padding: .35rem .4rem 0 0; border-right: 1px solid var(--border); color: var(--text-muted); font-size: .65rem; text-align: right; }
+.farm-calendar-week-slot { min-width: 0; padding: 3px; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #fff; cursor: pointer; }
+.farm-calendar-week-slot:hover { background: var(--gray-50); }
+.farm-calendar-week-slot .farm-calendar-event { display: grid; gap: 1px; width: 100%; margin-bottom: 2px; }
+.farm-calendar-day { max-width: 800px; margin: 0 auto; }
+.farm-calendar-day-heading { display: flex; justify-content: space-between; align-items: center; padding: .7rem 0; border-bottom: 1px solid var(--border); }
+.farm-calendar-day-heading strong { color: var(--text-primary); font-size: .88rem; }
+.farm-calendar-day-row { display: grid; grid-template-columns: 66px minmax(0, 1fr); min-height: 58px; }
+.farm-calendar-day-hour { padding: .55rem .6rem 0 0; border-right: 1px solid var(--border); color: var(--text-muted); font-size: .7rem; text-align: right; }
+.farm-calendar-day-slot { min-width: 0; padding: 4px 8px; border: 0; border-bottom: 1px solid var(--border); background: #fff; text-align: left; cursor: pointer; }
+.farm-calendar-day-slot:hover { background: var(--gray-50); }
+.farm-calendar-day-slot .farm-calendar-event { display: flex; flex-wrap: wrap; padding: .5rem .65rem; }
+.farm-calendar-agenda { display: grid; gap: .7rem; }
+.farm-agenda-day { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: .8rem; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.farm-agenda-date { color: var(--text-primary); font-size: .8rem; font-weight: 700; }
+.farm-agenda-events { display: grid; gap: .4rem; }
+.farm-agenda-empty { color: var(--text-muted); font-size: .78rem; }
+.farm-calendar-empty { grid-column: 1 / -1; padding: 2.5rem 1rem; color: var(--text-muted); text-align: center; }
+.farm-calendar-error { margin: .7rem 0; padding: .65rem .8rem; border: 1px solid #efc5c5; border-radius: var(--radius-md); background: #fff7f7; color: #922; font-size: .82rem; }
+.farm-calendar-loading { padding: 2rem 1rem; color: var(--text-secondary); text-align: center; }
+.farm-calendar-detail { margin-top: 1rem; padding: 1rem 1.15rem; }
+.farm-calendar-detail-head { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.farm-calendar-detail h2 { margin: 0 0 .25rem; color: var(--text-primary); font-size: 1.05rem; }
+.farm-calendar-detail-meta { color: var(--text-secondary); font-size: .78rem; }
+.farm-calendar-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .85rem; margin: .9rem 0; }
+.farm-calendar-detail-item { min-width: 0; }
+.farm-calendar-detail-item span { display: block; color: var(--text-muted); font-size: .66rem; font-weight: 700; text-transform: uppercase; }
+.farm-calendar-detail-item strong, .farm-calendar-detail-item a { display: block; margin-top: .15rem; color: var(--text-primary); font-size: .8rem; overflow-wrap: anywhere; }
+.farm-calendar-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.farm-calendar-actions button { min-height: 36px; }
+.farm-event-modal { z-index: 1000; padding: 1rem; overflow-y: auto; }
+.farm-event-modal .modal { width: min(760px, 100%); max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.farm-event-modal .modal-header { position: sticky; top: 0; z-index: 2; background: #fff; }
+.farm-event-modal .modal-title { margin: 0; }
+.farm-event-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem; }
+.farm-event-field { display: grid; align-content: start; gap: .35rem; min-width: 0; }
+.farm-event-field[hidden] { display: none !important; }
+.farm-event-field.full { grid-column: 1 / -1; }
+.farm-event-field label, .farm-event-all-day { color: var(--text-secondary); font-size: .75rem; font-weight: 650; }
+.farm-event-field .form-input { min-width: 0; }
+.farm-event-field textarea { resize: vertical; }
+.farm-event-all-day { display: flex; align-items: center; align-self: end; gap: .5rem; min-height: 40px; }
+.farm-event-all-day input { width: 17px; height: 17px; accent-color: var(--green-700); }
+.farm-event-quantity { display: grid; grid-template-columns: 1fr .75fr; gap: .4rem; }
+.farm-event-origin { grid-column: 1 / -1; margin: 0; padding: .65rem .75rem; border-radius: var(--radius-md); background: #f5f8f3; color: var(--green-800, #234b35); font-size: .76rem; }
+.farm-event-origin[hidden] { display: none; }
+
+@media (max-width: 900px) {
+  .farm-calendar-toolbar { align-items: flex-start; flex-direction: column; }
+  .farm-calendar-view-switch { align-self: stretch; display: grid; grid-template-columns: repeat(4, 1fr); }
+  .farm-calendar-view-switch button { padding: .55rem .4rem; }
+  .farm-calendar-cell { min-height: 98px; }
+  .farm-calendar-event-plot { display: none; }
+}
+@media (max-width: 640px) {
+  .farm-calendar-header { align-items: stretch; flex-direction: column; }
+  .farm-calendar-add { position: sticky; bottom: .75rem; z-index: 3; justify-content: center; min-height: 48px; box-shadow: var(--shadow-md); }
+  .farm-calendar-card { padding: .75rem; }
+  .farm-calendar-date-nav { width: 100%; }
+  .farm-calendar-date-nav h2 { flex: 1; font-size: 1rem; }
+  .farm-calendar-filters { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .farm-calendar-filters select { width: 100%; min-width: 0; font-size: .73rem; }
+  .farm-calendar-month { border-top: 0; }
+  .farm-calendar-weekday { min-height: 31px; padding: .45rem 0; font-size: .59rem; }
+  .farm-calendar-cell { min-height: 76px; padding: .2rem; }
+  .farm-calendar-day-number { min-width: 22px; height: 22px; font-size: .69rem; }
+  .farm-calendar-cell-events { gap: 2px; }
+  .farm-calendar-event { padding: .2rem .22rem; border-left-width: 2px; }
+  .farm-calendar-event-time { font-size: .55rem; }
+  .farm-calendar-event-title { font-size: .58rem; }
+  .farm-calendar-cell .farm-calendar-event-plot { display: none; }
+  .farm-calendar-cell .farm-calendar-event-time { display: none; }
+  .farm-calendar-cell .farm-calendar-event-count { padding: .1rem .15rem; font-size: .57rem; }
+  .farm-calendar-cell .farm-calendar-event-count.desktop-count { display: none; }
+  .farm-calendar-cell .farm-calendar-event-count.mobile-count { display: inline-block; }
+  .farm-calendar-week { min-width: 830px; }
+  .farm-calendar-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .farm-agenda-day { grid-template-columns: 1fr; gap: .45rem; padding: .7rem; }
+  .farm-event-modal { padding: 0; align-items: end; }
+  .farm-event-modal .modal { width: 100%; max-height: 94dvh; margin: 0; border-radius: 16px 16px 0 0; }
+  .farm-event-form { gap: .7rem; }
+  .farm-event-modal .modal-footer { position: sticky; bottom: 0; background: #fff; }
+}
+@media (max-width: 380px) {
+  .farm-calendar-cell { min-height: 66px; }
+  .farm-calendar-cell-events .farm-calendar-event:nth-child(n+2) { display: none; }
+
+  .farm-calendar-filters { grid-template-columns: 1fr; }
+  .farm-event-form { grid-template-columns: 1fr; }
+  .farm-event-field.full, .farm-event-origin { grid-column: 1; }
+}

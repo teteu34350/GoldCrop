@@ -1,63 +1,77 @@
 {% extends 'base.html' %}
+{% load static %}
+
+{% block breadcrumb %}Calendário{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'farm-calendar.css' %}?v=3" />
+{% endblock %}
 
 {% block content %}
+<section class="page active" id="page-farm-calendar">
+  <div class="page-content calendar-page">
+    <header class="farm-calendar-header">
+      <div>
+        <p class="calendar-eyebrow">Planejamento da operação</p>
+        <h1 class="page-title">Calendário</h1>
+        <p class="page-sub">Organize atividades, acompanhe compromissos e prepare os próximos trabalhos no campo.</p>
+      </div>
+      <button type="button" class="btn-primary farm-calendar-add" id="farmCalendarAdd" hidden>
+        <span aria-hidden="true">＋</span> Adicionar atividade
+      </button>
+    </header>
 
-<!-- ===================== PAGE: CALENDAR ===================== -->
-      <section class="page active" id="page-calendar">
-        <div class="page-content">
-          <div class="page-header">
-            <div>
-              <h1 class="page-title">Calendário Inteligente</h1>
-              <p class="page-sub">Visualize as janelas de aplicação estimadas pela IA para cada dia.</p>
-            </div>
-            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-              <label style="display:flex;align-items:center;gap:.5rem;font-size:.8rem;font-weight:600;color:#4b5563;">
-                Talhão referência
-                <select id="calendarTalhaoSelect" class="form-input" style="min-width:180px;" disabled>
-                  <option value="">Sem talhão com coordenadas</option>
-                </select>
-              </label>
-              <button class="btn-primary" onclick="openRegistrar()">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Registrar Aplicação
-              </button>
-            </div>
-          </div>
-
-          <div class="calendar-layout">
-            <!-- Calendar -->
-            <div class="card calendar-card">
-              <div class="cal-header">
-                <button class="cal-nav-btn" id="calPrev">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
-                <h2 class="cal-month" id="calMonthLabel">Agosto 2026</h2>
-                <button class="cal-nav-btn" id="calNext">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-              </div>
-              <div class="cal-legend">
-                <span class="cal-legend-item"><span class="cal-dot green"></span>Alta (≥80%)</span>
-                <span class="cal-legend-item"><span class="cal-dot yellow"></span>Média (60–79%)</span>
-                <span class="cal-legend-item"><span class="cal-dot red"></span>Baixa (&lt;60%)</span>
-                <span class="cal-legend-item"><span class="cal-dot gray"></span>Sem dados</span>
-                <span class="cal-legend-item"><span class="cal-ico">📋</span>Aplicação</span>
-              </div>
-              <div class="cal-weekdays">
-                <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-              </div>
-              <div class="cal-grid" id="calGrid"></div>
-            </div>
-
-            <!-- Day Panel -->
-            <div class="card day-panel" id="dayPanel">
-              <div class="day-panel-empty" id="dayPanelEmpty">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <p>Selecione um dia para ver os detalhes</p>
-              </div>
-              <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
-            </div>
-          </div>
+    <section class="card farm-calendar-card" aria-label="Agenda agrícola">
+      <div class="farm-calendar-toolbar">
+        <div class="farm-calendar-date-nav">
+          <button type="button" class="cal-nav-btn" id="farmCalendarPrev" aria-label="Período anterior">‹</button>
+          <button type="button" class="farm-calendar-today" id="farmCalendarToday">Hoje</button>
+          <button type="button" class="cal-nav-btn" id="farmCalendarNext" aria-label="Próximo período">›</button>
+          <h2 id="farmCalendarRange" aria-live="polite"></h2>
         </div>
-      </section>
+        <div class="farm-calendar-view-switch" role="group" aria-label="Visualização do calendário">
+          <button type="button" data-calendar-view="month" class="active">Mês</button>
+          <button type="button" data-calendar-view="week">Semana</button>
+          <button type="button" data-calendar-view="day">Dia</button>
+          <button type="button" data-calendar-view="agenda">Agenda</button>
+        </div>
+      </div>
+      <div class="farm-calendar-filters">
+        <label>Atividades
+          <select id="farmCalendarFilter" class="form-input">
+            <option value="ALL">Todas as atividades</option>
+            <option value="MINE">Minhas atividades</option>
+            <option value="APLICACAO">Aplicações</option>
+            <option value="PLANTIO">Plantio</option>
+            <option value="COLHEITA">Colheita</option>
+            <option value="MANEJO">Manejo</option>
+            <option value="MANUTENCAO">Manutenção</option>
+            <option value="INSPECAO">Inspeção</option>
+            <option value="OTHER">Outros tipos</option>
+          </select>
+        </label>
+        <label>Talhão
+          <select id="farmCalendarPlotFilter" class="form-input">
+            <option value="">Todos os talhões</option>
+          </select>
+        </label>
+      </div>
+      <div id="farmCalendarError" class="farm-calendar-error" role="alert" hidden></div>
+      <div class="farm-calendar-loading" id="farmCalendarLoading" hidden>Carregando agenda…</div>
+      <div class="farm-calendar-month" id="farmCalendarMonth" aria-label="Calendário mensal" hidden></div>
+      <div class="farm-calendar-week-scroll" id="farmCalendarWeekScroll" hidden>
+        <div id="farmCalendarWeek" class="farm-calendar-week" aria-label="Agenda semanal"></div>
+      </div>
+      <div id="farmCalendarDay" class="farm-calendar-day" hidden></div>
+      <div id="farmCalendarAgenda" class="farm-calendar-agenda" hidden></div>
+    </section>
+    <aside class="farm-calendar-detail card" id="farmCalendarDetail" hidden aria-live="polite"></aside>
+  </div>
+</section>
+
+{% include 'calendar_event_modal.html' %}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'farm-calendar.js' %}?v=3"></script>
 {% endblock %}

@@ -20,7 +20,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import (
-    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, MembroFazenda,
+    AcessoSistema, ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda, MembroFazenda,
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
@@ -62,6 +62,7 @@ def _protected_page(request, template):
 
 def home(request): return _protected_page(request, "dashboard.html")
 def calendario_view(request): return _protected_page(request, "calendario.html")
+def janela_ouro_view(request): return _protected_page(request, "janela_ouro.html")
 def talhoes_view(request): return _protected_page(request, "talhoes.html")
 def fazenda_view(request): return _protected_page(request, "fazenda.html")
 def sensores_view(request): return _protected_page(request, "sensores.html")
@@ -1458,3 +1459,311 @@ def estoque_dashboard_api(request):
         "consumo_talhoes": consumo_talhoes,
         "movimentacoes_recentes": movimentacoes_recentes
     })
+
+
+def _calendar_event_json(event):
+    return {
+        "id": event.id,
+        "title": event.titulo,
+        "description": event.descricao,
+        "date": event.data.isoformat(),
+        "start_time": event.horario_inicial.isoformat(timespec="minutes") if event.horario_inicial else "",
+        "end_time": event.horario_final.isoformat(timespec="minutes") if event.horario_final else "",
+        "all_day": event.dia_inteiro,
+        "category": event.categoria,
+        "category_label": event.get_categoria_display(),
+        "status": event.status,
+        "status_label": event.get_status_display(),
+        "priority": event.prioridade,
+        "priority_label": event.get_prioridade_display(),
+        "plot_id": event.talhao_id,
+        "plot_name": event.talhao.nome if event.talhao else "",
+        "plot_url": (
+            f"{reverse('dashboard:talhoes')}?talhao_id={event.talhao_id}"
+            if event.talhao_id else ""
+        ),
+        "responsible": event.responsavel,
+        "notes": event.observacoes,
+        "origin": event.origem,
+        "origin_label": event.get_origem_display(),
+        "creator_id": event.criado_por_id,
+        "application_id": event.aplicacao_id,
+        "application_label": (
+            f"{event.aplicacao.produto} · {event.aplicacao.data_aplicacao:%d/%m/%Y}"
+            if event.aplicacao_id else ""
+        ),
+        "product_id": event.produto_id,
+        "product_name": event.produto.nome if event.produto_id else "",
+        "product_quantity": str(event.quantidade_produto) if event.quantidade_produto is not None else "",
+        "product_unit": event.unidade_produto,
+        "recommendation_id": event.recomendacao_id,
+        "recommendation_date": event.recomendacao.data.isoformat() if event.recomendacao_id else None,
+        "recommendation_plot_id": event.recomendacao.talhao_id if event.recomendacao_id else None,
+        "recommendation_confidence": (
+            float(event.recomendacao.confianca * 100) if event.recomendacao_id else None
+        ),
+        "created_by": (
+            event.criado_por.get_full_name() or event.criado_por.username
+            if event.criado_por_id else ""
+        ),
+        "created_at": event.criado_em.isoformat(),
+        "updated_at": event.atualizado_em.isoformat(),
+    }
+
+
+def _calendar_optional_related_id(data, name):
+    value = data.get(name)
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"Referência {name} inválida.") from None
+
+
+def _save_calendar_event(request, farm, event=None):
+    is_new = event is None
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados do evento inválidos.")
+
+    def value(key, default=""):
+        return data.get(key, getattr(event, {
+            "title": "titulo",
+            "description": "descricao",
+            "date": "data",
+            "start_time": "horario_inicial",
+            "end_time": "horario_final",
+            "all_day": "dia_inteiro",
+            "category": "categoria",
+            "status": "status",
+            "priority": "prioridade",
+            "responsible": "responsavel",
+            "notes": "observacoes",
+            "product_quantity": "quantidade_produto",
+            "product_unit": "unidade_produto",
+        }.get(key, key), default) if event else default)
+
+    title = str(value("title")).strip()
+    if not title:
+        return _error("Informe o título da atividade.", field_errors={"title": "Obrigatório."})
+    if len(title) > 160:
+        return _error("O título pode ter no máximo 160 caracteres.")
+
+    try:
+        event_date = date.fromisoformat(str(value("date")))
+    except (TypeError, ValueError):
+        return _error("Informe uma data válida.")
+
+    all_day_value = value("all_day", False)
+    if isinstance(all_day_value, bool):
+        all_day = all_day_value
+    elif str(all_day_value).lower() in {"true", "1"}:
+        all_day = True
+    elif str(all_day_value).lower() in {"false", "0", ""}:
+        all_day = False
+    else:
+        return _error("Informe se a atividade dura o dia inteiro.")
+
+    start_time = end_time = None
+    if not all_day:
+        try:
+            start_time = time.fromisoformat(str(value("start_time")))
+            end_time = time.fromisoformat(str(value("end_time")))
+        except (TypeError, ValueError):
+            return _error("Informe os horários inicial e final da atividade.")
+        if end_time <= start_time:
+            return _error("O horário final deve ser posterior ao horário inicial.")
+
+    category = str(value("category", EventoCalendario.Categoria.TAREFA))
+    status = str(value("status", EventoCalendario.Status.PLANEJADA))
+    priority = str(value("priority", EventoCalendario.Prioridade.MEDIA))
+    if category not in EventoCalendario.Categoria.values:
+        return _error("Selecione uma categoria válida.")
+    if status not in EventoCalendario.Status.values:
+        return _error("Selecione um status válido.")
+    if priority not in EventoCalendario.Prioridade.values:
+        return _error("Selecione uma prioridade válida.")
+
+    from_recommendation = data.get("from_recommendation") is True
+    try:
+        plot_id = _calendar_optional_related_id(data, "plot_id")
+        application_id = _calendar_optional_related_id(data, "application_id")
+        product_id = _calendar_optional_related_id(data, "product_id")
+        recommendation_id = _calendar_optional_related_id(data, "recommendation_id")
+    except ValueError as error:
+        return _error(str(error))
+
+    plot = farm.talhoes.filter(pk=plot_id, ativo=True).first() if plot_id else None
+    if plot_id and plot is None:
+        return _error("Talhão não encontrado nesta fazenda.", 404)
+    application = farm.aplicacoes.select_related("talhao", "recomendacao").filter(pk=application_id).first() if application_id else None
+    if application_id and application is None:
+        return _error("Aplicação não encontrada nesta fazenda.", 404)
+    product = farm.produtos_estoque.filter(pk=product_id, ativo=True).first() if product_id else None
+    if product_id and product is None:
+        return _error("Produto não encontrado no estoque desta fazenda.", 404)
+    recommendation = farm.recomendacoes.select_related("talhao").filter(pk=recommendation_id).first() if recommendation_id else None
+    if from_recommendation and recommendation_id is None:
+        recommendation = farm.recomendacoes.select_related("talhao").filter(
+            data=event_date,
+            talhao=plot,
+            decisao="APPLY",
+            adequacao__gte=75,
+        ).order_by("-adequacao", "inicio").first()
+        if recommendation is None:
+            return _error("A recomendação favorável não está mais disponível para este talhão e data.")
+        recommendation_id = recommendation.id
+    if recommendation_id and recommendation is None:
+        return _error("Recomendação não encontrada nesta fazenda.", 404)
+    if recommendation_id and (
+        recommendation.decisao != "APPLY" or recommendation.adequacao < 75
+    ):
+        return _error("Somente uma recomendação favorável pode ser adicionada como atividade.")
+
+    if (
+        plot and application and application.talhao_id
+        and plot.id != application.talhao_id
+    ):
+        return _error("O talhão não corresponde à aplicação vinculada.")
+    if (
+        plot and recommendation and recommendation.talhao_id
+        and plot.id != recommendation.talhao_id
+        and (is_new or event.origem != EventoCalendario.Origem.RECOMENDACAO)
+    ):
+        return _error("O talhão não corresponde à recomendação vinculada.")
+    if plot is None and application and application.talhao_id:
+        plot = application.talhao
+    if plot is None and recommendation and recommendation.talhao_id:
+        plot = recommendation.talhao
+    if recommendation and recommendation.data != event_date and (
+        is_new or event.origem != EventoCalendario.Origem.RECOMENDACAO
+    ):
+        return _error("A data deve corresponder à recomendação vinculada.")
+    if application and not recommendation:
+        recommendation = application.recomendacao
+
+    quantity_raw = value("product_quantity")
+    try:
+        quantity = Decimal(str(quantity_raw)) if quantity_raw not in (None, "") else None
+    except (InvalidOperation, TypeError, ValueError):
+        return _error("Informe uma quantidade de produto válida.")
+    if quantity is not None and (not quantity.is_finite() or quantity <= 0):
+        return _error("A quantidade do produto deve ser maior que zero.")
+
+    description = str(value("description")).strip()
+    responsible = str(value("responsible")).strip()
+    notes = str(value("notes")).strip()
+    if len(responsible) > 150:
+        return _error("O responsável pode ter no máximo 150 caracteres.")
+    if len(description) > 10000 or len(notes) > 10000:
+        return _error("A descrição e as observações devem ter até 10.000 caracteres.")
+
+    if event is None:
+        event = EventoCalendario(fazenda=farm, criado_por=request.user)
+    event.titulo = title
+    event.descricao = description
+    event.data = event_date
+    event.horario_inicial = start_time
+    event.horario_final = end_time
+    event.dia_inteiro = all_day
+    event.categoria = category
+    event.status = status
+    event.prioridade = priority
+    event.talhao = plot
+    event.responsavel = responsible
+    event.observacoes = notes
+    if recommendation_id:
+        event.origem = EventoCalendario.Origem.RECOMENDACAO
+    elif is_new:
+        event.origem = EventoCalendario.Origem.USUARIO
+    event.aplicacao = application
+    event.produto = product
+    event.quantidade_produto = quantity
+    event.unidade_produto = str(value("product_unit")).strip() or (product.unidade if product else "")
+    event.recomendacao = recommendation
+    event.save()
+    return JsonResponse({"ok": True, "event": _calendar_event_json(event)}, status=201 if is_new else 200)
+
+
+@require_http_methods(["GET", "POST"])
+def calendar_events_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    if not _has_farm_permission(farm, request.user, "view"):
+        return _error("Acesso negado.", 403)
+
+    if request.method == "GET":
+        try:
+            start = date.fromisoformat(request.GET.get("start", ""))
+            end = date.fromisoformat(request.GET.get("end", ""))
+        except ValueError:
+            return _error("Informe o início e o fim do período do calendário.")
+        if end < start or (end - start).days > 62:
+            return _error("O período do calendário deve ter até 63 dias.")
+        events = EventoCalendario.objects.filter(
+            fazenda=farm,
+            data__range=(start, end),
+        ).select_related("talhao", "aplicacao", "produto", "recomendacao", "criado_por")
+        applications = farm.aplicacoes.select_related("talhao").order_by("-data_aplicacao", "-id")[:100]
+        return JsonResponse({
+            "ok": True,
+            "events": [_calendar_event_json(event) for event in events],
+            "categories": [{"value": value, "label": label} for value, label in EventoCalendario.Categoria.choices],
+            "statuses": [{"value": value, "label": label} for value, label in EventoCalendario.Status.choices],
+            "priorities": [{"value": value, "label": label} for value, label in EventoCalendario.Prioridade.choices],
+            "plots": [{"id": plot.id, "name": plot.nome} for plot in farm.talhoes.filter(ativo=True)],
+            "products": [{"id": product.id, "name": product.nome, "unit": product.unidade} for product in farm.produtos_estoque.filter(ativo=True)],
+            "applications": [{
+                "id": application.id,
+                "label": f"{application.produto} · {application.data_aplicacao:%d/%m/%Y}",
+                "date": application.data_aplicacao.isoformat(),
+                "plot_id": application.talhao_id,
+                "product": application.produto,
+            } for application in applications],
+            "permissions": {
+                "view": _has_farm_permission(farm, request.user, "view"),
+                "plan": _has_farm_permission(farm, request.user, "plan"),
+                "manage": _has_farm_permission(farm, request.user, "manage"),
+            },
+        })
+
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode criar eventos nesta fazenda.", 403)
+    return _save_calendar_event(request, farm)
+
+
+@require_http_methods(["PUT", "PATCH", "DELETE"])
+def calendar_event_detail_api(request, event_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    event = EventoCalendario.objects.filter(fazenda=farm, pk=event_id).select_related(
+        "talhao", "aplicacao", "produto", "recomendacao", "criado_por"
+    ).first()
+    if event is None:
+        return _error("Evento não encontrado nesta fazenda.", 404)
+    if request.method == "DELETE":
+        if not _has_farm_permission(farm, request.user, "manage"):
+            return _error("Seu perfil não pode excluir eventos desta fazenda.", 403)
+        event.delete()
+        return JsonResponse({"ok": True, "deleted_id": event_id})
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode editar eventos desta fazenda.", 403)
+    if request.method == "PATCH":
+        data = _json_body(request)
+        if not isinstance(data, dict) or set(data) != {"status"}:
+            return _error("Informe somente um status válido para atualizar.")
+        if data["status"] not in EventoCalendario.Status.values:
+            return _error("Selecione um status válido.")
+        event.status = data["status"]
+        event.save(update_fields=["status", "atualizado_em"])
+        return JsonResponse({"ok": True, "event": _calendar_event_json(event)})
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode editar eventos desta fazenda.", 403)
+    return _save_calendar_event(request, farm, event)

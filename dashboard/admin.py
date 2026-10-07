@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    AcessoSistema, ColetaMeteorologica, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
+    AcessoSistema, ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
     MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, PerfilProdutor, Produto,
     RecomendacaoJanela, SensorIoT, Talhao,
 )
@@ -119,3 +119,11 @@ class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
     @admin.display(description="Fazenda", ordering="produto__fazenda__nome")
     def fazenda(self, obj):
         return obj.produto.fazenda
+
+
+@admin.register(EventoCalendario)
+class EventoCalendarioAdmin(admin.ModelAdmin):
+    list_display = ("titulo", "fazenda", "data", "categoria", "status", "talhao", "criado_por")
+    list_filter = ("fazenda", "categoria", "status", "prioridade", "origem", "data")
+    search_fields = ("titulo", "fazenda__nome", "talhao__nome", "responsavel", "descricao")
+    list_select_related = ("fazenda", "talhao", "criado_por")

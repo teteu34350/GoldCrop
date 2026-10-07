@@ -946,6 +946,7 @@ function navigateTo(page) {
   const urlMap = {
     'dashboard': '/dashboard/',
     'calendar': '/calendario/',
+    'gold-window': '/janela-de-ouro/',
     'talhoes': '/talhoes/',
     'fazenda': '/fazenda/',
     'sensores': '/sensores/',
@@ -1163,6 +1164,7 @@ function renderDayPanel(day, data, recommendation = data.recommendation) {
           : '<strong>Aguardando dados.</strong> Ainda não há previsão meteorológica para este talhão.'
         : '⚠️ <strong>Condições desfavoráveis.</strong> Não recomendado para aplicação neste dia.'}
     </div>`}
+    ${hasWindow && selectedTalhao && (!recommendation?.decision || recommendation.decision === 'APPLY') ? `<button type="button" class="btn-ghost" style="width:100%;margin-top:.5rem;justify-content:center" data-add-to-farm-calendar data-date="${escapeHtml(selectedCalDay)}" data-plot-id="${Number(selectedTalhao.id)}" data-plot-name="${escapeHtml(selectedTalhao.name)}" data-recommendation-id="${recommendation?.id ? Number(recommendation.id) : ''}" data-window="${escapeHtml(windowTime)}" data-confidence="${Math.round((recommendation?.confidence ?? selectedIea / 100) * 100)}">Adicionar ao Calendário</button>` : ''}
     ${data.planned && data.planejamentoId && !data.app ? `<button class="btn-primary" style="width:100%;margin-top:.75rem;justify-content:center" onclick="openRegistrar(${selectedTalhao?.id}, ${data.planejamentoId})">Registrar execução planejada</button>` : ''}
     ${selectedTalhao ? `<button class="btn-ghost" style="width:100%;margin-top:.5rem;justify-content:center" onclick="openPlanejar(${selectedTalhao.id}, '${selectedCalDay}')">Planejar para ${selectedTalhao.name}</button>` : ''}
 
@@ -2474,6 +2476,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btnCadastrarTalhao')?.addEventListener('click', openCadastrarTalhaoModal);
   document.getElementById('cadastroTalhaoForm')?.addEventListener('submit', cadastrarTalhao);
   document.getElementById('edicaoTalhaoForm')?.addEventListener('submit', atualizarTalhao);
+  document.addEventListener('click', event => {
+    const recommendationButton = event.target.closest('[data-add-to-farm-calendar]');
+    if (!recommendationButton) return;
+    const range = recommendationButton.dataset.window || '';
+    const [startTime = '', endTime = ''] = range.split(/\s*[–—-]\s*/);
+    sessionStorage.setItem('goldcrop.pendingCalendarActivity', JSON.stringify({
+      date: recommendationButton.dataset.date,
+      plot_id: Number(recommendationButton.dataset.plotId),
+      recommendation_id: recommendationButton.dataset.recommendationId || null,
+      start_time: startTime,
+      end_time: endTime,
+      title: `Aplicação recomendada · ${recommendationButton.dataset.plotName}`,
+      description: `Condições favoráveis para aplicação no período ${range}. Confiança da recomendação: ${recommendationButton.dataset.confidence}%.`,
+      notes: `Janela de aplicação recomendada pelo GoldCrop: ${range}. Confiança: ${recommendationButton.dataset.confidence}%.`,
+    }));
+    window.location.href = '/calendario/?atividade=janela-de-ouro';
+  });
   ['calendarTalhaoSelect', 'dashboardTalhaoSelect', 'talhaoSelect'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', async event => {
       await selectTalhao(event.target.value);
@@ -2482,10 +2501,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   updateProfileDOM();
   await loadDatabaseState();
+  const requestedTalhaoId = Number(new URLSearchParams(window.location.search).get('talhao_id'));
+  if (document.getElementById('mapContainer') && TALHOES_DATA.some(item => Number(item.id) === requestedTalhaoId)) {
+    selectedTalhaoRefId = requestedTalhaoId;
+    focusedTalhaoMapId = requestedTalhaoId;
+    localStorage.setItem('goldcrop.selectedTalhaoId', String(requestedTalhaoId));
+  }
   syncCalendarTalhaoSelector();
   await loadLocalWeather(getSelectedReferenceTalhao()?.id);
   updateProfileDOM();
   await refreshLiveData();
+  if (document.getElementById('calGrid')) {
+    const params = new URLSearchParams(window.location.search);
+    const requestedDate = params.get('date');
+    const requestedTalhaoId = Number(params.get('talhao_id'));
+    if (requestedTalhaoId && TALHOES_DATA.some(item => Number(item.id) === requestedTalhaoId)) {
+      const selector = document.getElementById('calendarTalhaoSelect');
+      if (selector) selector.value = String(requestedTalhaoId);
+      await selectTalhao(requestedTalhaoId);
+    }
+    if (requestedDate) {
+      const [year, month, day] = requestedDate.split('-').map(Number);
+      if (year && month && day) {
+        calMonth = new Date(year, month - 1, 1);
+        renderCalendar();
+        const recommendationDay = CAL_DATA[requestedDate];
+        const dayCell = document.querySelector(`.cal-day[data-date="${requestedDate}"]`);
+        if (recommendationDay && dayCell) selectCalDay(requestedDate, day, recommendationDay, dayCell);
+      }
+    }
+  }
 
   // Close dropdown on outside click or ESC
   document.addEventListener('click', (e) => {
