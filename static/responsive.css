@@ -711,3 +711,296 @@ body.sidebar-open {
     font-size: .75rem;
   }
 }
+
+@media (max-width: 640px) {
+  .main-content,
+  .page.active,
+  .page-content {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-content {
+    width: 100%;
+    padding: 1rem .85rem 2rem;
+  }
+
+  .page-content > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .page-header {
+    align-items: stretch;
+  }
+
+  .page-title,
+  .page-sub {
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-header {
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+
+  .dashboard-title {
+    font-size: clamp(1.4rem, 6vw, 1.75rem);
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-subtitle {
+    font-size: .85rem;
+    line-height: 1.45;
+  }
+
+  .dashboard-farm-info {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px;
+    align-items: stretch;
+    justify-content: stretch;
+    gap: .5rem;
+    width: 100%;
+  }
+
+  .farm-info-item {
+    min-width: 0;
+    align-items: flex-start;
+    padding: .55rem .65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-card);
+    text-align: left;
+  }
+
+  .farm-info-label {
+    font-size: .62rem;
+  }
+
+  .farm-info-value {
+    max-width: 100%;
+    font-size: .78rem;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-notif-btn {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    align-self: center;
+  }
+
+  .dashboard-talhao-selector {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .4rem;
+    width: 100%;
+    min-width: 0;
+    padding: .75rem;
+  }
+
+  .dashboard-talhao-selector .form-input,
+  .dashboard-talhao-selector #dashboardTalhaoSelect,
+  .dashboard-talhao-selector #talhaoSelect {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dashboard-talhao-selector [role="status"] {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .6rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .dashboard-kpis .kpi-card {
+    display: flex;
+    min-width: 0;
+    gap: .55rem;
+    padding: .85rem;
+  }
+
+  .dashboard-kpis .kpi-icon-wrapper {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+  }
+
+  .dashboard-kpis .kpi-content {
+    min-width: 0;
+  }
+
+  .dashboard-kpis .kpi-label {
+    font-size: .67rem;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-kpis .kpi-value {
+    font-size: 1.5rem;
+  }
+
+  .dashboard-kpis .kpi-unit {
+    font-size: .72rem;
+  }
+
+  .dashboard-talhao-selector,
+  .pecuaria-farm-summary,
+  .golden-window-card,
+  .weather-content {
+    margin-bottom: 1.25rem;
+  }
+
+  .golden-window-card {
+    padding: 1.1rem;
+  }
+
+  .golden-window-card .gw-content {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .6rem;
+    margin-bottom: 1rem;
+  }
+
+  .golden-window-card .gw-main {
+    min-width: 0;
+    gap: .75rem;
+  }
+
+  .golden-window-card .gw-talhao-badge {
+    max-width: 100%;
+    padding: .4rem .65rem;
+    overflow-wrap: anywhere;
+  }
+
+  .golden-window-card .gw-date-big {
+    font-size: clamp(1.1rem, 5vw, 1.4rem);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .golden-window-card .gw-time-big {
+    font-size: .9rem;
+  }
+
+  .golden-window-card .gw-iea-ring {
+    gap: .2rem;
+  }
+
+  .golden-window-card .ring-chart {
+    width: 88px;
+    height: 88px;
+  }
+
+  .golden-window-card .ring-value {
+    font-size: 1.35rem;
+  }
+
+  .golden-window-card .ring-label {
+    font-size: .64rem;
+  }
+
+  .golden-window-card .gw-factors {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .4rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .golden-window-card .factor-item {
+    min-width: 0;
+    gap: .35rem;
+    padding: .5rem .4rem;
+  }
+
+  .golden-window-card .factor-icon {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+  }
+
+  .golden-window-card .factor-label,
+  .golden-window-card .factor-value {
+    overflow-wrap: anywhere;
+  }
+
+  .golden-window-card .factor-label {
+    font-size: .65rem;
+  }
+
+  .golden-window-card .factor-value {
+    font-size: .75rem;
+  }
+
+  .weather-content {
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .weather-current {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: .75rem;
+    text-align: left;
+  }
+
+  .weather-icon-big {
+    font-size: 2.25rem;
+  }
+
+  .weather-forecast-hourly {
+    min-width: 0;
+    gap: .5rem;
+  }
+
+  .forecast-hour {
+    min-width: 68px;
+    padding: .6rem .7rem;
+  }
+
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-card {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 380px) {
+  .dashboard-kpis .kpi-card {
+    padding: .7rem;
+  }
+
+  .dashboard-kpis .kpi-label {
+    font-size: .62rem;
+    letter-spacing: .02em;
+  }
+
+  .golden-window-card {
+    padding: .9rem;
+  }
+
+  .golden-window-card .gw-content {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  .golden-window-card .ring-chart {
+    width: 76px;
+    height: 76px;
+  }
+
+  .golden-window-card .gw-factors {
+    gap: .25rem;
+  }
+
+  .golden-window-card .factor-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

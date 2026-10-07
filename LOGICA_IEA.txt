@@ -1,0 +1,215 @@
+LOGICA DO IEA E DAS RECOMENDACOES METEOROLOGICAS
+================================================
+
+Objetivo deste documento
+-----------------------
+
+Este arquivo descreve a logica que o GoldCrop executa atualmente para calcular
+o Indice de Adequacao (IEA) e classificar uma janela de aplicacao. Ele documenta
+o comportamento existente; nao altera pesos, formulas nem recomendacoes.
+
+O IEA mede a adequacao das condicoes meteorologicas para uma aplicacao em uma
+janela prevista. Ele nao e, atualmente, um indice geral de saude da lavoura,
+necessidade de irrigacao ou beneficio da chuva para a cultura. Essa diferenca e
+importante para interpretar o peso da chuva: agua pode beneficiar a lavoura,
+mas chuva durante ou logo apos uma aplicacao pode lavar o produto, causar
+escorrimento ou lixiviacao.
+
+1. De onde vem a analise
+------------------------
+
+1. O sistema carrega a previsao meteorologica e os dados disponiveis para o
+   talhao selecionado.
+2. O motor GoldCropAnalysisEngine.js avalia periodos de 4 horas, avancando o
+   inicio da janela em intervalos de 1 hora, ate o horizonte de previsao
+   considerado pelo motor (no maximo 7 dias).
+3. Para cada janela, o motor calcula as notas dos fatores, soma o IEA, avalia
+   a confianca dos dados e verifica riscos.
+4. As janelas sao ordenadas pelo IEA. A janela de maior IEA e a melhor
+   recomendacao disponivel; ainda assim, sua decisao pode ser WAIT, AVOID ou
+   INSUFFICIENT_DATA por causa da confianca ou de riscos.
+
+2. Formula e pesos do IEA
+-------------------------
+
+Cada fator recebe uma nota entre 0 e 100. A formula efetiva e:
+
+IEA = soma(nota_do_fator x peso_do_fator)
+
+Pesos usados pelo motor atualmente:
+
+Fator                         Peso       Contribuicao maxima
+----------------------------  ---------  -------------------
+Umidade do solo               20%        20 pontos
+Chuva                         15%        15 pontos
+Distribuicao da chuva         10%        10 pontos
+Evapotranspiracao (ET0)       15%        15 pontos
+Vento                         10%        10 pontos
+Temperatura                   10%        10 pontos
+Umidade relativa do ar        10%        10 pontos
+Risco adicional da aplicacao  10%        10 pontos
+Total                         100%       100 pontos
+
+O fator "risco adicional da aplicacao" recebe atualmente nota fixa 100, pois o
+motor ainda nao calcula um score especifico para esse fator. Portanto, ele
+adiciona 10 pontos ao IEA de todas as janelas. Os riscos de lixiviacao,
+escorrimento e deriva sao avaliados separadamente e podem bloquear a decisao
+final, mas nao reduzem diretamente a soma do IEA.
+
+Os pesos acima sao os valores padrao efetivamente usados: o app.js instancia o
+motor sem passar uma configuracao alternativa.
+
+3. Como cada nota e calculada
+----------------------------
+
+Umidade do solo
+  Usa uma curva interpolada entre pontos. Os valores de referencia sao:
+  0% -> nota 0; 20% -> 30; 40% -> 85; 60% -> 85; 75% -> 50;
+  90% -> 10; 100% -> 0. Entre pontos, o motor calcula uma interpolacao linear.
+  A umidade considerada e a camada de 9 a 27 cm; se nao houver dado horario,
+  pode ser usada a leitura atual dessa camada.
+
+Chuva
+  A nota de chuva e a media aritmetica de tres notas:
+  - Volume acumulado na janela de 4 horas:
+    menos de 2 mm = 0;
+    de 2 a 5 mm = aumento linear de 0 a 100;
+    de 5 a 15 mm = 100;
+    de 15 a 30 mm = queda linear de 100 a 0;
+    acima de 30 mm = 0.
+  - Probabilidade de precipitacao:
+    nota = 100 - probabilidade percentual. Quanto maior a probabilidade de
+    chover durante a janela avaliada, menor esta parcela da nota.
+  - Intensidade:
+    ate 0,5 mm/h = 100; a partir de 5 mm/h = 0; entre esses valores, a queda
+    e linear.
+
+  Assim, a nota de chuva nao significa "chuva e sempre ruim" nem "chuva e
+  sempre boa": o volume moderado recebe a melhor nota, enquanto a probabilidade
+  e a intensidade elevadas reduzem a nota da janela de aplicacao.
+
+Distribuicao da chuva
+  Considera como a precipitacao da janela se distribui pelas horas:
+  nota = 100 x (1 - min(concentracao, 0,7)), onde concentracao e a maior
+  precipitacao horaria dividida pelo total da janela. Se nao houver chuva ou
+  nao houver valores horarios, a nota atual e 100. Chuva concentrada em uma
+  hora pode receber nota inferior a chuva distribuida.
+
+  Consequencia importante: a ausencia de chuva recebe nota maxima neste fator.
+  Isso e parte da logica atual de adequacao para aplicacao; nao representa uma
+  avaliacao do beneficio da chuva para a lavoura.
+
+Evapotranspiracao (ET0)
+  Usa ET0 de referencia de 4 mm/dia e peso de demanda 0,4:
+  nota = max(0, 100 - 0,4 x (ET0 / 4) x 100).
+  Maior demanda evapotranspirativa reduz a nota.
+
+Vento
+  A nota e 100 entre 0 e 15 km/h, cai linearmente de 15 a 40 km/h, e e 0
+  abaixo de 0 ou acima de 40 km/h. Para avaliar a janela, e usada a maior
+  velocidade horaria observada nela.
+
+Temperatura
+  A nota e 100 entre 20 e 30 graus C. Cai linearmente entre os limites
+  externos de -10 e 20 graus C, e entre 30 e 45 graus C; fora de -10 a 45,
+  recebe nota 0.
+
+Umidade relativa do ar
+  A nota e 100 entre 40% e 70%. Cai linearmente entre os limites externos de
+  10% e 40%, e de 70% a 90%; fora de 10% a 90%, recebe nota 0.
+
+Arredondamento
+  O IEA final e arredondado para o inteiro mais proximo antes da classificacao.
+
+4. Classificacao do IEA
+----------------------
+
+Faixa do IEA   Classificacao
+-------------  ----------------
+0 a 20         Muito desfavoravel
+21 a 40        Desfavoravel
+41 a 60        Atencao
+61 a 80        Favoravel
+81 a 100       Janela de Ouro
+
+Os nomes e faixas sao a classificacao da nota, nao uma garantia de resultado
+agronomico. A decisao final considera tambem confianca e riscos.
+
+5. Confianca dos dados
+----------------------
+
+A confianca e distinta do IEA: mede se ha dados suficientes para sustentar a
+analise, e nao se as condicoes sao favoraveis. O motor comeca em 100% e reduz
+a confianca conforme a importancia dos dados ausentes:
+
+Variavel       Penalidade se ausente
+-------------  ---------------------
+Umidade solo   30%
+Volume chuva   20%
+Prob. chuva     5%
+Vento          15%
+Temperatura    15%
+Umidade ar     10%
+ET0             5%
+Nebulosidade    2%
+Radiacao solar  2%
+
+Se uma variavel critica estiver ausente, a confianca da janela passa a zero.
+As variaveis criticas sao umidade do solo, volume e probabilidade da chuva,
+vento, temperatura e umidade relativa do ar. A decisao passa a
+INSUFFICIENT_DATA quando a confianca e menor que 65%. Dados ausentes nao devem
+ser confundidos com valor zero. Para variaveis nao criticas, a ausencia reduz
+a confianca pela metade da penalidade indicada. Essas penalidades somam 104%,
+nao sao normalizadas e a confianca final e limitada ao intervalo de 0% a 100%.
+
+6. Riscos e decisao final
+-------------------------
+
+Os riscos sao verificacoes adicionais, separadas da soma do IEA:
+
+- Escorrimento: alto se a chuva acumulada na janela exceder 25 mm.
+- Lixiviacao: alta se a umidade do solo exceder 80% e a chuva exceder 25 mm.
+- Deriva pelo vento: alta se o vento exceder 30 km/h.
+- Volatilizacao: alta se a temperatura exceder 30 graus C. Este risco e
+  calculado e exibido, mas nao e atualmente usado como bloqueio na politica
+  de decisao.
+
+Ordem da decisao:
+
+1. Confianca abaixo de 65%: INSUFFICIENT_DATA.
+2. Risco alto de lixiviacao, escorrimento ou deriva: AVOID.
+3. IEA igual ou superior a 60, sem esses riscos altos: APPLY.
+4. IEA de 40 a 59: WAIT.
+5. Demais casos: AVOID.
+
+O motor tambem disponibiliza condicoes previstas para as 24 e 48 horas
+seguintes a cada janela. No codigo atual, esses dados sao anexados ao resultado
+para contexto, mas nao entram diretamente na formula do IEA nem na decisao.
+
+7. Interpretacao da chuva e limite atual
+----------------------------------------
+
+O IEA atual e voltado a escolher condicoes para realizar uma aplicacao. Por
+isso, a probabilidade de chuva durante a janela reduz uma parcela da nota, e
+chuva muito intensa ou volumosa pode reduzir notas e acionar riscos. Ao mesmo
+tempo, volume moderado (5 a 15 mm) recebe nota maxima na parcela de volume.
+Distribuicao sem chuva tambem recebe nota maxima.
+
+Portanto, o sistema atual nao aplica uma regra geral de que "chuva e melhor
+que nao chover" ao IEA. Ele pondera chuva como condicao meteorologica da
+aplicacao. O beneficio hidrico da chuva para o desenvolvimento da cultura,
+considerando cultura, fase fenologica, solo, deficit hidrico e chuva acumulada
+em periodos maiores, nao e calculado por este IEA. Para representar esse
+beneficio sem confundi-lo com o risco de lavar um produto, seria necessario um
+indicador hidrico separado ou uma regra agronomica explicitamente definida;
+nenhuma alteracao desse tipo foi feita nesta documentacao.
+
+8. Referencias no codigo
+-----------------------
+
+- static/analysis/GoldCropAnalysisEngine.js:
+  pesos padrao, calculo dos fatores, classificacao, confianca e decisao.
+- static/app.js:
+  execucao do motor e apresentacao dos resultados por talhao.
+- tests/GoldCropAnalysisEngine.test.js:
+  testes das condicoes favoraveis, riscos, dados ausentes e confianca.
