@@ -1,8 +1,11 @@
 import json
+import logging
+import math
 import re
 import smtplib
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
@@ -21,9 +24,16 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from .models import (
     AcessoSistema, ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda, MembroFazenda,
-    NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
+    NotificacaoFazenda, ParametroTecnicoOperacao, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela, ResultadoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
+from .agronomy import OPERATIONS, evaluate_operation
+from .weather import (
+    WeatherProviderError, forecast_response, get_archive_collection,
+    get_forecast_collection,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _json_body(request):
@@ -560,10 +570,13 @@ def _recommendation_json(recommendation):
         "date": recommendation.data.isoformat(),
         "windowStart": recommendation.inicio.isoformat(), "windowEnd": recommendation.fim.isoformat(),
         "adequacyIndex": recommendation.adequacao, "classification": recommendation.classificacao,
-        "confidence": float(recommendation.confianca), "decision": recommendation.decisao,
+        "confidence": float(recommendation.confianca) if recommendation.confianca is not None else None,
+        "decision": recommendation.decisao, "operation": recommendation.tipo_operacao,
+        "context": recommendation.contexto, "explanation": recommendation.justificativa,
         "factors": recommendation.fatores, "risks": recommendation.riscos,
         "dataQuality": recommendation.qualidade_dados, "metrics": recommendation.metricas,
         "next24h": recommendation.proximas_24h, "next48h": recommendation.proximas_48h,
+        "createdAt": recommendation.criado_em.isoformat(),
     }
 
 
@@ -579,16 +592,23 @@ def system_state_api(request):
     talhoes = list(farm.talhoes.filter(ativo=True))
     talhao_context = {}
     for talhao in talhoes:
-        collection = talhao.coletas_meteorologicas.first()
-        recommendations = list(collection.recomendacoes.all()) if collection else []
+        collection = talhao.coletas_meteorologicas.filter(fonte="open-meteo").first()
+        recommendations = list(
+            collection.recomendacoes.filter(tipo_operacao=RecomendacaoJanela.Operacao.ADUBACAO)
+        ) if collection else []
         talhao_context[talhao.id] = {
             "collection": collection,
             "recommendations": [_recommendation_json(item) for item in recommendations],
         }
     requested_talhao_id = request.GET.get("talhao_id")
     selected_context = talhao_context.get(int(requested_talhao_id)) if requested_talhao_id and requested_talhao_id.isdigit() else None
-    latest_collection = selected_context["collection"] if selected_context else farm.coletas_meteorologicas.first()
-    recommendations = latest_collection.recomendacoes.all() if latest_collection else RecomendacaoJanela.objects.none()
+    latest_collection = (
+        selected_context["collection"] if selected_context
+        else farm.coletas_meteorologicas.filter(fonte="open-meteo").first()
+    )
+    recommendations = latest_collection.recomendacoes.filter(
+        tipo_operacao=RecomendacaoJanela.Operacao.ADUBACAO,
+    ) if latest_collection else RecomendacaoJanela.objects.none()
     owner_name = farm.produtor.get_full_name() or farm.produtor.username
     membership = _membership(farm, request.user)
     talhao_payload = []
@@ -669,9 +689,9 @@ def recommendations_ingest_api(request):
         talhao = farm.talhoes.filter(pk=talhao_id, ativo=True).first()
         if talhao is None:
             return _error("Talhão não encontrado na sua fazenda.", 404)
-        collection = talhao.coletas_meteorologicas.first()
+        collection = talhao.coletas_meteorologicas.filter(fonte="open-meteo").first()
     else:
-        collection = farm.coletas_meteorologicas.first()
+        collection = farm.coletas_meteorologicas.filter(fonte="open-meteo").first()
     if not collection:
         return _error("Salve a coleta meteorológica antes da recomendação.")
     recommendations = data.get("recommendations", [])
@@ -684,13 +704,22 @@ def recommendations_ingest_api(request):
             item.decisao,
             json.dumps(item.metricas, sort_keys=True, separators=(",", ":")),
         )
-        for item in collection.recomendacoes.all()
+        for item in collection.recomendacoes.filter(tipo_operacao=RecomendacaoJanela.Operacao.ADUBACAO)
     }
-    RecomendacaoJanela.objects.filter(coleta=collection).delete()
     created_recommendations = []
     for item in recommendations:
         inicio = _parse_datetime(item.get("windowStart"))
         fim = _parse_datetime(item.get("windowEnd"))
+        signature = (
+            date.fromisoformat(item["date"]).isoformat(),
+            timezone.localtime(inicio).isoformat(),
+            timezone.localtime(fim).isoformat(),
+            int(item.get("adequacyIndex", 0)),
+            item.get("decision", "INSUFFICIENT_DATA"),
+            json.dumps(item.get("metrics", {}), sort_keys=True, separators=(",", ":")),
+        )
+        if signature in old_signatures:
+            continue
         created_recommendations.append(RecomendacaoJanela.objects.create(
             fazenda=farm, talhao=collection.talhao, coleta=collection, data=date.fromisoformat(item["date"]), inicio=inicio, fim=fim,
             adequacao=int(item.get("adequacyIndex", 0)), classificacao=item.get("classification", "unknown"),
@@ -721,8 +750,522 @@ def recommendations_ingest_api(request):
         )
     return JsonResponse({
         "ok": True, "count": len(created_recommendations),
-        "recommendations": [_recommendation_json(item) for item in created_recommendations],
+        "recommendations": [
+            _recommendation_json(item)
+            for item in collection.recomendacoes.filter(tipo_operacao=RecomendacaoJanela.Operacao.ADUBACAO)
+        ],
     }, status=201)
+
+
+@require_GET
+def weather_forecast_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    plot = farm.talhoes.filter(pk=request.GET.get("talhao_id"), ativo=True).first()
+    if plot is None:
+        return _error("Talhão não encontrado na sua fazenda.", 404)
+    try:
+        collection, payload, refreshed = get_forecast_collection(
+            plot, force_refresh=request.GET.get("refresh") == "1",
+        )
+    except WeatherProviderError as error:
+        return _error(str(error), 503)
+    return JsonResponse({
+        "ok": True,
+        "refreshed": refreshed,
+        "weather": forecast_response(payload, collection),
+    })
+
+
+@require_GET
+def weather_history_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    plot = farm.talhoes.filter(pk=request.GET.get("talhao_id"), ativo=True).first()
+    if plot is None:
+        return _error("Talhão não encontrado na sua fazenda.", 404)
+    try:
+        start_date = date.fromisoformat(request.GET.get("start", ""))
+        end_date = date.fromisoformat(request.GET.get("end", ""))
+    except ValueError:
+        return _error("Informe datas históricas válidas no formato AAAA-MM-DD.")
+    if start_date > end_date or end_date > timezone.localdate() or (end_date - start_date).days > 6:
+        return _error("O período histórico deve ser passado, válido e limitado a 7 dias.")
+    try:
+        collection, payload, refreshed = get_archive_collection(plot, start_date, end_date)
+    except WeatherProviderError as error:
+        return _error(str(error), 503)
+    return JsonResponse({
+        "ok": True,
+        "refreshed": refreshed,
+        "source": collection.fonte,
+        "updated_at": collection.coletada_em.isoformat(),
+        "timezone": collection.timezone,
+        "data_kind": "reanálise meteorológica modelada; não equivale a observação local",
+        "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
+        "hourly": payload.get("hourly", {}),
+        "daily": payload.get("daily", {}),
+        "limitations": [
+            "Dados históricos de reanálise do Open-Meteo, não uma estação instalada no talhão.",
+            "Cobertura e disponibilidade variam por variável e período; dados ausentes permanecem ausentes.",
+        ],
+    })
+
+
+def _window_result_json(result):
+    payload = {
+        "id": result.id,
+        "recommendation_id": result.recomendacao_id,
+        "plot_id": result.talhao_id,
+        "plot_name": result.talhao.nome if result.talhao else "",
+        "status": result.status,
+        "performed_at": result.realizado_em.isoformat() if result.realizado_em else None,
+        "observed_conditions": result.condicoes_observadas,
+        "reported_outcome": result.resultado_informado,
+        "created_at": result.criado_em.isoformat(),
+    }
+    if result.recomendacao:
+        payload["operation"] = result.recomendacao.tipo_operacao
+        payload["forecast_metrics"] = result.recomendacao.metricas
+        payload["classification"] = result.recomendacao.classificacao
+        payload["timezone"] = result.recomendacao.qualidade_dados.get("fuso_horario")
+    return payload
+
+
+def _forecast_metrics_at(recommendation, moment):
+    collection = recommendation.coleta
+    if collection is None or moment is None:
+        return {}
+    payload = collection.dados_brutos.get("provider_payload")
+    hourly = payload.get("hourly") if isinstance(payload, dict) else None
+    if not isinstance(hourly, dict) or not isinstance(hourly.get("time"), list):
+        return {}
+    try:
+        local_moment = timezone.localtime(moment, ZoneInfo(collection.timezone))
+    except (ZoneInfoNotFoundError, TypeError, ValueError):
+        return {}
+    target = local_moment.strftime("%Y-%m-%dT%H:00")
+    try:
+        index = hourly["time"].index(target)
+    except ValueError:
+        return {}
+    values = {}
+    for name in ("temperature_2m", "precipitation", "wind_speed_10m"):
+        series = hourly.get(name)
+        if isinstance(series, list) and index < len(series):
+            values[name] = series[index]
+    return values
+
+
+def _latest_weather_summary(farm):
+    collection = farm.coletas_meteorologicas.filter(fonte="open-meteo").first()
+    if collection is None:
+        return None
+    metadata = collection.dados_brutos
+    return {
+        "source": collection.fonte,
+        "fetched_at": metadata.get("fetched_at", collection.coletada_em.isoformat()),
+        "timezone": collection.timezone,
+        "latitude": float(collection.latitude),
+        "longitude": float(collection.longitude),
+        "cache_minutes": 60 if metadata.get("provider_payload") else None,
+        "coverage": {
+            "past_days": metadata.get("past_days"),
+            "forecast_days": metadata.get("forecast_days"),
+            "soil_values": "estimativas meteorológicas, não medições",
+        },
+    }
+
+
+@require_http_methods(["GET", "POST"])
+def gold_window_parameters_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    if request.method == "GET":
+        operation = request.GET.get("operation", "")
+        product = request.GET.get("product", "").strip()
+        method = request.GET.get("method", "").strip()
+        if operation not in RecomendacaoJanela.Operacao.values or not product or not method:
+            return _error("Informe operação, produto e método para consultar parâmetros.")
+        parameters = ParametroTecnicoOperacao.objects.filter(
+            fazenda=farm,
+            tipo_operacao=operation,
+            produto__iexact=product,
+            metodo_aplicacao__iexact=method,
+        )[:20]
+        return JsonResponse({
+            "ok": True,
+            "parameters": [{
+                "id": item.id,
+                "source": item.fonte_referencia,
+                "verified_on": item.data_verificacao.isoformat(),
+                "parameters": item.parametros,
+            } for item in parameters],
+        })
+
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode cadastrar parâmetros técnicos nesta fazenda.", 403)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados dos parâmetros técnicos inválidos.")
+    operation = str(data.get("operation", ""))
+    product = str(data.get("product", "")).strip()
+    method = str(data.get("method", "")).strip()
+    source = str(data.get("source", "")).strip()
+    raw_verified_on = str(data.get("verified_on", "")).strip()
+    parameters = data.get("parameters")
+    if operation not in RecomendacaoJanela.Operacao.values:
+        return _error("Selecione uma operação válida.")
+    if not product or len(product) > 150 or not method or len(method) > 100:
+        return _error("Informe produto (até 150 caracteres) e método (até 100 caracteres).")
+    if not source or len(source) > 300:
+        return _error("Informe a fonte técnica consultada (até 300 caracteres).")
+    try:
+        verified_on = date.fromisoformat(raw_verified_on)
+    except ValueError:
+        return _error("Informe uma data de verificação válida.")
+    if verified_on > timezone.localdate():
+        return _error("A data de verificação não pode estar no futuro.")
+    if not isinstance(parameters, dict) or len(json.dumps(parameters)) > 20000:
+        return _error("Os parâmetros devem ser um objeto JSON de até 20 KB.")
+    item, _ = ParametroTecnicoOperacao.objects.update_or_create(
+        fazenda=farm,
+        tipo_operacao=operation,
+        produto=product,
+        metodo_aplicacao=method,
+        data_verificacao=verified_on,
+        defaults={
+            "parametros": parameters,
+            "fonte_referencia": source,
+            "registrado_por": request.user,
+        },
+    )
+    return JsonResponse({
+        "ok": True,
+        "parameter": {
+            "id": item.id,
+            "source": item.fonte_referencia,
+            "verified_on": item.data_verificacao.isoformat(),
+        },
+    }, status=201)
+
+
+@require_http_methods(["GET", "POST"])
+def gold_windows_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+
+    if request.method == "GET":
+        recommendations = farm.recomendacoes.select_related("talhao", "coleta").filter(
+            criado_em__gte=timezone.now() - timedelta(days=90),
+        )
+        operation = request.GET.get("operation")
+        plot_id = request.GET.get("talhao_id")
+        classification = request.GET.get("classification")
+        culture = request.GET.get("culture")
+        start = request.GET.get("start")
+        end = request.GET.get("end")
+        if operation in RecomendacaoJanela.Operacao.values:
+            recommendations = recommendations.filter(tipo_operacao=operation)
+        if plot_id and plot_id.isdigit():
+            recommendations = recommendations.filter(talhao_id=int(plot_id))
+        if culture:
+            recommendations = recommendations.filter(talhao__cultura__iexact=culture)
+        if classification in {"FAVORAVEL", "ATENCAO", "DESFAVORAVEL", "DADOS_INSUFICIENTES"}:
+            recommendations = recommendations.filter(classificacao=classification)
+        if start:
+            try:
+                recommendations = recommendations.filter(data__gte=date.fromisoformat(start))
+            except ValueError:
+                return _error("Data inicial inválida.")
+        if end:
+            try:
+                recommendations = recommendations.filter(data__lte=date.fromisoformat(end))
+            except ValueError:
+                return _error("Data final inválida.")
+        latest_collections = {
+            plot.id: plot.coletas_meteorologicas.filter(fonte="open-meteo").first()
+            for plot in farm.talhoes.filter(ativo=True)
+        }
+        forecast_cutoff = timezone.now() - timedelta(minutes=60)
+        items = []
+        for recommendation in recommendations.order_by("-criado_em")[:150]:
+            item = _recommendation_json(recommendation)
+            item["plot_name"] = recommendation.talhao.nome if recommendation.talhao else "Talhão removido"
+            item["culture"] = recommendation.talhao.cultura if recommendation.talhao else ""
+            item["source"] = recommendation.coleta.fonte if recommendation.coleta else None
+            item["updated_at"] = recommendation.coleta.coletada_em.isoformat() if recommendation.coleta else None
+            latest = latest_collections.get(recommendation.talhao_id)
+            item["weather_is_current"] = bool(
+                recommendation.coleta
+                and recommendation.coleta.fonte == "open-meteo"
+                and recommendation.coleta.coletada_em >= forecast_cutoff
+                and latest
+                and latest.id == recommendation.coleta_id
+                and recommendation.talhao
+                and recommendation.coleta.latitude == recommendation.talhao.latitude
+                and recommendation.coleta.longitude == recommendation.talhao.longitude
+            )
+            items.append(item)
+        results = farm.resultados_janela.select_related("recomendacao", "talhao").all()[:150]
+        events = farm.eventos_calendario.select_related("talhao").filter(
+            data__gte=timezone.localdate(),
+            status__in=[EventoCalendario.Status.PLANEJADA, EventoCalendario.Status.EM_ANDAMENTO],
+        )[:150]
+        return JsonResponse({
+            "ok": True,
+            "weather": _latest_weather_summary(farm),
+            "operations": [{"value": key, "label": label} for key, label in OPERATIONS.items()],
+            "plots": [{
+                "id": plot.id,
+                "name": plot.nome,
+                "culture": plot.cultura,
+                "variety": plot.variedade,
+                "soil_type": plot.tipo_solo,
+                "latitude": float(plot.latitude) if plot.latitude is not None else None,
+                "longitude": float(plot.longitude) if plot.longitude is not None else None,
+            } for plot in farm.talhoes.filter(ativo=True)],
+            "recommendations": items,
+            "results": [_window_result_json(result) for result in results],
+            "activities": [{
+                "id": event.id,
+                "title": event.titulo,
+                "date": event.data.isoformat(),
+                "start_time": event.horario_inicial.isoformat() if event.horario_inicial else None,
+                "end_time": event.horario_final.isoformat() if event.horario_final else None,
+                "category": event.categoria,
+                "status": event.status,
+                "plot_name": event.talhao.nome if event.talhao else "",
+            } for event in events],
+        })
+
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados da análise inválidos.")
+    if not _has_farm_permission(farm, request.user, "plan"):
+        return _error("Seu perfil não pode planejar operações nesta fazenda.", 403)
+    operation = str(data.get("operation", ""))
+    if operation not in RecomendacaoJanela.Operacao.values:
+        return _error("Selecione um tipo de operação válido.")
+    plot = farm.talhoes.filter(pk=data.get("plot_id"), ativo=True).first()
+    if plot is None:
+        return _error("Talhão não encontrado na sua fazenda.", 404)
+    criteria = data.get("criteria", {})
+    if not isinstance(criteria, dict):
+        return _error("Os critérios técnicos devem ser um objeto.")
+
+    collection = None
+    weather_payload = {}
+    refreshed = False
+    try:
+        collection, weather_payload, refreshed = get_forecast_collection(
+            plot, force_refresh=data.get("refresh_weather") is True,
+        )
+    except WeatherProviderError as error:
+        return _error(str(error), 503)
+    plot_data = {
+        "cultura": plot.cultura,
+        "variedade": plot.variedade,
+        "tipo_solo": plot.tipo_solo,
+    }
+    context_snapshot = {
+        "operation": operation,
+        "plot": {
+            "culture": plot.cultura,
+            "cultivar": plot.variedade,
+            "soil_type": plot.tipo_solo,
+            "terrain": criteria.get("relevo", ""),
+        },
+        "criteria": criteria,
+    }
+    evaluation_weather = {
+        **weather_payload,
+        "_goldcrop": {
+            "fetched_at": collection.coletada_em.isoformat() if collection else None,
+            "past_days": 7,
+            "forecast_days": 7,
+        },
+    }
+    now = timezone.now()
+    try:
+        evaluation = evaluate_operation(operation, plot_data, evaluation_weather, criteria, now)
+    except ValueError as error:
+        return _error(str(error))
+    windows = evaluation["windows"]
+
+    opportunities = sorted(
+        (
+            item for item in windows
+            if item["classificacao"] in {"FAVORAVEL", "ATENCAO"}
+        ),
+        key=lambda item: item["inicio"],
+    )
+    for item in windows:
+        following = next(
+            (candidate for candidate in opportunities if candidate["inicio"] >= item["fim"]),
+            None,
+        )
+        if following:
+            hours_until = (following["inicio"] - item["fim"]).total_seconds() / 3600
+            next_window = {
+                "windowStart": following["inicio"].isoformat(),
+                "windowEnd": following["fim"].isoformat(),
+                "classification": following["classificacao"],
+            }
+            if hours_until <= 24:
+                item["next24h"] = next_window
+            if hours_until <= 48:
+                item["next48h"] = next_window
+
+    previous = farm.recomendacoes.filter(
+        talhao=plot,
+        tipo_operacao=operation,
+        contexto=context_snapshot,
+    ).order_by("-criado_em").first()
+    persisted = []
+    for item in windows:
+        start_at = item["inicio"]
+        end_at = item["fim"]
+        existing = None
+        if collection:
+            existing = collection.recomendacoes.filter(
+                talhao=plot,
+                tipo_operacao=operation,
+                contexto=context_snapshot,
+                inicio=start_at,
+                fim=end_at,
+                classificacao=item["classificacao"],
+            ).first()
+        recommendation = existing or RecomendacaoJanela.objects.create(
+            fazenda=farm,
+            talhao=plot,
+            coleta=collection,
+            tipo_operacao=operation,
+            contexto=context_snapshot,
+            data=timezone.localtime(start_at).date(),
+            inicio=start_at,
+            fim=end_at,
+            adequacao=None,
+            classificacao=item["classificacao"],
+            confianca=None,
+            decisao=item["decisao"],
+            justificativa=item["justificativa"],
+            fatores=item["fatores"],
+            riscos=item["riscos"],
+            qualidade_dados=item["qualidade_dados"],
+            metricas=item["metricas"],
+            proximas_24h=item.get("next24h", {}),
+            proximas_48h=item.get("next48h", {}),
+        )
+        persisted.append(recommendation)
+
+    first = persisted[0] if persisted else None
+    if first and previous and collection and previous.coleta_id != collection.id and (
+        previous.classificacao != first.classificacao
+        or previous.data != first.data
+    ):
+        _create_farm_notification(
+            farm,
+            request.user,
+            NotificacaoFazenda.Tipo.RECOMENDACAO,
+            "A recomendação da janela foi alterada",
+            f"A previsão atualizada alterou a recomendação de {OPERATIONS[operation]} para {plot.nome}. Revise os fatores antes de agir.",
+        )
+    return JsonResponse({
+        "ok": True,
+        "refreshed": refreshed,
+        "recommendations": [_recommendation_json(item) for item in persisted],
+    }, status=201)
+
+
+@require_POST
+def gold_window_result_api(request, recommendation_id):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    if not farm:
+        return _error("Fazenda não encontrada.", 404)
+    if not _has_farm_permission(farm, request.user, "record"):
+        return _error("Seu perfil não pode registrar resultados nesta fazenda.", 403)
+    recommendation = farm.recomendacoes.filter(pk=recommendation_id).select_related("talhao").first()
+    if recommendation is None:
+        return _error("Recomendação não encontrada nesta fazenda.", 404)
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _error("Dados do resultado inválidos.")
+    status = str(data.get("status", ""))
+    if status not in ResultadoJanela.Status.values:
+        return _error("Selecione se a operação foi realizada, adiada ou cancelada.")
+    observed_at = None
+    if data.get("performed_at"):
+        try:
+            observed_at = _parse_datetime(data["performed_at"])
+        except (TypeError, ValueError):
+            return _error("Data/hora realizada inválida.")
+    if status == ResultadoJanela.Status.REALIZADA and observed_at is None:
+        return _error("Informe a data e hora da operação realizada.")
+    if status == ResultadoJanela.Status.REALIZADA and observed_at > timezone.now():
+        return _error("A data e hora de uma operação realizada não podem estar no futuro.")
+    observed = data.get("observed_conditions", {})
+    if not isinstance(observed, dict):
+        return _error("As condições observadas devem ser um objeto.")
+    allowed_observations = {"temperature_2m", "precipitation", "wind_speed_10m"}
+    if set(observed) - allowed_observations:
+        return _error("As condições observadas contêm variáveis não aceitas.")
+    comparison = {}
+    forecast_metrics = _forecast_metrics_at(recommendation, observed_at)
+    if not forecast_metrics and observed_at and recommendation.inicio <= observed_at <= recommendation.fim:
+        forecast_metrics = recommendation.metricas
+    metric_map = {
+        "temperature_2m": ("temperatura_c", "°C"),
+        "precipitation": ("precipitacao_mm", "mm"),
+        "wind_speed_10m": ("vento_kmh", "km/h"),
+    }
+    for observed_name, (forecast_name, unit) in metric_map.items():
+        if observed_name not in observed:
+            continue
+        observed_value = observed[observed_name]
+        if isinstance(observed_value, bool):
+            return _error(f"Valor observado inválido: {observed_name}.")
+        try:
+            observed_value = float(observed_value)
+        except (TypeError, ValueError):
+            return _error(f"Valor observado inválido: {observed_name}.")
+        if not math.isfinite(observed_value):
+            return _error(f"Valor observado inválido: {observed_name}.")
+        if observed_name != "temperature_2m" and observed_value < 0:
+            return _error(f"Valor observado não pode ser negativo: {observed_name}.")
+        forecast_value = forecast_metrics.get(observed_name, forecast_metrics.get(forecast_name))
+        comparison[observed_name] = {
+            "observed": observed_value,
+            "forecast": forecast_value,
+            "difference": observed_value - forecast_value if isinstance(forecast_value, (int, float)) else None,
+            "unit": unit,
+        }
+    stored_observations = {**observed, "forecast_comparison": comparison}
+    result = ResultadoJanela.objects.create(
+        fazenda=farm,
+        talhao=recommendation.talhao,
+        recomendacao=recommendation,
+        registrado_por=request.user,
+        status=status,
+        realizado_em=observed_at,
+        condicoes_observadas=stored_observations,
+        resultado_informado=str(data.get("reported_outcome", "")).strip(),
+    )
+    return JsonResponse({"ok": True, "result": _window_result_json(result)}, status=201)
 
 
 @require_POST
@@ -1107,8 +1650,9 @@ def password_reset_api(request):
             email_template_name="registration/password_reset_email.txt",
             use_https=request.is_secure(),
         )
-    except (OSError, smtplib.SMTPException, ValueError) as error:
-        return _error(f"Não foi possível enviar as instruções de redefinição: {error}", 503)
+    except (OSError, smtplib.SMTPException, ValueError):
+        logger.exception("Password reset email delivery failed")
+        return _error("Não foi possível enviar as instruções de redefinição no momento.", 503)
     return JsonResponse({
         "ok": True,
         "message": "Se houver uma conta vinculada a este e-mail, as instruções serão enviadas.",
@@ -1500,7 +2044,9 @@ def _calendar_event_json(event):
         "recommendation_date": event.recomendacao.data.isoformat() if event.recomendacao_id else None,
         "recommendation_plot_id": event.recomendacao.talhao_id if event.recomendacao_id else None,
         "recommendation_confidence": (
-            float(event.recomendacao.confianca * 100) if event.recomendacao_id else None
+            float(event.recomendacao.confianca * 100)
+            if event.recomendacao_id and event.recomendacao.confianca is not None
+            else None
         ),
         "created_by": (
             event.criado_por.get_full_name() or event.criado_por.username
@@ -1603,9 +2149,9 @@ def _save_calendar_event(request, farm, event=None):
     product = farm.produtos_estoque.filter(pk=product_id, ativo=True).first() if product_id else None
     if product_id and product is None:
         return _error("Produto não encontrado no estoque desta fazenda.", 404)
-    recommendation = farm.recomendacoes.select_related("talhao").filter(pk=recommendation_id).first() if recommendation_id else None
+    recommendation = farm.recomendacoes.select_related("talhao", "coleta").filter(pk=recommendation_id).first() if recommendation_id else None
     if from_recommendation and recommendation_id is None:
-        recommendation = farm.recomendacoes.select_related("talhao").filter(
+        recommendation = farm.recomendacoes.select_related("talhao", "coleta").filter(
             data=event_date,
             talhao=plot,
             decisao="APPLY",
@@ -1616,10 +2162,45 @@ def _save_calendar_event(request, farm, event=None):
         recommendation_id = recommendation.id
     if recommendation_id and recommendation is None:
         return _error("Recomendação não encontrada nesta fazenda.", 404)
-    if recommendation_id and (
-        recommendation.decisao != "APPLY" or recommendation.adequacao < 75
-    ):
-        return _error("Somente uma recomendação favorável pode ser adicionada como atividade.")
+    if recommendation_id:
+        is_integrated_window = bool(recommendation.contexto)
+        if is_integrated_window:
+            collection = recommendation.coleta
+            latest_collection = (
+                recommendation.talhao.coletas_meteorologicas.filter(fonte="open-meteo").first()
+                if recommendation.talhao_id else None
+            )
+            if recommendation.classificacao not in {"FAVORAVEL", "ATENCAO"}:
+                return _error("Somente uma janela favorável ou de atenção pode ser planejada.")
+            if (
+                collection is None
+                or collection.fonte != "open-meteo"
+                or collection.coletada_em < timezone.now() - timedelta(minutes=60)
+                or latest_collection is None
+                or latest_collection.id != collection.id
+                or recommendation.talhao is None
+                or collection.latitude != recommendation.talhao.latitude
+                or collection.longitude != recommendation.talhao.longitude
+            ):
+                return _error("A previsão desta janela expirou ou foi substituída por uma mais recente. Atualize os dados e avalie novamente antes de planejar.")
+            try:
+                plot_timezone = ZoneInfo(collection.timezone)
+            except (ZoneInfoNotFoundError, TypeError):
+                return _error("O fuso horário da recomendação está indisponível.")
+            window_start = timezone.localtime(recommendation.inicio, plot_timezone)
+            window_end = timezone.localtime(recommendation.fim, plot_timezone)
+            event_start = timezone.make_aware(datetime.combine(event_date, start_time), plot_timezone) if start_time else None
+            event_end = timezone.make_aware(datetime.combine(event_date, end_time), plot_timezone) if end_time else None
+            if (
+                event_date != window_start.date()
+                or event_start is None
+                or event_end is None
+                or event_start < window_start
+                or event_end > window_end
+            ):
+                return _error("A data e o horário planejados devem estar dentro da janela recomendada.")
+        elif recommendation.decisao != "APPLY" or recommendation.adequacao is None or recommendation.adequacao < 75:
+            return _error("Somente uma recomendação favorável pode ser adicionada como atividade.")
 
     if (
         plot and application and application.talhao_id

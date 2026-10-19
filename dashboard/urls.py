@@ -14,7 +14,8 @@ from .views import (
     farm_settings_api, farm_team_api, farm_member_api,
     notifications_api, notification_read_api,
     estoque_view, estoque_dashboard_api, estoque_produtos_api, estoque_movimentacoes_api,
-    calendar_events_api, calendar_event_detail_api,
+    calendar_events_api, calendar_event_detail_api, weather_forecast_api,
+    weather_history_api, gold_windows_api, gold_window_parameters_api, gold_window_result_api,
 )
 
 app_name = 'dashboard'
@@ -39,7 +40,12 @@ urlpatterns = [
     path('logout/', logout_api, name='logout'),
     path('api/state/', system_state_api, name='system_state_api'),
     path('api/weather/ingest/', weather_ingest_api, name='weather_ingest_api'),
+    path('api/weather/forecast/', weather_forecast_api, name='weather_forecast_api'),
+    path('api/weather/history/', weather_history_api, name='weather_history_api'),
     path('api/recommendations/ingest/', recommendations_ingest_api, name='recommendations_ingest_api'),
+    path('api/janelas-ouro/', gold_windows_api, name='gold_windows_api'),
+    path('api/janelas-ouro/parametros/', gold_window_parameters_api, name='gold_window_parameters_api'),
+    path('api/janelas-ouro/<int:recommendation_id>/resultado/', gold_window_result_api, name='gold_window_result_api'),
     path('api/applications/', application_create_api, name='application_create_api'),
     path('api/planejamentos/', planejamento_create_api, name='planejamento_create_api'),
     path('api/planejamentos/<int:planejamento_id>/exec/', aplicacao_exec_api, name='aplicacao_exec_api'),

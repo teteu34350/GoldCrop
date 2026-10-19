@@ -2,8 +2,8 @@ from django.contrib import admin
 
 from .models import (
     AcessoSistema, ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda, LeituraSensorIoT,
-    MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, PerfilProdutor, Produto,
-    RecomendacaoJanela, SensorIoT, Talhao,
+    MembroFazenda, MovimentacaoEstoque, NotificacaoFazenda, ParametroTecnicoOperacao, PerfilProdutor, Produto,
+    RecomendacaoJanela, ResultadoJanela, SensorIoT, Talhao,
 )
 
 
@@ -75,9 +75,23 @@ class ColetaMeteorologicaAdmin(admin.ModelAdmin):
 
 @admin.register(RecomendacaoJanela)
 class RecomendacaoJanelaAdmin(admin.ModelAdmin):
-    list_display = ("fazenda", "data", "inicio", "fim", "adequacao", "decisao", "confianca")
-    list_filter = ("decisao", "classificacao", "data")
+    list_display = ("fazenda", "talhao", "tipo_operacao", "data", "inicio", "fim", "classificacao", "decisao")
+    list_filter = ("tipo_operacao", "decisao", "classificacao", "data")
     search_fields = ("fazenda__nome",)
+
+
+@admin.register(ResultadoJanela)
+class ResultadoJanelaAdmin(admin.ModelAdmin):
+    list_display = ("fazenda", "talhao", "status", "realizado_em", "registrado_por", "criado_em")
+    list_filter = ("fazenda", "status", "criado_em")
+    search_fields = ("talhao__nome", "resultado_informado")
+
+
+@admin.register(ParametroTecnicoOperacao)
+class ParametroTecnicoOperacaoAdmin(admin.ModelAdmin):
+    list_display = ("fazenda", "tipo_operacao", "produto", "metodo_aplicacao", "data_verificacao", "fonte_referencia")
+    list_filter = ("fazenda", "tipo_operacao", "data_verificacao")
+    search_fields = ("produto", "metodo_aplicacao", "fonte_referencia")
 
 
 @admin.register(SensorIoT)

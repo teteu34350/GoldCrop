@@ -19,7 +19,7 @@ class CadastroELoginApiTests(TestCase):
     def setUp(self):
         self.payload = {
             "nome": "Maria da Silva", "email": "maria@example.com", "telefone": "(35) 99999-1234",
-            "senha": "Senha123", "nome_fazenda": "Fazenda Horizonte", "cep": "37000-000",
+            "senha": "SenhaSegura123", "nome_fazenda": "Fazenda Horizonte", "cep": "37000-000",
             "estado": "MG", "cidade": "Varginha", "bairro": "Zona Rural", "endereco": "BR 491 km 10",
             "area_hectares": 120.5, "quantidade_talhoes": 8, "culturas": ["Café Arábica"],
             "tipo_cultivo": "Convencional", "irrigacao": "Gotejamento",
@@ -30,7 +30,7 @@ class CadastroELoginApiTests(TestCase):
         response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
         self.assertEqual(response.status_code, 201)
         user = User.objects.get(username="maria@example.com")
-        self.assertTrue(user.check_password("Senha123"))
+        self.assertTrue(user.check_password("SenhaSegura123"))
         self.assertEqual(PerfilProdutor.objects.get(usuario=user).telefone, "35999991234")
         self.assertFalse(Fazenda.objects.filter(produtor=user).exists())
         self.assertEqual(response.json()["redirect_url"], reverse("dashboard:farm_onboarding"))
@@ -41,7 +41,7 @@ class CadastroELoginApiTests(TestCase):
             "nome": "Maria da Silva",
             "email": "maria-sem-fazenda@example.com",
             "telefone": "(35) 99999-1234",
-            "senha": "Senha123",
+            "senha": "SenhaSegura123",
             "nome_fazenda": "Fazenda que não deve ser criada",
             "funcao": "MANAGER",
         }
@@ -63,7 +63,7 @@ class CadastroELoginApiTests(TestCase):
                 "nome": "Maria da Silva",
                 "email": "onboarding@example.com",
                 "telefone": "(35) 99999-1234",
-                "senha": "Senha123",
+                "senha": "SenhaSegura123",
             },
             content_type="application/json",
         )
@@ -76,6 +76,16 @@ class CadastroELoginApiTests(TestCase):
         response = self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
         self.assertEqual(response.status_code, 400)
         self.assertIn("email", response.json()["field_errors"])
+
+    def test_recusa_senha_curta(self):
+        payload = {**self.payload, "email": "senha-fraca@example.com", "senha": "Senha123"}
+        response = self.client.post(
+            reverse("dashboard:cadastro_api"),
+            payload,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("senha", response.json()["field_errors"])
 
     def test_login_valida_credenciais_reais(self):
         self.client.post(reverse("dashboard:cadastro_api"), self.payload, content_type="application/json")
@@ -292,13 +302,15 @@ class PlanejamentoEIndicadoresTests(TestCase):
         )
         self.talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão A", area_hectares=10, cultura="Café", latitude=-20.89, longitude=-46.08, raio_metros=100)
         self.collection = ColetaMeteorologica.objects.create(
-            fazenda=self.farm, talhao=self.talhao, fonte="open-meteo", coletada_em=datetime(2026, 9, 1, 12, 0, 0),
+            fazenda=self.farm, talhao=self.talhao, fonte="open-meteo",
+            coletada_em=timezone.make_aware(datetime(2026, 9, 1, 12, 0, 0)),
             latitude=-20.89, longitude=-46.08, timezone="America/Sao_Paulo",
             dados_atuais={}, dados_horarios={}, dados_diarios={}, dados_solo_modelados={}, dados_brutos={}
         )
         self.recommendation = RecomendacaoJanela.objects.create(
-            fazenda=self.farm, talhao=self.talhao, coleta=self.collection, data=date(2026, 9, 2), inicio=datetime(2026, 9, 2, 6, 0, 0),
-            fim=datetime(2026, 9, 2, 10, 0, 0), adequacao=88, classificacao="golden_window",
+            fazenda=self.farm, talhao=self.talhao, coleta=self.collection, data=date(2026, 9, 2),
+            inicio=timezone.make_aware(datetime(2026, 9, 2, 6, 0, 0)),
+            fim=timezone.make_aware(datetime(2026, 9, 2, 10, 0, 0)), adequacao=88, classificacao="golden_window",
             confianca=0.9, decisao="aplicar", fatores={}, riscos={}, qualidade_dados={}, metricas={}, proximas_24h={}, proximas_48h={}
         )
         self.client.force_login(self.user)
@@ -498,12 +510,12 @@ class MembershipTeamAndNotificationTests(TestCase):
         self.assertEqual(denied.status_code, 403)
 
     def test_login_de_usuario_vinculado_abre_dashboard_sem_criar_fazenda(self):
-        self.owner.set_password("Senha123")
+        self.owner.set_password("SenhaSegura123")
         self.owner.save(update_fields=["password"])
         self.client.logout()
         response = self.client.post(
             reverse("dashboard:login_api"),
-            {"email": self.owner.email, "password": "Senha123", "remember_me": True},
+            {"email": self.owner.email, "password": "SenhaSegura123", "remember_me": True},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
@@ -545,7 +557,7 @@ class MembershipTeamAndNotificationTests(TestCase):
                 "nome": "Novo Proprietário",
                 "email": "new-owner@example.com",
                 "telefone": "(35) 99999-1234",
-                "senha": "Senha123",
+                "senha": "SenhaSegura123",
             },
             content_type="application/json",
         )
@@ -930,8 +942,10 @@ class CalendarioDaFazendaApiTests(TestCase):
     def test_janela_de_ouro_e_pagina_independente_no_menu(self):
         response = self.client.get(reverse("dashboard:gold_window"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Encontre o melhor momento para realizar suas aplicações")
+        self.assertContains(response, "Compare oportunidades por talhão e operação")
+        self.assertContains(response, "Fitossanitária")
         self.assertContains(response, 'id="calGrid"')
+        self.assertContains(response, 'id="goldEvaluateForm"')
         self.assertContains(response, 'id="dayPanel" aria-label="Análise da janela selecionada"')
         self.assertContains(response, 'class="card day-panel gold-window-detail"')
         self.assertNotContains(response, 'id="farmCalendarMonth"')

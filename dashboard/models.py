@@ -281,16 +281,25 @@ class ColetaMeteorologica(models.Model):
 
 
 class RecomendacaoJanela(models.Model):
+    class Operacao(models.TextChoices):
+        ADUBACAO = "ADUBACAO", "Adubação"
+        FITOSSANITARIA = "FITOSSANITARIA", "Fitossanitária"
+        PLANTIO = "PLANTIO", "Plantio"
+        MECANIZADA = "MECANIZADA", "Operações agrícolas"
+
     fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="recomendacoes")
     talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="recomendacoes")
-    coleta = models.ForeignKey(ColetaMeteorologica, on_delete=models.CASCADE, related_name="recomendacoes")
+    coleta = models.ForeignKey(ColetaMeteorologica, on_delete=models.SET_NULL, null=True, blank=True, related_name="recomendacoes")
+    tipo_operacao = models.CharField(max_length=20, choices=Operacao.choices, default=Operacao.ADUBACAO)
+    contexto = models.JSONField(default=dict)
     data = models.DateField()
     inicio = models.DateTimeField()
     fim = models.DateTimeField()
-    adequacao = models.PositiveSmallIntegerField()
+    adequacao = models.PositiveSmallIntegerField(null=True, blank=True)
     classificacao = models.CharField(max_length=30)
-    confianca = models.DecimalField(max_digits=5, decimal_places=4)
+    confianca = models.DecimalField(max_digits=5, decimal_places=4, null=True, blank=True)
     decisao = models.CharField(max_length=30)
+    justificativa = models.TextField(blank=True)
     fatores = models.JSONField(default=dict)
     riscos = models.JSONField(default=dict)
     qualidade_dados = models.JSONField(default=dict)
@@ -302,6 +311,49 @@ class RecomendacaoJanela(models.Model):
     class Meta:
         ordering = ["data", "-adequacao"]
         indexes = [models.Index(fields=["fazenda", "data"]), models.Index(fields=["fazenda", "inicio"])]
+
+
+class ResultadoJanela(models.Model):
+    class Status(models.TextChoices):
+        REALIZADA = "REALIZADA", "Realizada"
+        ADIADA = "ADIADA", "Adiada"
+        CANCELADA = "CANCELADA", "Cancelada"
+
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="resultados_janela")
+    talhao = models.ForeignKey(Talhao, on_delete=models.SET_NULL, null=True, blank=True, related_name="resultados_janela")
+    recomendacao = models.ForeignKey(RecomendacaoJanela, on_delete=models.SET_NULL, null=True, blank=True, related_name="resultados")
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices)
+    realizado_em = models.DateTimeField(null=True, blank=True)
+    condicoes_observadas = models.JSONField(default=dict)
+    resultado_informado = models.TextField(blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em"]
+        indexes = [models.Index(fields=["fazenda", "criado_em"])]
+
+
+class ParametroTecnicoOperacao(models.Model):
+    fazenda = models.ForeignKey(Fazenda, on_delete=models.CASCADE, related_name="parametros_tecnicos_operacao")
+    tipo_operacao = models.CharField(max_length=20, choices=RecomendacaoJanela.Operacao.choices)
+    produto = models.CharField(max_length=150)
+    metodo_aplicacao = models.CharField(max_length=100, blank=True)
+    parametros = models.JSONField(default=dict)
+    fonte_referencia = models.CharField(max_length=300)
+    data_verificacao = models.DateField()
+    registrado_por = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-data_verificacao", "-atualizado_em"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["fazenda", "tipo_operacao", "produto", "metodo_aplicacao", "data_verificacao"],
+                name="parametro_operacao_fonte_data_unica",
+            ),
+        ]
 
 
 class SensorIoT(models.Model):

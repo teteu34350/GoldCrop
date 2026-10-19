@@ -43,16 +43,85 @@
 .gold-window-days .cal-day { cursor: pointer; }
 .gold-window-days .cal-day.no-data { cursor: pointer; }
 .gold-window-days .cal-day-window { display: block; }
+.gold-window-source { color: var(--text-secondary); font-size: .75rem; text-align: right; }
+.gold-operation-tabs { display: flex; gap: .45rem; overflow-x: auto; margin: 0 0 1rem; padding: .25rem 0; }
+.gold-operation-tabs button {
+  flex: 0 0 auto;
+  padding: .65rem .9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.gold-operation-tabs button.active { border-color: var(--green-700); background: #edf4ed; color: var(--green-700); }
+.gold-evaluation-card, .gold-results-card, .gold-activities-card { margin-bottom: 1rem; padding: 1.1rem; }
+.gold-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .9rem; }
+.gold-section-heading h2 { margin: 0; color: var(--text-primary); font-size: 1rem; }
+.gold-section-heading .calendar-eyebrow { margin-bottom: .25rem; }
+.gold-form-top { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.5fr); gap: .8rem; align-items: end; }
+.gold-field { display: grid; gap: .35rem; color: var(--text-secondary); font-size: .74rem; font-weight: 650; }
+.gold-operation-description { min-height: 2.2rem; color: var(--text-secondary); font-size: .75rem; line-height: 1.45; }
+.gold-criteria-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; margin-top: .8rem; }
+.gold-criteria-grid .form-input { width: 100%; }
+.gold-parameter-actions { display: flex; grid-column: 1 / -1; flex-wrap: wrap; align-items: end; gap: .65rem; }
+.gold-parameter-actions .gold-field { flex: 1 1 240px; }
+.gold-form-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .9rem; }
+.gold-refresh-check { display: flex; align-items: center; gap: .45rem; color: var(--text-secondary); font-size: .75rem; }
+.gold-form-message { min-height: 1rem; margin: .5rem 0 0; color: var(--text-secondary); font-size: .75rem; }
+.gold-filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .65rem; margin-bottom: .9rem; }
+.gold-filters .form-input { min-width: 0; }
+.gold-window-list, .gold-activities-list { display: grid; gap: .65rem; }
+.gold-window-item, .gold-activity-item { padding: .85rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.gold-window-item { border-left: 4px solid #9ca3af; }
+.gold-window-item[data-classification="FAVORAVEL"] { border-left-color: #3a8554; }
+.gold-window-item[data-classification="ATENCAO"] { border-left-color: #d97706; }
+.gold-window-item[data-classification="DESFAVORAVEL"] { border-left-color: #dc2626; }
+.gold-window-item[data-classification="DADOS_INSUFICIENTES"] { border-left-color: #6b7280; }
+.gold-window-item header, .gold-activity-item header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .45rem; }
+.gold-window-item h3, .gold-activity-item h3 { margin: 0; color: var(--text-primary); font-size: .88rem; }
+.gold-window-item p, .gold-activity-item p { margin: .45rem 0; color: var(--text-secondary); font-size: .76rem; line-height: 1.5; }
+.gold-window-item .gold-stale-warning { padding: .55rem .65rem; border-radius: 6px; background: #fff7e6; color: #805600; }
+.gold-classification { padding: .2rem .5rem; border-radius: 99px; background: #f3f4f6; color: #4b5563; font-size: .68rem; font-weight: 750; }
+.gold-window-item[data-classification="FAVORAVEL"] .gold-classification { background: #e9f4ec; color: #27633c; }
+.gold-window-item[data-classification="ATENCAO"] .gold-classification { background: #fff7e6; color: #946200; }
+.gold-window-item[data-classification="DESFAVORAVEL"] .gold-classification { background: #fff0f0; color: #a11b1b; }
+.gold-window-details { display: flex; flex-wrap: wrap; gap: .45rem 1rem; color: var(--text-secondary); font-size: .7rem; }
+.gold-window-factors { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: .55rem 0; }
+.gold-window-factors strong { display: block; margin-bottom: .25rem; color: var(--text-primary); font-size: .72rem; }
+.gold-window-factors ul { margin: 0; padding-left: 1rem; color: var(--text-secondary); font-size: .72rem; line-height: 1.5; }
+.gold-window-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .65rem; }
+.gold-window-actions button { font-size: .73rem; }
+.gold-result-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin-top: .55rem; padding-top: .55rem; border-top: 1px solid var(--border); }
+.gold-result-form .gold-field { min-width: 130px; flex: 1; }
+.gold-empty { margin: .2rem 0; color: var(--text-secondary); font-size: .78rem; }
+.gold-calendar-help { margin: .3rem 0 0; color: var(--text-secondary); font-size: .72rem; }
+.gold-window-days .calendar-window-actions { margin: .7rem 0; }
+.gold-window-days .cal-grid { margin-bottom: .8rem; }
+.gold-window-detail { min-height: 180px; }
 @media (max-width: 900px) {
   .gold-window-layout { grid-template-columns: minmax(0, 1fr); }
   .gold-window-detail { position: static; }
+  .gold-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
+  .gold-window-source { text-align: left; }
+  .gold-form-top, .gold-criteria-grid { grid-template-columns: minmax(0, 1fr); }
+  .gold-form-actions { align-items: stretch; flex-direction: column; }
+  .gold-form-actions .btn-primary { justify-content: center; width: 100%; }
+  .gold-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gold-window-factors { grid-template-columns: minmax(0, 1fr); }
+  .gold-section-heading { align-items: flex-start; }
+  .gold-window-days .gold-section-heading { flex-direction: row; }
+  .gold-evaluation-card, .gold-results-card, .gold-activities-card { padding: .85rem; }
+  .gold-window-days .cal-day-window { display: none; }
   .calendar-window-actions { width: 100%; align-items: stretch; }
   .calendar-reference-select { flex: 1 1 100%; }
   .calendar-reference-select select { width: 100%; }
-  .calendar-window-actions .btn-primary { justify-content: center; width: 100%; }
+  .gold-window-days .calendar-window-actions .btn-primary { justify-content: center; width: 100%; }
   .gold-window-intro { align-items: flex-start; padding: .85rem; }
   .gold-window-intro-mark { flex-basis: 36px; width: 36px; height: 36px; }
-  .gold-window-days .cal-day-window { display: none; }
 }
