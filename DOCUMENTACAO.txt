@@ -673,13 +673,19 @@ Banco de dados em produção (Vercel):
   origens HTTPS adicionais. DEBUG fica desativado por padrão nesse ambiente.
 - Em outros ambientes de produção, DEBUG=false e uma SECRET_KEY secreta são
   obrigatórios. Não use a chave local padrão em nenhuma implantação.
-- Em produção, HTTPS, cookies seguros e HSTS são ativados por padrão. O
-  `build` de pyproject.toml executa `check --deploy`, verifica migrações não
-  criadas e falha se encontrar migrações ainda não aplicadas. As migrações são
-  uma etapa de release deliberada: aplique-as ao banco PostgreSQL de produção
-  com `python manage.py migrate --noinput` antes de promover o novo código.
-  Não execute esse comando contra produção a partir de builds de preview ou
-  ambientes locais sem confirmar DATABASE_URL.
+- Em produção, HTTPS, cookies seguros e HSTS são ativados por padrão. O build
+  definido em pyproject.toml executa `python build.py`, que verifica segurança
+  e alterações de modelos sem migrações. Em deploys Vercel `production`, aplica
+  as migrações pendentes com `migrate`; em deploys `preview` e `development`, não
+  altera o banco.
+- Configure um banco PostgreSQL isolado também para Preview/Development na Vercel
+  se precisar validar essas implantações; não compartilhe o banco de produção
+  com previews. O build de produção aplica migrações no banco vinculado ao
+  ambiente Production antes de publicar o código. Faça backup do PostgreSQL
+  antes da primeira implantação com migrações novas e confira os logs do build.
+- Se o Build Command tiver sido sobrescrito nas configurações do projeto Vercel,
+  altere-o para `python build.py` ou remova a substituição para que
+  `[tool.vercel.scripts]` em pyproject.toml seja usado.
 - SECURE_HSTS_INCLUDE_SUBDOMAINS e SECURE_HSTS_PRELOAD ficam desativados por
   padrão; só os habilite após confirmar que todos os subdomínios e domínios
   associados suportam HTTPS continuamente.
