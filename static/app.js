@@ -108,6 +108,10 @@ function clearCalendarData() {
   Object.keys(CAL_DATA).forEach(date => delete CAL_DATA[date]);
 }
 
+function notifyWeatherUpdated(talhaoId) {
+  window.dispatchEvent(new CustomEvent('goldcrop:weather-updated', { detail: { talhaoId } }));
+}
+
 async function loadDatabaseState() {
   try {
     const response = await apiRequest('/api/state/');
@@ -510,24 +514,23 @@ const OPEN_METEO_DATA_DICTIONARY = {
 const OPEN_METEO_VARIABLES = {
   current: [
     'temperature_2m', 'relative_humidity_2m', 'precipitation', 'rain', 'showers',
-    'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'dew_point_2m', 'cloud_cover',
+    'wind_speed_10m', 'wind_gusts_10m', 'dew_point_2m', 'cloud_cover',
     'shortwave_radiation', 'et0_fao_evapotranspiration', 'weather_code',
     'soil_moisture_0_to_1cm', 'soil_moisture_1_to_3cm', 'soil_moisture_3_to_9cm',
     'soil_moisture_9_to_27cm', 'soil_moisture_27_to_81cm',
   ],
   hourly: [
     'temperature_2m', 'relative_humidity_2m', 'precipitation_probability',
-    'precipitation', 'rain', 'showers', 'wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m',
+    'precipitation', 'rain', 'showers', 'wind_speed_10m', 'wind_gusts_10m',
     'dew_point_2m', 'cloud_cover', 'shortwave_radiation',
-    'et0_fao_evapotranspiration', 'weather_code', 'soil_temperature_0cm', 'soil_temperature_6cm',
-    'soil_temperature_18cm', 'soil_moisture_0_to_1cm',
+    'et0_fao_evapotranspiration', 'weather_code', 'soil_moisture_0_to_1cm',
     'soil_moisture_1_to_3cm', 'soil_moisture_3_to_9cm', 'soil_moisture_9_to_27cm',
     'soil_moisture_27_to_81cm',
   ],
   daily: [
     'temperature_2m_max', 'temperature_2m_mean', 'temperature_2m_min',
     'precipitation_sum', 'rain_sum', 'showers_sum', 'precipitation_probability_max',
-    'wind_speed_10m_max', 'wind_gusts_10m_max', 'shortwave_radiation_sum', 'sunshine_duration',
+    'wind_speed_10m_max', 'wind_gusts_10m_max', 'shortwave_radiation_sum',
     'et0_fao_evapotranspiration', 'weather_code',
   ],
 };
@@ -548,7 +551,7 @@ function normalizeOpenMeteoWeather(data, reference) {
 
   return {
     source: 'open-meteo',
-    fetchedAt: data.fetchedAt || new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
     location: { latitude: data.latitude, longitude: data.longitude, timezone: data.timezone },
     current: { observedAt: data.current?.time || null, values: data.current || {} },
     hourly,
@@ -800,6 +803,7 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     window.GOLDCROP_WEATHER = null;
     clearCalendarData();
     updateSystemFromAnalysis();
+    notifyWeatherUpdated(null);
     return;
   }
   selectedTalhaoRefId = reference.id;
@@ -825,20 +829,33 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     if (document.getElementById('calGrid')) renderCalendar();
     if (document.getElementById('mapContainer')) renderTalhoes();
     if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
+    notifyWeatherUpdated(reference.id);
     return;
   }
 
+  const params = new URLSearchParams({
+    latitude: reference.latitude,
+    longitude: reference.longitude,
+    current: OPEN_METEO_VARIABLES.current.join(','),
+    hourly: OPEN_METEO_VARIABLES.hourly.join(','),
+    daily: OPEN_METEO_VARIABLES.daily.join(','),
+    forecast_days: '7',
+    timezone: 'America/Sao_Paulo',
+  });
+
   try {
-    const response = await apiRequest(`/api/weather/forecast/?talhao_id=${reference.id}`);
-    const responseData = await response.json();
-    if (!response.ok || !responseData.ok) {
-      throw new Error(responseData.message || `Weather API unavailable (${response.status})`);
-    }
-    const data = responseData.weather;
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if (!response.ok) throw new Error('Weather API unavailable');
+    const data = await response.json();
     if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
     const normalized = normalizeOpenMeteoWeather(data, reference);
     window.GOLDCROP_WEATHER = normalized;
     const analysis = applyWeatherToCalendar(normalized);
+    const collectionResponse = await apiRequest('/api/weather/ingest/', {
+      method: 'POST',
+      body: JSON.stringify({ ...normalized, talhao_id: reference.id }),
+    });
+    if (!collectionResponse.ok) throw new Error(`Weather persistence failed: ${collectionResponse.status}`);
     const recommendationResponse = await apiRequest('/api/recommendations/ingest/', {
       method: 'POST',
       body: JSON.stringify({ ...analysis, talhao_id: reference.id }),
@@ -856,6 +873,7 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     };
     if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
     window.GOLDCROP_RECOMMENDATIONS = reference.analysis;
+    notifyWeatherUpdated(reference.id);
     updateSystemFromAnalysis();
     const current = normalized.current.values;
     const rain = finiteWeatherValue(normalized.daily.values.precipitation_sum?.[0]);
@@ -899,7 +917,9 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
       if (weatherSummary) weatherSummary.textContent = `${reference.name} · usando última previsão salva`;
       if (document.getElementById('calGrid')) renderCalendar();
       if (document.getElementById('mapContainer')) renderTalhoes();
+      notifyWeatherUpdated(reference.id);
     } else if (weatherSummary) weatherSummary.textContent = `${reference.name} · Clima local indisponível`;
+    if (!reference.weather?.hourly?.timestamps?.length) notifyWeatherUpdated(reference.id);
     const dashboardWeatherTemp = document.getElementById('weatherTemp');
     const dashboardWeatherCondition = document.getElementById('weatherCondition');
     const currentWeather = reference.weather?.current?.values;

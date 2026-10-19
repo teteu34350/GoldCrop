@@ -181,65 +181,29 @@ APIs da agenda:
 - PUT/PATCH/DELETE /api/calendar/events/<id>/
 - PATCH atualiza o status; PUT substitui os dados editáveis do evento
 
-5.4.1. Janelas de Ouro
+5.4.1. Janela de Ouro
 Rota: /janela-de-ouro/
-Arquivos: templates/janela_ouro.html, static/gold-window.js,
-static/gold-window.css, dashboard/agronomy.py, dashboard/weather.py
+Arquivo: templates/janela_ouro.html
 
-O módulo mantém o calendário anterior de adubação e acrescenta janelas
-fitossanitárias, de plantio e de operações mecanizadas. Cada avaliação usa
-regras próprias, guarda o contexto e a versão da previsão e explica fatores,
-riscos, dados ausentes, fonte e atualização. Recomendações não criam eventos
-automaticamente; uma atividade só entra no calendário compartilhado após ação
-explícita do usuário. Resultados realizados, adiados ou cancelados e medições
-informadas pelo produtor são persistidos para comparação descritiva.
+Este módulo analítico é independente da agenda operacional e preserva o motor
+GoldCropAnalysisEngine, a seleção de talhão, a previsão e o painel de recomendação.
+Uma recomendação pode ser encaminhada ao formulário de atividade do Calendário,
+mas só é persistida como evento após confirmação explícita do usuário.
 
-A previsão é consultada no servidor para as coordenadas do talhão e compartilhada
-entre as telas. O cache persistido no banco dura 60 minutos; atualizações
-explícitas substituem a coleta para novas análises sem apagar recomendações
-anteriores. A requisição usa unidades métricas e o fuso informado pelo Open-Meteo,
-com até 7 dias de previsão e 7 dias anteriores disponíveis pelo endpoint de
-previsão. Esses dias anteriores não são medições de estação local. Temperatura e
-umidade do solo são estimativas modeladas e permanecem identificadas como tal.
-Variáveis ausentes não recebem valores substitutos.
-Se o provedor estiver indisponível durante uma avaliação, a API retorna erro
-explícito, não cria recomendação baseada em coleta vencida e mantém o histórico
-existente visível como desatualizado.
-O endpoint de histórico Open-Meteo Archive pode consultar até 7 dias por chamada;
-os resultados são reanálise modelada, não observações locais, e ficam persistidos
-separadamente das previsões para não alterar a análise operacional.
-Recomendações com previsão vencida continuam no histórico, mas são marcadas como
-desatualizadas, não podem ser planejadas e exigem nova avaliação. Janelas horárias
-são separadas por dia local para que os eventos do calendário preservem seus
-limites.
+5.4.2. Janela Fitossanitária
+Rota: /janela-fitossanitaria/
+Arquivo: templates/janela_fitossanitaria.html
 
-Não há limites universais embutidos para defensivos, fertilizantes ou culturas.
-Para defensivos, é obrigatória a confirmação do rótulo/bula vigente e os limites
-fornecidos são restrições impeditivas, não compensadas por outros fatores; a
-avaliação exige também a confirmação de que todas as restrições meteorológicas
-aplicáveis foram transcritas, bem como a fonte e a data de verificação. Os
-parâmetros fitossanitários podem ser salvos por fazenda e reutilizados pelos
-membros com permissão de planejamento; cada registro mantém a fonte e a data
-de verificação, que devem ser confirmadas antes de uma nova aplicação. Adubação,
-plantio e mecanização exigem limites específicos informados para o produto,
-método, cultura/estágio ou operação/solo. Sem esses dados, o
-estado é "dados insuficientes". A indicação de confiança cobre dados disponíveis,
-não é uma probabilidade de êxito.
-
-APIs:
-- GET /api/weather/forecast/?talhao_id=<id> (refresh=1 força atualização)
-- GET /api/weather/history/?talhao_id=<id>&start=AAAA-MM-DD&end=AAAA-MM-DD
-- GET/POST /api/janelas-ouro/ (consulta e avaliação de janelas)
-- GET/POST /api/janelas-ouro/parametros/ (consulta e cadastro de parâmetros técnicos)
-- POST /api/janelas-ouro/<id>/resultado/ (execução e resultado do produtor)
-
-Fontes da camada meteorológica: Open-Meteo Forecast API
-(https://open-meteo.com/en/docs) e Historical Weather API
-(https://open-meteo.com/en/docs/historical-weather-api). Restrições de defensivos devem ser transcritas
-do rótulo e da bula vigentes do produto e validadas por profissional habilitado;
-faixas de cultura, fertilizante, solo e tráfego também dependem de recomendação
-técnica local. O sistema não declara aprendizado automático nem atribui
-causalidade a resultados operacionais.
+Esta tela é independente da Janela de Ouro e reutiliza a previsão horária já
+coletada para o talhão. A análise cruza vento, rajadas, temperatura, umidade,
+precipitação e probabilidade de chuva com os limites informados pelo produtor a
+partir da bula/rótulo. Não há limites universais predefinidos; sem confirmação da
+bula, previsão atualizada ou variáveis necessárias, o resultado é "dados
+insuficientes". As recomendações são consultivas e não substituem a bula nem a
+avaliação profissional. Coletas com mais de 12 horas são consideradas
+desatualizadas. Registros e planejamentos identificados como defensivos aparecem
+na tela sem sobrescrever recomendações de adubação; a previsão continua sendo
+coletada e persistida pela integração meteorológica já existente.
 
 5.5. Talhões
 Rota: /talhoes/
@@ -392,7 +356,7 @@ Cada talhão pode incluir:
 - raio em metros
 
 O talhão selecionado com coordenadas válidas fornece o ponto para sua própria:
-- consulta compartilhada de previsão meteorológica via serviço Django/Open-Meteo
+- consulta de previsão meteorológica via Open-Meteo
 - análise e cálculo de janelas recomendadas
 - exibição do clima no dashboard e calendário
 
@@ -674,24 +638,17 @@ Banco de dados em produção (Vercel):
 - Em outros ambientes de produção, DEBUG=false e uma SECRET_KEY secreta são
   obrigatórios. Não use a chave local padrão em nenhuma implantação.
 - Em produção, HTTPS, cookies seguros e HSTS são ativados por padrão. O build
-  definido em pyproject.toml executa `python build.py`, que verifica segurança
-  e alterações de modelos sem migrações. Em deploys Vercel `production`, aplica
-  as migrações pendentes com `migrate`; em deploys `preview` e `development`, não
-  altera o banco.
-- Configure um banco PostgreSQL isolado também para Preview/Development na Vercel
-  se precisar validar essas implantações; não compartilhe o banco de produção
-  com previews. O build de produção aplica migrações no banco vinculado ao
-  ambiente Production antes de publicar o código. Faça backup do PostgreSQL
-  antes da primeira implantação com migrações novas e confira os logs do build.
-- Se o Build Command tiver sido sobrescrito nas configurações do projeto Vercel,
-  altere-o para `python build.py` ou remova a substituição para que
-  `[tool.vercel.scripts]` em pyproject.toml seja usado.
+  executa `python build.py`, que verifica segurança e alterações de modelos.
+  Em deploys Vercel `production`, aplica as migrações; em `preview` e
+  `development`, não altera o banco.
+- Configure um banco PostgreSQL isolado para Preview/Development; não compartilhe
+  o banco de produção com previews. Faça backup antes da primeira implantação
+  com migrações novas e confira os logs do build.
+- O comando de build em vercel.json deve permanecer `python build.py`; ele
+  prevalece sobre `[tool.vercel.scripts]` em pyproject.toml.
 - SECURE_HSTS_INCLUDE_SUBDOMAINS e SECURE_HSTS_PRELOAD ficam desativados por
-  padrão; só os habilite após confirmar que todos os subdomínios e domínios
-  associados suportam HTTPS continuamente.
-- A Vercel coleta e serve `STATIC_ROOT` pelo CDN durante o build.
-- Configure EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD e
-  DEFAULT_FROM_EMAIL para habilitar recuperação de senha por SMTP.
+  padrão; só os habilite após confirmar que todos os domínios associados
+  suportam HTTPS continuamente.
 - A base PostgreSQL será nova e não receberá automaticamente os dados do arquivo
   SQLite local; exporte/import seus dados separadamente se precisar deles.
 

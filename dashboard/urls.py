@@ -3,19 +3,18 @@ from django.urls import reverse_lazy
 from django.contrib.auth import views as auth_views
 
 from .views import (
-    home, calendario_view, janela_ouro_view, talhoes_view, fazenda_view,
+    home, calendario_view, janela_ouro_view, janela_fitossanitaria_view, talhoes_view, fazenda_view,
     sensores_view, aplicacoes_view, historico_view, configuracoes_view,
     farm_onboarding_view,
     login_view, cadastro_view, login_api, cadastro_api, logout_api,
-    system_state_api, weather_ingest_api, recommendations_ingest_api,
+    system_state_api, weather_ingest_api, recommendations_ingest_api, pesticide_recommendations_api,
     application_create_api, talhao_create_api, talhao_update_api, talhao_delete_api,
     profile_update_api, password_reset_api, planejamento_create_api, aplicacao_exec_api, analytics_api,
     farms_api, farm_create_api, farm_join_api, farm_access_code_api,
     farm_settings_api, farm_team_api, farm_member_api,
     notifications_api, notification_read_api,
     estoque_view, estoque_dashboard_api, estoque_produtos_api, estoque_movimentacoes_api,
-    calendar_events_api, calendar_event_detail_api, weather_forecast_api,
-    weather_history_api, gold_windows_api, gold_window_parameters_api, gold_window_result_api,
+    calendar_events_api, calendar_event_detail_api,
 )
 
 app_name = 'dashboard'
@@ -25,6 +24,7 @@ urlpatterns = [
     path('fazendas/boas-vindas/', farm_onboarding_view, name='farm_onboarding'),
     path('calendario/', calendario_view, name='calendar'),
     path('janela-de-ouro/', janela_ouro_view, name='gold_window'),
+    path('janela-fitossanitaria/', janela_fitossanitaria_view, name='pesticide_window'),
     path('talhoes/', talhoes_view, name='talhoes'),
     path('fazenda/', fazenda_view, name='fazenda'),
     path('sensores/', sensores_view, name='sensores'),
@@ -40,12 +40,8 @@ urlpatterns = [
     path('logout/', logout_api, name='logout'),
     path('api/state/', system_state_api, name='system_state_api'),
     path('api/weather/ingest/', weather_ingest_api, name='weather_ingest_api'),
-    path('api/weather/forecast/', weather_forecast_api, name='weather_forecast_api'),
-    path('api/weather/history/', weather_history_api, name='weather_history_api'),
     path('api/recommendations/ingest/', recommendations_ingest_api, name='recommendations_ingest_api'),
-    path('api/janelas-ouro/', gold_windows_api, name='gold_windows_api'),
-    path('api/janelas-ouro/parametros/', gold_window_parameters_api, name='gold_window_parameters_api'),
-    path('api/janelas-ouro/<int:recommendation_id>/resultado/', gold_window_result_api, name='gold_window_result_api'),
+    path('api/pesticide-recommendations/', pesticide_recommendations_api, name='pesticide_recommendations_api'),
     path('api/applications/', application_create_api, name='application_create_api'),
     path('api/planejamentos/', planejamento_create_api, name='planejamento_create_api'),
     path('api/planejamentos/<int:planejamento_id>/exec/', aplicacao_exec_api, name='aplicacao_exec_api'),

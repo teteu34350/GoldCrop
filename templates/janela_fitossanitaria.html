@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block breadcrumb %}Janela Fitossanitária{% endblock %}
+
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=3" />
+{% endblock %}
+
+{% block content %}
+<section class="page active" id="page-pesticide-window">
+  <div class="page-content">
+    <header class="page-header">
+      <div>
+        <p class="calendar-eyebrow">Aplicação fitossanitária · decisão por talhão</p>
+        <h1 class="page-title">Janela Fitossanitária</h1>
+        <p class="page-sub">Consulte os horários de aplicação em relação à previsão e aos limites informados na bula do produto.</p>
+      </div>
+      <div class="calendar-window-actions">
+        <label class="calendar-reference-select">
+          Talhão
+          <select id="calendarTalhaoSelect" class="form-input" disabled>
+            <option value="">Carregando talhões...</option>
+          </select>
+        </label>
+        <button class="btn-primary" type="button" onclick="openPesticideApplication()">
+          <span aria-hidden="true">＋</span> Registrar aplicação
+        </button>
+      </div>
+    </header>
+
+    <div class="card pesticide-label-form">
+      <div class="pesticide-label-heading">
+        <strong>Exigências do produto</strong>
+        <p>Transcreva somente os limites aplicáveis na bula/rótulo. Campos vazios não recebem limites genéricos.</p>
+      </div>
+      <form id="pesticideLabelForm">
+        <div class="pesticide-label-grid">
+          <label class="form-group">
+            <span>Produto</span>
+            <input class="form-input" name="product" maxlength="150" autocomplete="off" required />
+          </label>
+          <label class="form-group">
+            <span>Vento máximo (km/h)</span>
+            <input class="form-input" name="max_wind_speed" type="number" min="0" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Rajada máxima (km/h)</span>
+            <input class="form-input" name="max_wind_gusts" type="number" min="0" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Temperatura mínima (°C)</span>
+            <input class="form-input" name="min_temperature" type="number" min="-50" max="60" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Temperatura máxima (°C)</span>
+            <input class="form-input" name="max_temperature" type="number" min="-50" max="60" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Umidade mínima (%)</span>
+            <input class="form-input" name="min_relative_humidity" type="number" min="0" max="100" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Umidade máxima (%)</span>
+            <input class="form-input" name="max_relative_humidity" type="number" min="0" max="100" step="any" />
+          </label>
+          <label class="form-group">
+            <span>Intervalo sem chuva (horas)</span>
+            <input class="form-input" name="rain_free_hours" type="number" min="0" max="72" step="1" />
+          </label>
+        </div>
+        <div class="pesticide-label-footer">
+          <label class="pesticide-label-confirm">
+            <input type="checkbox" name="label_confirmed" required />
+            <span>Conferi a bula/rótulo e os limites informados correspondem às exigências aplicáveis a este produto.</span>
+          </label>
+          <button class="btn-primary" type="submit">Analisar janelas</button>
+        </div>
+      </form>
+      <p class="pesticide-form-note">A análise é uma referência meteorológica e não substitui a bula, a orientação de profissional habilitado nem a avaliação das condições reais da aplicação.</p>
+    </div>
+
+    <div class="pesticide-source-line" id="pesticideSourceLine" role="status">Aguardando a atualização meteorológica do talhão.</div>
+
+    <div class="calendar-layout gold-window-layout">
+      <section class="card calendar-card gold-window-days" aria-label="Dias analisados para aplicação fitossanitária">
+        <div class="cal-header">
+          <div>
+            <span class="calendar-eyebrow">Condições por dia</span>
+            <h2 class="cal-month" id="pesticideMonthLabel">Carregando previsão...</h2>
+          </div>
+          <div class="gold-window-period-nav">
+            <button class="cal-nav-btn" id="pesticidePrev" type="button" aria-label="Período anterior">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="cal-nav-btn" id="pesticideNext" type="button" aria-label="Próximo período">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="cal-legend">
+          <span class="cal-legend-item"><span class="cal-dot green"></span>Favorável</span>
+          <span class="cal-legend-item"><span class="cal-dot yellow"></span>Atenção</span>
+          <span class="cal-legend-item"><span class="cal-dot red"></span>Desfavorável</span>
+          <span class="cal-legend-item"><span class="cal-dot gray"></span>Dados insuficientes</span>
+        </div>
+        <div class="cal-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        </div>
+        <div class="cal-grid" id="pesticideCalGrid"></div>
+      </section>
+      <aside class="card day-panel gold-window-detail" id="pesticideDayPanel" aria-label="Análise da janela fitossanitária selecionada">
+        <div class="day-panel-empty" id="pesticideDayPanelEmpty">
+          <span class="gold-window-empty-mark" aria-hidden="true">✦</span>
+          <strong>Selecione um dia</strong>
+          <p>Os horários e fatores determinantes serão exibidos após a análise das exigências do produto.</p>
+        </div>
+        <div class="day-panel-content" id="pesticideDayPanelContent" style="display:none"></div>
+      </aside>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'pesticide-calendar.js' %}?v=1"></script>
+{% endblock %}

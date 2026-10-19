@@ -1,10 +1,10 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block breadcrumb %}Janelas de Ouro{% endblock %}
+{% block breadcrumb %}Janela de Ouro{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=4" />
+  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=3" />
 {% endblock %}
 
 {% block content %}
@@ -12,144 +12,67 @@
   <div class="page-content">
     <header class="page-header">
       <div>
-        <p class="calendar-eyebrow">Planejamento agrícola · previsão compartilhada</p>
-        <h1 class="page-title">Janelas de Ouro</h1>
-        <p class="page-sub">Compare oportunidades por talhão e operação usando a mesma base meteorológica, com critérios técnicos explícitos.</p>
+        <p class="calendar-eyebrow">Decisão agrícola · análise inteligente</p>
+        <h1 class="page-title">Janela de Ouro</h1>
+        <p class="page-sub">Encontre o melhor momento para realizar suas aplicações com base nas condições da sua lavoura e na previsão do tempo.</p>
       </div>
-      <div class="gold-window-source" id="goldWeatherSource" aria-live="polite">Carregando dados da fazenda…</div>
+      <div class="calendar-window-actions">
+        <label class="calendar-reference-select">
+          Talhão
+          <select id="calendarTalhaoSelect" class="form-input" disabled>
+            <option value="">Carregando talhões...</option>
+          </select>
+        </label>
+        <button class="btn-primary" type="button" onclick="openRegistrar()">
+          <span aria-hidden="true">＋</span> Registrar aplicação
+        </button>
+      </div>
     </header>
 
     <div class="gold-window-intro card">
       <div class="gold-window-intro-mark" aria-hidden="true">✦</div>
       <div>
-        <strong>Recomendações explicáveis, não substitutos do rótulo ou da avaliação de campo.</strong>
-        <p>Os limites de produtos e cultura devem vir do rótulo/bula vigentes ou de orientação técnica local. Estimativas de solo são meteorológicas, não leituras de sensores.</p>
+        <strong>Encontre o momento certo para agir.</strong>
+        <p>Analise as condições por talhão e compare chuva, temperatura, umidade e vento antes de decidir quando aplicar.</p>
       </div>
     </div>
 
-    <nav class="gold-operation-tabs" aria-label="Tipo de janela agrícola">
-      <button type="button" class="active" data-gold-tab="ADUBACAO" aria-pressed="true">Adubação</button>
-      <button type="button" data-gold-tab="FITOSSANITARIA" aria-pressed="false">Fitossanitária</button>
-      <button type="button" data-gold-tab="PLANTIO" aria-pressed="false">Plantio</button>
-      <button type="button" data-gold-tab="MECANIZADA" aria-pressed="false">Operações agrícolas</button>
-    </nav>
-
-    <section class="card gold-evaluation-card" aria-labelledby="goldEvaluateTitle">
-      <div class="gold-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Análise por operação</span>
-          <h2 id="goldEvaluateTitle">Defina produto e critérios técnicos</h2>
+    <div class="calendar-layout gold-window-layout">
+      <section class="card calendar-card gold-window-days" aria-label="Dias analisados para aplicação">
+        <div class="cal-header">
+          <div>
+            <span class="calendar-eyebrow">Condições por dia</span>
+            <h2 class="cal-month" id="calMonthLabel">Carregando previsão...</h2>
+          </div>
+          <div class="gold-window-period-nav">
+            <button class="cal-nav-btn" id="calPrev" type="button" aria-label="Período anterior">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="cal-nav-btn" id="calNext" type="button" aria-label="Próximo período">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
-      </div>
-      <form id="goldEvaluateForm">
-        <input type="hidden" id="goldOperation" value="ADUBACAO" />
-        <div class="gold-form-top">
-          <label class="gold-field">Talhão
-            <select class="form-input" id="goldPlotSelect" required><option value="">Carregando talhões…</option></select>
-          </label>
-          <div class="gold-operation-description" id="goldOperationDescription"></div>
+        <div class="cal-legend">
+          <span class="cal-legend-item"><span class="cal-dot green"></span>Favorável</span>
+          <span class="cal-legend-item"><span class="cal-dot yellow"></span>Atenção</span>
+          <span class="cal-legend-item"><span class="cal-dot red"></span>Desfavorável</span>
+          <span class="cal-legend-item"><span class="cal-dot gray"></span>Dados insuficientes</span>
         </div>
-        <div class="gold-criteria-grid" id="goldCriteriaFields"></div>
-        <div class="gold-form-actions">
-          <label class="gold-refresh-check"><input type="checkbox" id="goldRefreshWeather" /> Atualizar a previsão antes de avaliar</label>
-          <button type="submit" class="btn-primary" id="goldEvaluateButton">Avaliar janelas</button>
+        <div class="cal-weekdays">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
         </div>
-        <p class="gold-form-message" id="goldFormMessage" role="status" aria-live="polite"></p>
-      </form>
-    </section>
-
-    <section class="card gold-results-card" aria-labelledby="goldResultsTitle">
-      <div class="gold-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Visão consolidada</span>
-          <h2 id="goldResultsTitle">Oportunidades e histórico recente</h2>
-        </div>
-      </div>
-      <div class="gold-filters">
-        <label class="gold-field">Talhão<select class="form-input" id="goldFilterPlot"><option value="">Todos os talhões</option></select></label>
-        <label class="gold-field">Cultura<select class="form-input" id="goldFilterCulture"><option value="">Todas as culturas</option></select></label>
-        <label class="gold-field">Operação<select class="form-input" id="goldFilterOperation"><option value="">Todas</option></select></label>
-        <label class="gold-field">Classificação
-          <select class="form-input" id="goldFilterClassification">
-            <option value="">Todas</option><option value="FAVORAVEL">Favorável</option>
-            <option value="ATENCAO">Atenção</option><option value="DESFAVORAVEL">Desfavorável</option>
-            <option value="DADOS_INSUFICIENTES">Dados insuficientes</option>
-          </select>
-        </label>
-        <label class="gold-field">De<input class="form-input" id="goldFilterStart" type="date" /></label>
-        <label class="gold-field">Até<input class="form-input" id="goldFilterEnd" type="date" /></label>
-      </div>
-      <div class="gold-window-list" id="goldResultList" aria-live="polite">
-        <p class="gold-empty">Carregando janelas…</p>
-      </div>
-    </section>
-
-    <section class="card gold-activities-card" aria-labelledby="goldActivitiesTitle">
-      <div class="gold-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Agenda compartilhada</span>
-          <h2 id="goldActivitiesTitle">Atividades previstas na fazenda</h2>
-        </div>
-        <a class="btn-ghost" href="{% url 'dashboard:calendar' %}">Abrir calendário</a>
-      </div>
-      <div class="gold-activities-list" id="goldActivitiesList"><p class="gold-empty">Carregando atividades…</p></div>
-    </section>
-
-    <section class="card gold-activities-card" aria-labelledby="goldResultsHistoryTitle">
-      <div class="gold-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Registro de campo</span>
-          <h2 id="goldResultsHistoryTitle">Resultados informados pelo produtor</h2>
-        </div>
-      </div>
-      <div class="gold-activities-list" id="goldResultsHistory"><p class="gold-empty">Carregando resultados…</p></div>
-    </section>
-
-    <section class="card calendar-card gold-window-days" id="goldFertilizerCalendar" aria-label="Calendário legado da janela de adubação">
-      <div class="gold-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Calendário de adubação existente</span>
-          <h2 class="cal-month" id="calMonthLabel">Carregando previsão…</h2>
-          <p class="gold-calendar-help">Mantém a análise e os registros existentes de adubação. As novas operações usam critérios próprios acima.</p>
-        </div>
-        <div class="gold-window-period-nav">
-          <button class="cal-nav-btn" id="calPrev" type="button" aria-label="Período anterior">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <button class="cal-nav-btn" id="calNext" type="button" aria-label="Próximo período">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="calendar-window-actions">
-        <label class="calendar-reference-select">Talhão
-          <select id="calendarTalhaoSelect" class="form-input" disabled><option value="">Carregando talhões…</option></select>
-        </label>
-        <button class="btn-primary" type="button" onclick="openRegistrar()"><span aria-hidden="true">＋</span> Registrar aplicação</button>
-      </div>
-      <div class="cal-legend">
-        <span class="cal-legend-item"><span class="cal-dot green"></span>Favorável</span>
-        <span class="cal-legend-item"><span class="cal-dot yellow"></span>Atenção</span>
-        <span class="cal-legend-item"><span class="cal-dot red"></span>Desfavorável</span>
-        <span class="cal-legend-item"><span class="cal-dot gray"></span>Dados insuficientes</span>
-      </div>
-      <div class="cal-weekdays">
-        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
-      </div>
-      <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-grid" id="calGrid"></div>
+      </section>
       <aside class="card day-panel gold-window-detail" id="dayPanel" aria-label="Análise da janela selecionada">
         <div class="day-panel-empty" id="dayPanelEmpty">
           <span class="gold-window-empty-mark" aria-hidden="true">✦</span>
-          <strong>Descubra sua Janela de Adubação</strong>
-          <p>Selecione um dia para consultar a previsão e os registros do talhão.</p>
+          <strong>Descubra sua Janela de Ouro</strong>
+          <p>Selecione um dia para ver a recomendação e as condições previstas para o talhão.</p>
         </div>
         <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>
       </aside>
-    </section>
+    </div>
   </div>
 </section>
-{% endblock %}
-
-{% block extra_scripts %}
-  <script src="{% static 'gold-window.js' %}?v=1"></script>
 {% endblock %}
