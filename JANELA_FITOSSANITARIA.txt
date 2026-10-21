@@ -1,256 +1,64 @@
-DOCUMENTACAO DA JANELA FITOSSANITARIA
-=====================================
+Janela Fitossanitaria — analise meteorologica automatica
+========================================================
 
 Objetivo
 --------
+A tela apresenta uma triagem meteorologica para planejamento de aplicacoes,
+por talhao. O usuario apenas seleciona o talhao; produto e limites de bula nao
+sao solicitados. O resultado nao aprova produto ou aplicacao e nao substitui
+a bula, a orientacao profissional ou a avaliacao das condicoes reais.
 
-Este documento explica o funcionamento implementado na tela Janela
-Fitossanitaria do GoldCrop. A tela analisa previsoes meteorologicas por talhao
-e compara cada horario com os limites da bula/rótulo informados pelo usuario.
-Ela serve como apoio a decisao e nao substitui a bula, a avaliacao das
-condicoes reais, nem a orientacao de profissional habilitado.
+Fonte, localizacao e atualizacao
+-------------------------------
+O fluxo reutiliza a integracao Open-Meteo compartilhada com as outras telas:
+`static/app.js` consulta a Forecast API com latitude e longitude do talhao
+selecionado, normaliza os dados e salva a coleta por talhao. O parametro
+`timezone=auto` permite que o provedor determine o fuso pelas coordenadas; nao
+se usa geolocalizacao do navegador nem coordenadas fixas.
 
-1. O que a analise faz
-----------------------
+A previsao inclui condicoes atuais, sensacao termica quando fornecida, variaveis
+horarias e agregados diarios. Os eventos `goldcrop:weather-updated` e
+`goldcrop:weather-refresh-requested` integram a tela ao cache e ao fluxo de
+atualizacao existentes. A pagina consulta a API interna somente para ler a
+coleta salva e calcular a classificacao; nao chama um segundo provedor. A
+previsao salva e considerada desatualizada apos 12 horas.
 
-A analise procura horarios em que as condicoes meteorologicas previstas nao
-ultrapassem as exigencias informadas para o produto. Ela nao calcula o IEA da
-Janela de Ouro, nao estima a eficacia do produto e nao cria limites padrao para
-preencher campos deixados em branco.
+Regras de triagem operacional
+-----------------------------
+`dashboard/pesticides.py` avalia cada horario futuro individualmente e agrupa
+horarios consecutivos de mesma classificacao. A consulta de chuva considera o
+horario analisado e os dois horarios seguintes. Uma janela favoravel precisa
+de pelo menos duas horas consecutivas.
 
-O resultado e uma classificacao meteorologica:
+Os criterios gerais de triagem usados pelo sistema sao:
 
-- Favoravel: os dados necessarios estao disponiveis, nenhum limite informado
-  foi ultrapassado e nao ha chuva prevista nem probabilidade de chuva no
-  intervalo consultado.
-- Atencao: nao ha restricao confirmada por chuva ou pelos limites preenchidos,
-  mas existe probabilidade de chuva sem precipitacao prevista, ou faltam
-  limites especificos da bula para um ou mais fatores.
-- Desfavoravel: pelo menos um limite informado foi ultrapassado ou ha
-  precipitacao prevista durante o intervalo sem chuva exigido.
-- Dados insuficientes: faltam dados meteorologicos necessarios, os horarios
-  nao podem ser avaliados com seguranca, ou os dados do produto/bula sao
-  invalidos ou incompletos.
+- Vento acima de 15 km/h ou rajadas acima de 20 km/h: desfavoravel.
+- Volume de precipitacao acima de zero ou probabilidade de chuva de 60% ou
+  mais durante/depois do horario: desfavoravel.
+- Probabilidade de chuva a partir de 30%: atencao.
+- Temperatura abaixo de 10 °C ou acima de 32 °C: atencao.
+- Umidade relativa abaixo de 30%: atencao.
+- Umidade relativa acima de 95%: atencao por risco de molhamento persistente.
+- Um periodo favoravel menor que duas horas e reclassificado como atencao.
 
-Uma classificacao Favoravel significa apenas que a previsao disponivel e os
-limites informados nao indicam restricoes naquele horario. Nao e uma
-autorizacao automatica para aplicar.
+Esses valores sao filtros meteorologicos de triagem operacional do GoldCrop.
+Nao sao limites universais de defensivos, nao consideram exigencias especificas
+de uma bula e nao garantem seguranca, eficacia ou adequacao da aplicacao. A
+falta de variaveis meteorologicas necessarias ou de cobertura para a avaliacao
+da chuva resulta em dados insuficientes, nunca em valores presumidos.
 
-2. Fluxo da analise
--------------------
-
-1. O usuario seleciona o talhao e informa o nome do produto.
-2. O usuario transcreve os limites aplicaveis da bula/rótulo: vento, rajadas,
-   temperatura, umidade relativa e intervalo sem chuva.
-3. A confirmacao de que a bula/rótulo foi conferida e obrigatoria.
-4. A tela envia os dados para a API da Janela Fitossanitaria.
-5. A API valida o talhao na fazenda ativa e seleciona a coleta compativel com
-   a fazenda, o talhao e as coordenadas atuais do talhao.
-6. O avaliador examina os horarios futuros disponiveis, classifica cada hora
-   e agrupa os resultados por dia.
-7. A tela apresenta o calendario, os detalhes do dia selecionado, os fatores,
-   riscos, restricoes, dados ausentes e registros de aplicacoes planejadas ou
-   realizadas no talhao.
-
-A avaliacao e feita quando o formulario e enviado. Ela tambem pode ser
-recalculada quando a tela recebe o evento de atualizacao meteorologica
-`goldcrop:weather-updated`.
-
-2.1. Obtencao, cache e selecao da previsao
------------------------------------------
-
-O fluxo meteorologico compartilhado da Janela de Ouro usa a API Forecast do
-Open-Meteo. A verificacao do projeto encontrou essa fonte configurada no
-cliente `static/app.js`; nao ha uma segunda fonte de previsao para comparar.
-O cliente consulta a fonte ao carregar a aplicacao ou ao selecionar outro
-talhao e salva a coleta no servidor por meio de `weather_ingest_api`.
-
-Antes de fazer uma nova consulta, o cliente pode reutilizar a coleta persistida
-quando ela:
-
-- pertence ao talhao selecionado e tem coordenadas iguais as coordenadas
-  atuais do talhao;
-- foi coletada ha no maximo 15 minutos (com tolerancia de cinco minutos para
-  diferenca de relogio);
-- possui fuso, horarios futuros e valores numericos para todas as seis
-  variaveis necessarias a analise fitossanitaria.
-
-Essa reutilizacao reduz chamadas repetidas ao trocar de tela ou selecionar
-novamente um talhao com previsao recente. Ela nao substitui a validacao
-fitossanitaria no servidor. Uma consulta manual pode solicitar uma atualizacao
-forcada; erros HTTP, indisponibilidade e limite de requisicoes (HTTP 429) sao
-apresentados ao usuario.
-
-No servidor, a selecao considera somente coletas da fazenda ativa e do talhao
-selecionado cujas coordenadas correspondam as coordenadas atuais desse
-talhao. Entre elas, prioriza previsoes dentro da validade de 12 horas; depois,
-uma previsao completa em todas as variaveis e horarios futuros; em seguida,
-maior cobertura completa e, por fim, a coleta mais recente. Assim, uma
-coleta recente mas incompleta nao substitui uma coleta ainda valida e
-completa. Se nao houver uma coleta atual completa, o avaliador recebe a
-melhor coleta compativel e aplica suas validacoes normais, podendo retornar
-Dados insuficientes. Dados de coordenadas anteriores ou de outro talhao/fazenda
-nao sao usados como se pertencessem ao local selecionado.
-
-Depois da coleta ou reutilizacao, a Janela de Ouro emite
-`goldcrop:weather-updated` com o ID do talhao. A tela fitossanitaria ignora
-eventos de outros talhoes, agrupa eventos proximos para evitar consultas
-duplicadas e recalcula o resultado usando a API interna. A tela nao consulta
-diretamente um provedor meteorologico ao abrir um horario ou enviar o
-formulario.
-
-3. Campos da bula e validacoes
-------------------------------
-
-Produto
-  Obrigatorio. O nome e exibido como contexto da analise.
-
-Vento maximo (km/h) e rajada maxima (km/h)
-  Limites superiores opcionais. Se a velocidade prevista for maior que o
-  limite correspondente, o horario fica Desfavoravel.
-
-Temperatura minima e maxima (°C)
-  Limites inferior e superior opcionais. Valores abaixo do minimo ou acima do
-  maximo deixam o horario Desfavoravel.
-
-Umidade relativa minima e maxima (%)
-  Limites inferior e superior opcionais. Valores abaixo do minimo ou acima do
-  maximo deixam o horario Desfavoravel.
-
-Intervalo sem chuva (horas)
-  Campo opcional, inteiro de 0 a 72. A avaliacao verifica a hora candidata e
-  os valores horarios seguintes ate o numero de horas informado, inclusive.
-  Por exemplo, 2 horas consulta tres registros horarios: a hora avaliada,
-  mais os registros de +1 h e +2 h. Se o campo ficar vazio, o codigo considera
-  zero hora adicional e ainda consulta o registro da propria hora candidata.
-
-Os limites de vento e rajadas aceitam valores a partir de zero; temperatura,
-de -50 a 60 °C; umidade, de 0 a 100%; intervalo sem chuva, de 0 a 72 horas.
-Quando os dois limites de temperatura ou os dois limites de umidade sao
-informados, o minimo nao pode exceder o maximo.
-
-Campos de limite vazios nao recebem valores universais. Se algum dos fatores
-vento, rajadas, temperatura ou umidade nao tiver limite aplicavel informado,
-o resultado do horario pode ser no maximo Atencao, mesmo que as condicoes
-conhecidas estejam dentro dos limites. A tela orienta o usuario a informar
-somente exigencias aplicaveis na bula/rótulo.
-
-4. Regras por horario
----------------------
-
-Cada ponto horario futuro da previsao representa uma janela com duracao de
-uma hora. O fim exibido e uma hora depois do inicio. Horarios que ja
-terminaram nao sao avaliados. Os horarios e as datas usam o fuso horario
-associado a previsao do talhao.
-
-Para cada janela, o codigo compara:
-
-- temperatura do ar com os limites minimo e maximo informados;
-- umidade relativa com os limites minimo e maximo informados;
-- velocidade do vento com o maximo informado;
-- rajadas de vento com o maximo informado;
-- precipitacao prevista no intervalo sem chuva;
-- probabilidade de precipitacao no mesmo intervalo.
-
-Se qualquer limite meteorologico preenchido for ultrapassado, a janela recebe
-uma restricao correspondente e e classificada como Desfavoravel. Se houver
-qualquer quantidade de precipitacao prevista maior que zero em qualquer hora
-consultada no intervalo sem chuva, a janela tambem e Desfavoravel. O codigo
-nao aplica um limiar minimo de milimetros para essa regra.
-
-Se nao houver precipitacao prevista, mas a probabilidade de chuva for maior
-que zero em alguma hora consultada, o resultado e Atencao: a previsao indica
-risco, mas nao confirma que chovera. Quando nao ha precipitacao nem
-probabilidade de chuva no intervalo, esse fator pode ser apresentado como
-favoravel.
-
-Mesmo que determinado limite da bula nao tenha sido informado, a previsao
-precisa conter as variaveis meteorologicas necessarias para a avaliacao:
-temperatura, umidade relativa, vento, rajadas, precipitacao e probabilidade de
-precipitacao. Valores ausentes ou invalidos nao sao tratados como zero; podem
-resultar em Dados insuficientes. A analise tambem precisa ter previsao horaria
-que cubra todo o intervalo sem chuva solicitado.
-
-5. Validade e qualidade dos dados
----------------------------------
-
-- A previsao precisa ter horario de atualizacao e fuso horario validos.
-- Previsoes com mais de 12 horas de idade sao recusadas como desatualizadas.
-- Uma diferenca entre o relogio atual e a atualizacao superior a 5 minutos no
-  futuro tambem invalida a previsao.
-- Sao necessarios horarios futuros e as series horarias de todas as variaveis
-  meteorologicas usadas pelo avaliador.
-- Se uma parte dos dados estiver ausente, o horario afetado pode ser
-  classificado como Dados insuficientes e a confianca geral como limitada.
-- A confianca e apresentada como alta quando todos os horarios avaliados nao
-  possuem dados ausentes; e limitada quando pelo menos um horario tem dados
-  ausentes.
-
-A tela informa a fonte, o horario da atualizacao, a idade da previsao, o fuso
-e uma mensagem sobre a qualidade dos dados, quando essas informacoes estao
-disponiveis. A extensao do horizonte depende da previsao horaria armazenada;
-nao ha neste avaliador um horizonte fixo de sete dias.
-
-6. Como interpretar o calendario e o detalhe
---------------------------------------------
-
-O calendario usa a melhor classificacao encontrada entre as janelas daquele
-dia, nesta ordem: Favoravel, Atencao, Desfavoravel e Dados insuficientes.
-Assim, um dia que contenha ao menos uma hora Favoravel pode aparecer como
-Favoravel, mesmo que outras horas do mesmo dia sejam desfavoraveis. E
-necessario abrir o dia e conferir cada horario antes de tomar uma decisao.
-
-A classificacao geral da analise segue a mesma prioridade entre todas as
-janelas. A "proxima janela favoravel" e a primeira janela Favoravel encontrada
-na ordem cronologica. Uma janela classificada como Atencao nao e apresentada
-como proxima oportunidade favoravel.
-
-No detalhe do dia, a tela mostra os valores previstos de temperatura,
-umidade, probabilidade de chuva, precipitacao, vento e rajadas, alem de:
-
-- fatores favoraveis observados em relacao aos limites informados;
-- riscos, como probabilidade de chuva ou limites da bula nao informados;
-- restricoes confirmadas que tornam a janela Desfavoravel;
-- dados ausentes que impedem uma avaliacao completa;
-- aplicacoes registradas e defensivos planejados para aquele talhao.
-
-Os marcadores de planejamento e registro sao informativos. Eles nao alteram
-os valores meteorologicos nem a classificacao calculada para a janela.
-
-7. Limites e cuidados de uso
-----------------------------
-
-- A analise depende da qualidade e atualidade da previsao; as condicoes reais
-  no talhao podem divergir.
-- Os limites devem ser transcritos corretamente da bula/rótulo do produto e
-  podem variar por produto, cultura, alvo, metodo e condicoes de uso.
-- O sistema compara apenas as variaveis e os limites implementados acima.
-  Outros requisitos da bula nao sao inferidos automaticamente.
-- A probabilidade de chuva gera um aviso de Atencao, nao uma previsao
-  deterministica de chuva.
-- A janela nao valida dose, mistura, equipamento, intervalo de reentrada,
-  intervalo de seguranca, restricoes legais ou outros requisitos da aplicacao.
-- Em caso de dados insuficientes, de Atencao ou de divergencia com o campo,
-  nao se deve interpretar a tela como confirmacao de que a aplicacao e segura.
-
-8. Componentes relacionados
----------------------------
-
+API e arquivos
+--------------
 - Interface: `templates/janela_fitossanitaria.html`
-- Calendario, apresentacao dos resultados e eventos: `static/pesticide-calendar.js`
-- Atualizacao meteorologica compartilhada e cache de coleta recente:
-  `static/app.js`
-- Layout responsivo compartilhado: `static/gold-window.css`
-- Regras e classificacao meteorologica: `dashboard/pesticides.py`
-- Endpoint que seleciona a previsao e monta os registros de operacao:
-  `dashboard/views.py` (`pesticide_recommendations_api`)
-- Rota da tela e da API: `dashboard/urls.py`
-- Testes das regras e da API: `dashboard/test_pesticides.py`
+- Renderizacao e eventos: `static/pesticide-calendar.js`
+- Integracao meteorologica compartilhada: `static/app.js`
+- Analise automatica e criterios: `dashboard/pesticides.py`
+- Endpoint de leitura/análise automatica (GET):
+  `/api/pesticide-recommendations/?talhao_id=<id>`
+- Endpoint POST legado para consultas com informacoes de bula continua
+  disponivel para preservar compatibilidade.
+- Testes: `dashboard/test_pesticides.py`
 
-A API da janela fitossanitaria calcula e retorna o resultado da consulta. Essa
-rota nao persiste a analise como uma recomendacao `RecomendacaoJanela`. Os
-registros de aplicacoes e planejamentos mostrados no calendario sao lidos de
-seus respectivos registros existentes. Em telas pequenas, o formulario passa
-a uma coluna, o calendario mantem as classificacoes e horarios visiveis, e os
-detalhes meteorologicos sao organizados em blocos verticais sem rolagem
-horizontal da pagina.
+Falhas, ausencia de previsao e talhoes sem coordenadas sao comunicados na tela.
+O botao de atualizacao reutiliza o evento da integracao existente. Resultados
+sao atualizados ao trocar o talhao e quando a coleta desse talhao e atualizada.

@@ -7,7 +7,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, RecomendacaoJanela, Talhao
-from .pesticides import evaluate_pesticide_windows, weather_selection_score
+from .pesticides import (
+    evaluate_meteorological_windows,
+    evaluate_pesticide_windows,
+    weather_selection_score,
+)
 
 
 SAO_PAULO = ZoneInfo("America/Sao_Paulo")
@@ -159,6 +163,66 @@ class PesticideDecisionTests(SimpleTestCase):
         self.assertEqual(weather_selection_score(stale, now=self.now)[0], 0)
 
 
+class MeteorologicalWindowTests(SimpleTestCase):
+    def setUp(self):
+        self.now = datetime(2025, 1, 15, 9, tzinfo=SAO_PAULO)
+        self.weather = sample_weather(self.now, count=8)
+
+    def test_groups_consecutive_hourly_conditions_and_requires_two_hours(self):
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["windows"][0]["classification"], "favorable")
+        self.assertEqual(result["windows"][0]["duration_hours"], 6)
+        self.assertEqual(result["windows"][0]["start"], self.now.isoformat())
+        self.assertEqual(result["minimum_window_hours"], 2)
+        self.assertTrue(result["recommendation_notice"])
+
+    def test_short_favorable_period_is_caution_not_a_recommendation(self):
+        values = self.weather["hourly"]["values"]
+        values["wind_speed_10m"][1] = 16
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["windows"][0]["classification"], "attention")
+        self.assertIn("duração mínima", result["windows"][0]["alerts"][0])
+        self.assertEqual(result["next_opportunity"]["start"], (self.now + timedelta(hours=2)).isoformat())
+
+    def test_evaluates_rain_after_each_application_hour(self):
+        self.weather["hourly"]["values"]["precipitation_probability"][2] = 70
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["hours"][0]["classification"], "unfavorable")
+        self.assertIn("chuva", result["hours"][0]["alerts"][0])
+
+    def test_weather_extremes_raise_caution_without_product_specific_limits(self):
+        self.weather["hourly"]["values"]["temperature_2m"][0] = 34
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["hours"][0]["classification"], "attention")
+        self.assertIn("Temperatura", result["hours"][0]["alerts"][0])
+
+    def test_missing_hourly_forecast_is_insufficient_not_favorable(self):
+        del self.weather["hourly"]
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["classification"], "insufficient")
+        self.assertIn("previsão horária", result["missing"])
+        self.assertEqual(result["windows"], [])
+
+    def test_missing_required_hourly_values_are_insufficient(self):
+        del self.weather["hourly"]["values"]["wind_gusts_10m"]
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["hours"][0]["classification"], "insufficient")
+        self.assertIn("Rajadas de vento", result["missing"])
+
+    def test_stale_forecast_is_insufficient(self):
+        self.weather["fetched_at"] = (self.now - timedelta(hours=13)).isoformat()
+        result = evaluate_meteorological_windows(self.weather, now=self.now)
+
+        self.assertEqual(result["classification"], "insufficient")
+        self.assertIn("previsão atualizada", result["missing"])
+
+
 class PesticideCalendarApiTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(username="pesticide-owner")
@@ -188,6 +252,10 @@ class PesticideCalendarApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Janela Fitossanitária")
         self.assertContains(response, "Janela de Ouro")
+        self.assertContains(response, 'id="calendarTalhaoSelect"')
+        self.assertContains(response, 'id="pesticideTimeline"')
+        self.assertNotContains(response, 'id="pesticideLabelForm"')
+        self.assertNotContains(response, 'name="max_wind_speed"')
 
     def test_api_returns_insufficient_when_no_saved_weather_exists(self):
         ExecucaoAplicacao.objects.create(
@@ -219,6 +287,83 @@ class PesticideCalendarApiTests(TestCase):
             [item["product"] for item in response.json()["operations"]["applications"]],
             ["Fungicida"],
         )
+
+    def test_automatic_api_returns_insufficient_when_hourly_forecast_is_missing(self):
+        now = timezone.now()
+        ColetaMeteorologica.objects.create(
+            fazenda=self.farm,
+            talhao=self.talhao,
+            coletada_em=now,
+            latitude=self.talhao.latitude,
+            longitude=self.talhao.longitude,
+            timezone="America/Sao_Paulo",
+            dados_horarios={},
+        )
+        response = self.client.get(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": self.talhao.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["classification"], "insufficient")
+        self.assertIn("previsão horária", response.json()["missing"])
+
+    def test_automatic_api_uses_selected_talhao_coordinates_and_timezone(self):
+        now = timezone.now()
+        second_talhao = Talhao.objects.create(
+            fazenda=self.farm,
+            nome="Talhão 2",
+            latitude=-21.2,
+            longitude=-46.5,
+        )
+        for talhao, timezone_name in (
+            (self.talhao, "America/Sao_Paulo"),
+            (second_talhao, "America/Cuiaba"),
+        ):
+            weather = sample_weather(now.astimezone(ZoneInfo(timezone_name)), count=8)
+            ColetaMeteorologica.objects.create(
+                fazenda=self.farm,
+                talhao=talhao,
+                coletada_em=now,
+                latitude=talhao.latitude,
+                longitude=talhao.longitude,
+                timezone=timezone_name,
+                dados_atuais={"temperature_2m": 25},
+                dados_horarios=weather["hourly"],
+                dados_diarios={
+                    "timestamps": ["2025-01-15"],
+                    "values": {"precipitation_sum": [1.2]},
+                },
+            )
+
+        response = self.client.get(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": second_talhao.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["talhao_id"], second_talhao.id)
+        self.assertEqual(response.json()["weather"]["location"]["latitude"], -21.2)
+        self.assertEqual(response.json()["timezone"], "America/Cuiaba")
+        self.assertEqual(response.json()["weather"]["daily"]["values"]["precipitation_sum"], [1.2])
+
+    def test_automatic_api_rejects_talhoes_outside_the_active_farm(self):
+        response = self.client.get(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": 999999},
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_automatic_api_requires_authentication(self):
+        self.client.logout()
+
+        response = self.client.get(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": self.talhao.id},
+        )
+
+        self.assertEqual(response.status_code, 401)
 
     def test_api_marks_missing_plot_coordinates_as_not_refreshable(self):
         self.talhao.latitude = None

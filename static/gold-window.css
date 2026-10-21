@@ -63,47 +63,14 @@
   #page-gold-window .gold-window-days .cal-day-window { display: none; }
 }
 
-.pesticide-label-form { margin-bottom: 1rem; padding: 1rem 1.1rem; }
-.pesticide-label-heading strong { color: var(--text-primary); font-size: .95rem; }
-.pesticide-label-heading p { margin: .25rem 0 .9rem; color: var(--text-secondary); font-size: .78rem; line-height: 1.45; }
-.pesticide-label-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
-.pesticide-label-grid .form-group { display: grid; gap: .35rem; margin: 0; }
-.pesticide-label-grid .form-group span { color: var(--text-secondary); font-size: .72rem; font-weight: 650; }
-.pesticide-label-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: .85rem; }
-.pesticide-label-confirm { display: flex; align-items: flex-start; gap: .5rem; color: var(--text-secondary); font-size: .74rem; line-height: 1.45; }
-.pesticide-label-confirm input { margin-top: .15rem; accent-color: var(--green-700); }
 .pesticide-form-note { margin: .8rem 0 0; color: var(--text-muted); font-size: .7rem; line-height: 1.45; }
 .pesticide-source-line { margin: 0 0 .75rem; color: var(--text-secondary); font-size: .74rem; line-height: 1.45; }
-.pesticide-detail-heading { margin-bottom: .85rem; }
-.pesticide-detail-heading h3 { margin: .2rem 0 0; color: var(--text-primary); font-size: 1rem; }
-.pesticide-detail-copy { color: var(--text-secondary); font-size: .78rem; line-height: 1.5; }
-.pesticide-hour-list { display: grid; gap: .7rem; }
-.pesticide-hour { padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
-.pesticide-hour.green-day { background: rgba(58,133,84,.04); border-color: rgba(58,133,84,.2); }
-.pesticide-hour.yellow-day { background: rgba(245,158,11,.04); border-color: rgba(245,158,11,.22); }
-.pesticide-hour.red-day { background: rgba(239,68,68,.04); border-color: rgba(239,68,68,.2); }
-.pesticide-hour.no-data { background: var(--gray-50); }
-.pesticide-hour-heading { display: flex; justify-content: space-between; gap: .75rem; color: var(--text-primary); font-size: .78rem; }
-.pesticide-hour-heading span { color: var(--text-secondary); }
-.pesticide-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin-top: .65rem; }
-.pesticide-metric { display: flex; justify-content: space-between; gap: .3rem; color: var(--text-secondary); font-size: .68rem; }
-.pesticide-metric strong { color: var(--text-primary); font-size: .68rem; white-space: nowrap; }
-.pesticide-window-notes { margin-top: .65rem; color: var(--text-secondary); font-size: .7rem; line-height: 1.45; }
-.pesticide-window-notes strong { color: var(--text-primary); }
-.pesticide-window-notes ul { margin: .2rem 0 0; padding-left: 1.1rem; }
 
 #page-pesticide-window,
 #page-pesticide-window .page-content,
-#page-pesticide-window .page-content > *,
-#page-pesticide-window .gold-window-layout > * {
+#page-pesticide-window .page-content > * {
   min-width: 0;
   box-sizing: border-box;
-}
-
-#page-pesticide-window .pesticide-label-grid .form-input {
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
 }
 
 .pesticide-status-row {
@@ -125,66 +92,101 @@
   min-height: 44px;
 }
 
-#pesticideCalGrid[aria-busy="true"] { pointer-events: none; }
-#pesticideCalGrid.is-stale,
-#pesticideDayPanelContent.is-stale { opacity: .68; }
-
-#page-pesticide-window .cal-nav-btn {
-  width: 44px;
-  height: 44px;
+.pesticide-weather-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .75rem;
+  margin-bottom: 1rem;
 }
 
-#page-pesticide-window .pesticide-hour,
-#page-pesticide-window .pesticide-window-notes,
-#page-pesticide-window .pesticide-metric {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
+.pesticide-weather-summary .card { min-width: 0; padding: .9rem 1rem; }
+.pesticide-summary-card,
+.pesticide-current-card { display: flex; flex-direction: column; gap: .35rem; }
+.pesticide-summary-label { color: var(--text-muted); font-size: .68rem; font-weight: 700; }
+.pesticide-summary-card strong,
+.pesticide-current-card strong { color: var(--text-primary); font-size: 1rem; overflow-wrap: anywhere; }
+.pesticide-summary-card > span:last-child,
+.pesticide-current-card > span:last-child { color: var(--text-secondary); font-size: .68rem; line-height: 1.4; }
+.pesticide-windows-section,
+.pesticide-timeline-section,
+.pesticide-daily-section { margin-bottom: 1rem; padding: 1rem; }
+.pesticide-section-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; margin-bottom: .85rem; }
+.pesticide-section-heading h2 { margin: .2rem 0 0; color: var(--text-primary); font-size: 1.05rem; }
+.pesticide-window-legend,
+.pesticide-timeline-caption { margin: 0; color: var(--text-muted); font-size: .68rem; line-height: 1.45; }
+.pesticide-windows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.pesticide-window-card { min-width: 0; padding: .85rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.pesticide-window-card.is-selected { box-shadow: 0 0 0 2px rgba(58, 133, 84, .18); }
+.pesticide-window-card.is-favorable,
+.pesticide-timeline-hour.is-favorable { border-color: rgba(58, 133, 84, .28); background: rgba(58, 133, 84, .045); }
+.pesticide-window-card.is-attention,
+.pesticide-timeline-hour.is-attention { border-color: rgba(245, 158, 11, .3); background: rgba(245, 158, 11, .055); }
+.pesticide-window-card.is-unfavorable,
+.pesticide-timeline-hour.is-unfavorable { border-color: rgba(239, 68, 68, .25); background: rgba(239, 68, 68, .045); }
+.pesticide-window-card.is-insufficient,
+.pesticide-timeline-hour.is-insufficient { background: var(--gray-50); }
+.pesticide-window-card-heading { display: flex; justify-content: space-between; align-items: center; gap: .5rem; color: var(--text-muted); font-size: .7rem; }
+.pesticide-window-badge,
+.pesticide-timeline-status { display: inline-flex; align-items: center; width: fit-content; padding: .22rem .45rem; border-radius: 999px; background: rgba(20, 30, 24, .07); color: var(--text-primary); font-size: .66rem; font-weight: 700; }
+.is-favorable .pesticide-window-badge,
+.is-favorable .pesticide-timeline-status { background: rgba(58, 133, 84, .12); color: var(--green-700); }
+.is-attention .pesticide-window-badge,
+.is-attention .pesticide-timeline-status { background: rgba(245, 158, 11, .15); color: #8b5a00; }
+.is-unfavorable .pesticide-window-badge,
+.is-unfavorable .pesticide-timeline-status { background: rgba(239, 68, 68, .12); color: #a92828; }
+.pesticide-window-card h3 { margin: .6rem 0; color: var(--text-primary); font-size: .88rem; }
+.pesticide-window-conditions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+.pesticide-window-conditions span { display: grid; gap: .15rem; color: var(--text-muted); font-size: .65rem; }
+.pesticide-window-conditions strong { color: var(--text-primary); font-size: .71rem; overflow-wrap: anywhere; }
+.pesticide-window-reasons,
+.pesticide-window-alerts { margin-top: .65rem; color: var(--text-secondary); font-size: .7rem; line-height: 1.45; }
+.pesticide-window-reasons strong,
+.pesticide-window-alerts strong { color: var(--text-primary); }
+.pesticide-window-reasons ul,
+.pesticide-window-alerts ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.pesticide-window-alerts { color: #8b5a00; }
+.is-unfavorable .pesticide-window-alerts { color: #a92828; }
+.pesticide-window-select { min-height: 40px; margin-top: .65rem; padding: .4rem .65rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; color: var(--green-700); font: inherit; font-size: .7rem; font-weight: 650; cursor: pointer; }
+.pesticide-empty { grid-column: 1 / -1; margin: 0; padding: .8rem; border-radius: var(--radius-sm); background: var(--gray-50); color: var(--text-secondary); font-size: .78rem; line-height: 1.5; }
+.pesticide-daily-forecast { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: .6rem; }
+.pesticide-daily-card { display: flex; min-width: 0; flex-direction: column; gap: .4rem; padding: .7rem; border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-secondary); font-size: .66rem; line-height: 1.4; }
+.pesticide-daily-card > strong { color: var(--text-primary); font-size: .75rem; }
+.pesticide-daily-condition { min-height: 1.8em; color: var(--text-primary); }
+.pesticide-daily-temperature { color: var(--green-700); font-size: .78rem; font-weight: 700; }
+.pesticide-timeline-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.pesticide-timeline { display: flex; align-items: stretch; gap: .65rem; width: max-content; min-width: 100%; padding: .15rem .1rem .55rem; }
+.pesticide-timeline-hour { display: flex; flex: 0 0 205px; flex-direction: column; gap: .55rem; min-width: 0; padding: .7rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.pesticide-timeline-time { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.pesticide-timeline-time strong { color: var(--text-primary); font-size: .85rem; }
+.pesticide-timeline-time span,
+.pesticide-timeline-condition { color: var(--text-muted); font-size: .68rem; }
+.pesticide-timeline-metrics { display: grid; grid-template-columns: 1fr; gap: .28rem; }
+.pesticide-timeline-metric { display: flex; justify-content: space-between; gap: .4rem; color: var(--text-secondary); font-size: .66rem; }
+.pesticide-timeline-metric strong { color: var(--text-primary); font-size: .66rem; text-align: right; white-space: nowrap; }
+.pesticide-timeline-alert { margin: 0; color: #8b5a00; font-size: .66rem; line-height: 1.4; }
+.is-unfavorable .pesticide-timeline-alert { color: #a92828; }
 
-@media (max-width: 900px) {
-  .pesticide-label-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 640px) {
   #page-pesticide-window .page-content { padding-right: .75rem; padding-left: .75rem; }
   #page-pesticide-window .page-header { align-items: stretch; gap: .75rem; }
   #page-pesticide-window .page-title { font-size: 1.45rem; }
   #page-pesticide-window .page-sub { font-size: .78rem; line-height: 1.5; }
-  .pesticide-label-form { padding: .85rem; }
-  .pesticide-label-grid { grid-template-columns: minmax(0, 1fr); }
-  .pesticide-label-footer { align-items: stretch; flex-direction: column; }
-  .pesticide-label-footer .btn-primary { justify-content: center; width: 100%; }
   .pesticide-status-row { align-items: stretch; flex-direction: column; }
   .pesticide-retry { width: 100%; justify-content: center; }
-  #page-pesticide-window .calendar-card { padding: .75rem; }
-  #page-pesticide-window .cal-header { align-items: center; gap: .5rem; }
-  #page-pesticide-window .cal-month { font-size: .95rem; }
-  #page-pesticide-window .cal-weekdays { gap: 2px; }
-  #page-pesticide-window .cal-weekdays span { font-size: .56rem; }
-  #page-pesticide-window .cal-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
-  #page-pesticide-window .cal-day {
-    min-width: 0;
-    min-height: 72px;
-    padding: .32rem .08rem;
-    gap: .18rem;
-  }
-  #page-pesticide-window .cal-day-iea {
-    max-width: 100%;
-    padding: 1px 2px;
-    font-size: .52rem;
-    line-height: 1.2;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-  #page-pesticide-window .cal-day-window { display: block; font-size: .5rem; }
-  #page-pesticide-window .cal-day-num { font-size: .72rem; }
-  #page-pesticide-window .cal-day-markers { gap: 1px; }
-  #page-pesticide-window .cal-legend { gap: .5rem; }
-  #page-pesticide-window .cal-legend-item { font-size: .65rem; }
-  #page-pesticide-window .gold-window-detail { padding: .85rem; }
-  #page-pesticide-window .pesticide-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
-  #page-pesticide-window .pesticide-metric { flex-direction: column; gap: .1rem; font-size: .68rem; }
-  #page-pesticide-window .pesticide-metric strong { white-space: normal; }
-  #page-pesticide-window .pesticide-hour-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }
-  #page-pesticide-window .pesticide-hour { padding: .7rem; }
-  #page-pesticide-window .pesticide-window-notes { font-size: .74rem; }
+  .pesticide-weather-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .pesticide-weather-summary .pesticide-current-card { grid-column: 1 / -1; }
+  .pesticide-weather-summary .card { padding: .75rem; }
+  .pesticide-section-heading { align-items: flex-start; flex-direction: column; gap: .35rem; }
+  .pesticide-windows { grid-template-columns: minmax(0, 1fr); }
+  .pesticide-windows-section,
+  .pesticide-timeline-section,
+  .pesticide-daily-section { padding: .8rem; }
+  .pesticide-daily-forecast { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pesticide-window-conditions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pesticide-timeline-hour { flex-basis: 190px; }
+}
+
+@media (min-width: 641px) and (max-width: 1000px) {
+  .pesticide-weather-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pesticide-windows { grid-template-columns: minmax(0, 1fr); }
 }

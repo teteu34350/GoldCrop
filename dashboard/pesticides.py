@@ -13,6 +13,18 @@ WEATHER_FIELDS = {
 }
 MAX_WEATHER_AGE = timedelta(hours=12)
 MAX_CLOCK_SKEW = timedelta(minutes=5)
+OPERATIONAL_SCREENING_CRITERIA = {
+    "maximum_wind_speed_kmh": 15,
+    "maximum_wind_gust_kmh": 20,
+    "rain_probability_caution_percent": 30,
+    "rain_probability_unfavorable_percent": 60,
+    "minimum_window_hours": 2,
+    "rain_lookahead_hours": 2,
+    "temperature_caution_below_c": 10,
+    "temperature_caution_above_c": 32,
+    "relative_humidity_caution_below_percent": 30,
+    "relative_humidity_caution_above_percent": 95,
+}
 
 
 def _number(value):
@@ -159,6 +171,211 @@ def weather_selection_score(weather, *, now=None):
         complete_rows,
         -max(0, int(age.total_seconds() // 60)),
     )
+
+
+def evaluate_meteorological_windows(weather, *, now=None):
+    """Screen hourly weather using documented operational criteria, not product-label limits."""
+    if not isinstance(weather, dict):
+        return _insufficient("Não há previsão meteorológica salva para este talhão.")
+
+    timezone_name = weather.get("timezone")
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (TypeError, ValueError, ZoneInfoNotFoundError):
+        return _insufficient("Fuso horário da previsão ausente ou inválido.", missing=["timezone"])
+
+    fetched_at = _parse_time(weather.get("fetched_at"), zone)
+    current_time = now or datetime.now(zone)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=zone)
+    else:
+        current_time = current_time.astimezone(zone)
+    if fetched_at is None:
+        return _insufficient("Horário da atualização meteorológica não disponível.", missing=["fetched_at"])
+    age = current_time.astimezone(dt_timezone.utc) - fetched_at.astimezone(dt_timezone.utc)
+    if age < -MAX_CLOCK_SKEW or age > MAX_WEATHER_AGE:
+        return _insufficient(
+            "A previsão salva está desatualizada; atualize os dados meteorológicos.",
+            missing=["previsão atualizada"],
+        )
+
+    hourly = weather.get("hourly")
+    timestamps = hourly.get("timestamps") if isinstance(hourly, dict) else None
+    values = hourly.get("values") if isinstance(hourly, dict) else None
+    if not isinstance(timestamps, list) or not timestamps or not isinstance(values, dict):
+        return _insufficient("A previsão horária necessária não está disponível.", missing=["previsão horária"])
+
+    parsed_times = [_parse_time(value, zone) for value in timestamps]
+    rows = []
+    missing_fields = []
+    for field, label in WEATHER_FIELDS.items():
+        series = values.get(field)
+        if not isinstance(series, list) or len(series) != len(timestamps):
+            missing_fields.append(label)
+    for index, timestamp in enumerate(parsed_times):
+        if timestamp is None or timestamp.astimezone(dt_timezone.utc) + timedelta(hours=1) <= current_time.astimezone(dt_timezone.utc):
+            continue
+        metrics = {
+            field: _number(values[field][index])
+            if isinstance(values.get(field), list) and index < len(values[field])
+            else None
+            for field in WEATHER_FIELDS
+        }
+        for field in ("apparent_temperature", "weather_code"):
+            series = values.get(field)
+            metrics[field] = _number(series[index]) if isinstance(series, list) and index < len(series) else None
+        missing = [
+            WEATHER_FIELDS[field]
+            for field in WEATHER_FIELDS
+            if metrics[field] is None
+        ]
+        reasons = []
+        alerts = []
+        classification = "insufficient" if missing or missing_fields else "favorable"
+
+        if classification != "insufficient":
+            if metrics["wind_speed_10m"] > OPERATIONAL_SCREENING_CRITERIA["maximum_wind_speed_kmh"]:
+                classification = "unfavorable"
+                alerts.append("Vento acima do critério operacional de triagem.")
+            if metrics["wind_gusts_10m"] > OPERATIONAL_SCREENING_CRITERIA["maximum_wind_gust_kmh"]:
+                classification = "unfavorable"
+                alerts.append("Rajadas acima do critério operacional de triagem.")
+
+            rain_unknown = False
+            rain_volume = False
+            rain_probability = 0
+            for offset in range(OPERATIONAL_SCREENING_CRITERIA["rain_lookahead_hours"] + 1):
+                future_index = index + offset
+                if future_index >= len(timestamps):
+                    rain_unknown = True
+                    break
+                amount_series = values.get("precipitation")
+                probability_series = values.get("precipitation_probability")
+                amount = _number(amount_series[future_index]) if isinstance(amount_series, list) and future_index < len(amount_series) else None
+                probability = _number(probability_series[future_index]) if isinstance(probability_series, list) and future_index < len(probability_series) else None
+                if amount is None or probability is None:
+                    rain_unknown = True
+                    break
+                rain_volume = rain_volume or amount > 0
+                rain_probability = max(rain_probability, probability)
+            if rain_unknown:
+                classification = "insufficient"
+                missing.append("precipitação durante o período de análise")
+            elif rain_volume or rain_probability >= OPERATIONAL_SCREENING_CRITERIA["rain_probability_unfavorable_percent"]:
+                classification = "unfavorable"
+                alerts.append("Há precipitação ou alta probabilidade de chuva durante/depois do horário.")
+            elif rain_probability >= OPERATIONAL_SCREENING_CRITERIA["rain_probability_caution_percent"]:
+                if classification == "favorable":
+                    classification = "attention"
+                alerts.append("Probabilidade de chuva exige cautela.")
+
+            temperature = metrics["temperature_2m"]
+            if (
+                temperature < OPERATIONAL_SCREENING_CRITERIA["temperature_caution_below_c"]
+                or temperature > OPERATIONAL_SCREENING_CRITERIA["temperature_caution_above_c"]
+            ):
+                if classification == "favorable":
+                    classification = "attention"
+                alerts.append("Temperatura fora da faixa operacional de triagem.")
+            if metrics["relative_humidity_2m"] < OPERATIONAL_SCREENING_CRITERIA["relative_humidity_caution_below_percent"]:
+                if classification == "favorable":
+                    classification = "attention"
+                alerts.append("Umidade relativa baixa; há maior potencial de evaporação.")
+            elif metrics["relative_humidity_2m"] > OPERATIONAL_SCREENING_CRITERIA["relative_humidity_caution_above_percent"]:
+                if classification == "favorable":
+                    classification = "attention"
+                alerts.append("Umidade relativa muito alta; considere o risco de molhamento persistente.")
+            if not alerts:
+                reasons.append("Variáveis meteorológicas disponíveis dentro dos critérios operacionais de triagem.")
+
+        rows.append({
+            "date": timestamp.date().isoformat(),
+            "start": timestamp.isoformat(),
+            "end": (timestamp.astimezone(dt_timezone.utc) + timedelta(hours=1)).astimezone(zone).isoformat(),
+            "classification": classification,
+            "metrics": metrics,
+            "reasons": reasons,
+            "alerts": alerts,
+            "missing": sorted(set(missing)),
+        })
+
+    if not rows:
+        return _insufficient("Não há horários futuros disponíveis no horizonte atual.", missing=["horários futuros"])
+
+    # A single favorable hour is too short to present as a usable operation window.
+    index = 0
+    while index < len(rows):
+        end_index = index + 1
+        while (
+            end_index < len(rows)
+            and rows[end_index]["classification"] == rows[index]["classification"]
+            and rows[end_index - 1]["end"] == rows[end_index]["start"]
+        ):
+            end_index += 1
+        if (
+            rows[index]["classification"] == "favorable"
+            and end_index - index < OPERATIONAL_SCREENING_CRITERIA["minimum_window_hours"]
+        ):
+            for row in rows[index:end_index]:
+                row["classification"] = "attention"
+                row["alerts"].append("Período favorável mais curto que a duração mínima de planejamento (2 horas).")
+                row["reasons"] = []
+        index = end_index
+
+    windows = []
+    index = 0
+    while index < len(rows):
+        end_index = index + 1
+        while (
+            end_index < len(rows)
+            and rows[end_index]["classification"] == rows[index]["classification"]
+            and rows[end_index - 1]["end"] == rows[end_index]["start"]
+        ):
+            end_index += 1
+        grouped = rows[index:end_index]
+        windows.append({
+            "date": grouped[0]["date"],
+            "start": grouped[0]["start"],
+            "end": grouped[-1]["end"],
+            "duration_hours": len(grouped),
+            "classification": grouped[0]["classification"],
+            "hours": grouped,
+            "reasons": sorted({reason for row in grouped for reason in row["reasons"]}),
+            "alerts": sorted({alert for row in grouped for alert in row["alerts"]}),
+            "missing": sorted({item for row in grouped for item in row["missing"]}),
+        })
+        index = end_index
+
+    favorable = [window for window in windows if window["classification"] == "favorable"]
+    has_sufficient_rows = not missing_fields and all(not row["missing"] for row in rows)
+    return {
+        "operation": "FITOSSANITARIA",
+        "classification": (
+            "favorable" if favorable else
+            "attention" if any(window["classification"] == "attention" for window in windows) else
+            "unfavorable" if any(window["classification"] == "unfavorable" for window in windows) else
+            "insufficient"
+        ),
+        "message": (
+            "Classificação meteorológica operacional; confirme a bula e as condições reais da aplicação."
+            if favorable else
+            "Nenhuma janela favorável com duração mínima foi encontrada na previsão."
+        ),
+        "source": weather.get("source", "Open-Meteo"),
+        "fetched_at": fetched_at.isoformat(),
+        "timezone": timezone_name,
+        "age_minutes": max(0, int(age.total_seconds() // 60)),
+        "forecast_start": rows[0]["start"],
+        "forecast_end": rows[-1]["end"],
+        "confidence": "high" if has_sufficient_rows else "limited",
+        "missing": sorted(set(missing_fields)),
+        "criteria": OPERATIONAL_SCREENING_CRITERIA,
+        "minimum_window_hours": OPERATIONAL_SCREENING_CRITERIA["minimum_window_hours"],
+        "windows": windows,
+        "hours": rows,
+        "next_opportunity": favorable[0] if favorable else None,
+        "recommendation_notice": "Esta análise é meteorológica e não substitui a verificação da bula nem a avaliação das condições reais da operação.",
+    }
 
 
 def evaluate_pesticide_windows(weather, label, *, now=None):

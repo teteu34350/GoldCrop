@@ -24,7 +24,11 @@ from .models import (
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
-from .pesticides import evaluate_pesticide_windows, weather_selection_score
+from .pesticides import (
+    evaluate_meteorological_windows,
+    evaluate_pesticide_windows,
+    weather_selection_score,
+)
 
 
 def _json_body(request):
@@ -743,22 +747,7 @@ def recommendations_ingest_api(request):
     }, status=201)
 
 
-@require_POST
-def pesticide_recommendations_api(request):
-    if not request.user.is_authenticated:
-        return _error("Autenticação necessária.", 401)
-    data = _json_body(request)
-    farm = _current_farm(request)
-    if not isinstance(data, dict) or not farm:
-        return _error("Informe um talhão válido da fazenda ativa.")
-    try:
-        talhao_id = int(data.get("talhao_id"))
-    except (TypeError, ValueError):
-        return _error("Informe um talhão válido.")
-    talhao = farm.talhoes.filter(pk=talhao_id, ativo=True).first()
-    if talhao is None:
-        return _error("Talhão não encontrado na fazenda ativa.", 404)
-
+def _pesticide_weather_for_talhao(farm, talhao):
     collections = (
         ColetaMeteorologica.objects.filter(
             fazenda=farm,
@@ -778,19 +767,54 @@ def pesticide_recommendations_api(request):
         }),
         default=None,
     )
-    collection_score = weather_selection_score({
+    weather = {
+        "source": collection.fonte,
         "fetched_at": collection.coletada_em.isoformat(),
         "timezone": collection.timezone,
+        "location": {
+            "latitude": float(collection.latitude),
+            "longitude": float(collection.longitude),
+        },
+        "current": collection.dados_atuais,
         "hourly": collection.dados_horarios,
-    }) if collection else (0, 0, 0, 0)
-    weather = None
-    if collection:
-        weather = {
-            "source": collection.fonte,
-            "fetched_at": collection.coletada_em.isoformat(),
-            "timezone": collection.timezone,
-            "hourly": collection.dados_horarios,
-        }
+        "daily": collection.dados_diarios,
+    } if collection else None
+    score = weather_selection_score(weather, now=timezone.now()) if weather else (0, 0, 0, 0)
+    return collection, weather, score
+
+
+@require_http_methods(["GET", "POST"])
+def pesticide_recommendations_api(request):
+    if not request.user.is_authenticated:
+        return _error("Autenticação necessária.", 401)
+    farm = _current_farm(request)
+    data = {"talhao_id": request.GET.get("talhao_id")} if request.method == "GET" else _json_body(request)
+    if not isinstance(data, dict) or not farm:
+        return _error("Informe um talhão válido da fazenda ativa.")
+    try:
+        talhao_id = int(data.get("talhao_id"))
+    except (TypeError, ValueError):
+        return _error("Informe um talhão válido.")
+    talhao = farm.talhoes.filter(pk=talhao_id, ativo=True).first()
+    if talhao is None:
+        return _error("Talhão não encontrado na fazenda ativa.", 404)
+
+    collection, weather, collection_score = _pesticide_weather_for_talhao(farm, talhao)
+    if request.method == "GET":
+        result = evaluate_meteorological_windows(weather)
+        result["talhao"] = talhao.nome
+        result["talhao_id"] = talhao.id
+        result["weather_collection_id"] = collection.id if collection else None
+        result["weather_complete"] = bool(collection_score[0] and collection_score[1])
+        result["weather_refreshable"] = talhao.latitude is not None and talhao.longitude is not None
+        result["weather"] = weather
+        return JsonResponse(result)
+
+    collection_score = weather_selection_score({
+        "fetched_at": weather["fetched_at"],
+        "timezone": weather["timezone"],
+        "hourly": weather["hourly"],
+    }, now=timezone.now()) if weather else (0, 0, 0, 0)
     result = evaluate_pesticide_windows(weather, data.get("product_label"))
     if weather:
         result.setdefault("source", weather["source"])

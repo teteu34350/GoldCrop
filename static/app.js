@@ -491,6 +491,7 @@ const SENSOR_HUMIDITY_LOCKED = 'Bloqueado';
 // storage candidates for future weather_observations and weather_forecasts tables.
 const OPEN_METEO_DATA_DICTIONARY = {
   temperature_2m: { unit: '°C', purpose: 'Temperature stress and product absorption.' },
+  apparent_temperature: { unit: '°C', purpose: 'Perceived temperature context.' },
   relative_humidity_2m: { unit: '%', purpose: 'Humidity conditions and evaporation risk.' },
   precipitation: { unit: 'mm', purpose: 'Total water volume in the preceding interval.' },
   precipitation_probability: { unit: '%', purpose: 'Probability of precipitation during the application window.' },
@@ -522,14 +523,14 @@ const OPEN_METEO_DATA_DICTIONARY = {
 
 const OPEN_METEO_VARIABLES = {
   current: [
-    'temperature_2m', 'relative_humidity_2m', 'precipitation', 'rain', 'showers',
+    'temperature_2m', 'apparent_temperature', 'relative_humidity_2m', 'precipitation', 'rain', 'showers',
     'wind_speed_10m', 'wind_gusts_10m', 'dew_point_2m', 'cloud_cover',
     'shortwave_radiation', 'et0_fao_evapotranspiration', 'weather_code',
     'soil_moisture_0_to_1cm', 'soil_moisture_1_to_3cm', 'soil_moisture_3_to_9cm',
     'soil_moisture_9_to_27cm', 'soil_moisture_27_to_81cm',
   ],
   hourly: [
-    'temperature_2m', 'relative_humidity_2m', 'precipitation_probability',
+    'temperature_2m', 'apparent_temperature', 'relative_humidity_2m', 'precipitation_probability',
     'precipitation', 'rain', 'showers', 'wind_speed_10m', 'wind_gusts_10m',
     'dew_point_2m', 'cloud_cover', 'shortwave_radiation',
     'et0_fao_evapotranspiration', 'weather_code', 'soil_moisture_0_to_1cm',
@@ -958,7 +959,7 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId, forceRe
     hourly: OPEN_METEO_VARIABLES.hourly.join(','),
     daily: OPEN_METEO_VARIABLES.daily.join(','),
     forecast_days: '7',
-    timezone: 'America/Sao_Paulo',
+    timezone: 'auto',
   });
 
   try {
