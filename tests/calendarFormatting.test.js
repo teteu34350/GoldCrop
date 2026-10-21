@@ -34,6 +34,53 @@ assert.strictEqual(context.formatMetricValue(12.5, '°C'), '12,5°C');
 assert.strictEqual(vm.runInContext('calMonth.getFullYear()', context), new Date().getFullYear(), 'calendar should open in the current year');
 assert.strictEqual(vm.runInContext('calMonth.getMonth()', context), new Date().getMonth(), 'calendar should open in the current month');
 
+const cachedForecast = {
+  fetchedAt: new Date().toISOString(),
+  location: { latitude: -20.89, longitude: -46.08, timezone: 'America/Sao_Paulo' },
+  hourly: {
+    timestamps: [new Date(Date.now() + 60 * 60 * 1000).toISOString()],
+    values: {
+      temperature_2m: [22],
+      relative_humidity_2m: [65],
+      precipitation_probability: [0],
+      precipitation: [0],
+      wind_speed_10m: [5],
+      wind_gusts_10m: [8],
+    },
+  },
+  daily: { timestamps: [new Date().toISOString().slice(0, 10)] },
+};
+const cachedPlot = { latitude: -20.89, longitude: -46.08 };
+assert.strictEqual(context.canReuseSavedForecast(cachedForecast, cachedPlot), true, 'complete fresh forecast for the selected plot should be reused');
+const localFutureHour = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'America/Sao_Paulo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+}).format(new Date(Date.now() + 60 * 60 * 1000)).replace(' ', 'T').slice(0, 16);
+assert.strictEqual(context.canReuseSavedForecast({
+  ...cachedForecast,
+  hourly: { ...cachedForecast.hourly, timestamps: [localFutureHour] },
+}, cachedPlot), true, 'local forecast timestamps should use the forecast timezone rather than the browser timezone');
+assert.strictEqual(context.canReuseSavedForecast({
+  ...cachedForecast,
+  fetchedAt: new Date(Date.now() - 16 * 60 * 1000).toISOString(),
+}, cachedPlot), false, 'stale local cache should trigger a new weather request');
+assert.strictEqual(context.canReuseSavedForecast({
+  ...cachedForecast,
+  location: { ...cachedForecast.location, latitude: -20.88 },
+}, cachedPlot), false, 'forecast for different plot coordinates should not be reused');
+assert.strictEqual(context.canReuseSavedForecast({
+  ...cachedForecast,
+  hourly: {
+    ...cachedForecast.hourly,
+    values: { ...cachedForecast.hourly.values, wind_gusts_10m: [] },
+  },
+}, cachedPlot), false, 'incomplete hourly forecast should not be reused');
+
 const elements = {};
 const maps = [];
 context.document.getElementById = id => elements[id] || null;

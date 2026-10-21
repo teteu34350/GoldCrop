@@ -112,6 +112,15 @@ function notifyWeatherUpdated(talhaoId) {
   window.dispatchEvent(new CustomEvent('goldcrop:weather-updated', { detail: { talhaoId } }));
 }
 
+if (typeof window.addEventListener === 'function') {
+  window.addEventListener('goldcrop:weather-refresh-requested', event => {
+    const talhaoId = Number(event.detail?.talhaoId);
+    if (talhaoId && talhaoId === selectedTalhaoRefId) {
+      loadLocalWeather(talhaoId, true);
+    }
+  });
+}
+
 async function loadDatabaseState() {
   try {
     const response = await apiRequest('/api/state/');
@@ -795,7 +804,103 @@ function updateSystemFromAnalysis() {
   if (document.getElementById('fazendaContent')) renderFazenda();
 }
 
-async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
+function canReuseSavedForecast(weather, reference) {
+  const fetchedAt = Date.parse(weather?.fetchedAt || '');
+  const age = Date.now() - fetchedAt;
+  const latitude = Number(weather?.location?.latitude);
+  const longitude = Number(weather?.location?.longitude);
+  const timestamps = weather?.hourly?.timestamps;
+  const values = weather?.hourly?.values;
+  const requiredFields = [
+    'temperature_2m',
+    'relative_humidity_2m',
+    'precipitation_probability',
+    'precipitation',
+    'wind_speed_10m',
+    'wind_gusts_10m',
+  ];
+
+  if (
+    !Number.isFinite(fetchedAt)
+    || age < -5 * 60 * 1000
+    || age > 15 * 60 * 1000
+    || !Number.isFinite(latitude)
+    || !Number.isFinite(longitude)
+    || typeof weather?.location?.timezone !== 'string'
+    || !weather.location.timezone
+    || Math.abs(latitude - reference.latitude) > 0.000001
+    || Math.abs(longitude - reference.longitude) > 0.000001
+    || !Array.isArray(timestamps)
+    || !timestamps.length
+    || !Array.isArray(weather?.daily?.timestamps)
+    || !weather.daily.timestamps.length
+    || !values
+  ) return false;
+
+  let currentForecastHour;
+  try {
+    currentForecastHour = new Intl.DateTimeFormat('sv-SE', {
+      timeZone: weather.location.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date()).replace(' ', 'T').slice(0, 13);
+  } catch (error) {
+    if (error instanceof RangeError) return false;
+    throw error;
+  }
+
+  return requiredFields.every(field => {
+    const series = values[field];
+    return Array.isArray(series)
+      && series.length === timestamps.length
+      && timestamps.every((timestamp, index) => {
+        if (typeof timestamp !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(timestamp)) return false;
+        const hasOffset = /(?:Z|[+-]\d{2}:\d{2})$/i.test(timestamp);
+        const time = Date.parse(timestamp);
+        if (hasOffset && !Number.isFinite(time)) return false;
+        const stillOpen = hasOffset
+          ? time + 60 * 60 * 1000 > Date.now()
+          : timestamp.slice(0, 13) >= currentForecastHour;
+        return !stillOpen || Number.isFinite(Number(series[index]));
+      });
+  });
+}
+
+function updateWeatherSummary(reference, weather, sourceLabel = 'Open-Meteo') {
+  const current = weather.current?.values || {};
+  const rain = finiteWeatherValue(weather.daily?.values?.precipitation_sum?.[0]);
+  const probabilities = (weather.hourly?.values?.precipitation_probability || [])
+    .slice(0, 24)
+    .map(finiteWeatherValue)
+    .filter(value => value != null);
+  const probability = probabilities.length ? Math.max(...probabilities) : null;
+  const condition = WEATHER_CODES[current.weather_code] || 'Condição não informada';
+  const temperatureValue = finiteWeatherValue(current.temperature_2m);
+  const temperature = temperatureValue == null
+    ? '—'
+    : temperatureValue.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const weatherSummary = document.getElementById('weatherSummary');
+  const rainValue = document.getElementById('rainForecastValue');
+  const rainDesc = document.getElementById('rainForecastDesc');
+
+  if (weatherSummary) weatherSummary.textContent = `${reference.name} · ${temperature}°C · ${condition} · ${sourceLabel}`;
+  if (rainValue) rainValue.innerHTML = `${formatWeatherValue(rain)}<span class="kpi-unit">mm</span>`;
+  if (rainDesc) rainDesc.textContent = `${reference.name} · Probabilidade de ${formatWeatherValue(probability, 0)}% · ${sourceLabel}`;
+  const dashboardWeatherTemp = document.getElementById('weatherTemp');
+  const dashboardWeatherCondition = document.getElementById('weatherCondition');
+  if (dashboardWeatherTemp) dashboardWeatherTemp.textContent = `${temperature}°C`;
+  if (dashboardWeatherCondition) dashboardWeatherCondition.textContent = condition;
+
+  reference.temp = current.temperature_2m;
+  reference.moisture = current.relative_humidity_2m;
+  reference.rain = rain;
+  reference.wind = current.wind_speed_10m;
+}
+
+async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId, forceRefresh = false) {
   const requestId = ++weatherRequestId;
   const reference = TALHOES_DATA.find(t => t.id === Number(referenceTalhaoId)) || getSelectedReferenceTalhao();
   if (!reference) {
@@ -833,6 +938,19 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     return;
   }
 
+  if (!forceRefresh && canReuseSavedForecast(reference.weather, reference)) {
+    const analysis = applyWeatherToCalendar(reference.weather);
+    window.GOLDCROP_WEATHER = reference.weather;
+    window.GOLDCROP_RECOMMENDATIONS = analysis;
+    updateWeatherSummary(reference, reference.weather, 'previsão salva recentemente');
+    updateSystemFromAnalysis();
+    if (document.getElementById('calGrid')) renderCalendar();
+    if (document.getElementById('mapContainer')) renderTalhoes();
+    if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
+    notifyWeatherUpdated(reference.id);
+    return;
+  }
+
   const params = new URLSearchParams({
     latitude: reference.latitude,
     longitude: reference.longitude,
@@ -845,7 +963,12 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
 
   try {
     const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
-    if (!response.ok) throw new Error('Weather API unavailable');
+    if (response.status === 429) {
+      throw new Error('O serviço meteorológico limitou as consultas. Aguarde alguns minutos e tente novamente.');
+    }
+    if (!response.ok) {
+      throw new Error(`O serviço meteorológico está indisponível (HTTP ${response.status}).`);
+    }
     const data = await response.json();
     if (requestId !== weatherRequestId || selectedTalhaoRefId !== reference.id) return;
     const normalized = normalizeOpenMeteoWeather(data, reference);
@@ -875,34 +998,7 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
     window.GOLDCROP_RECOMMENDATIONS = reference.analysis;
     notifyWeatherUpdated(reference.id);
     updateSystemFromAnalysis();
-    const current = normalized.current.values;
-    const rain = finiteWeatherValue(normalized.daily.values.precipitation_sum?.[0]);
-    const probabilities = (normalized.hourly.values.precipitation_probability || [])
-      .slice(0, 24)
-      .map(finiteWeatherValue)
-      .filter(value => value != null);
-    const probability = probabilities.length ? Math.max(...probabilities) : null;
-    const condition = WEATHER_CODES[current.weather_code] || 'Condição não informada';
-    const temperatureValue = finiteWeatherValue(current.temperature_2m);
-    const temperature = temperatureValue == null
-      ? '—'
-      : temperatureValue.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
-    const weatherSummary = document.getElementById('weatherSummary');
-    const rainValue = document.getElementById('rainForecastValue');
-    const rainDesc = document.getElementById('rainForecastDesc');
-
-    if (weatherSummary) weatherSummary.textContent = `${reference.name} · ${temperature}°C · ${condition}`;
-    if (rainValue) rainValue.innerHTML = `${formatWeatherValue(rain)}<span class="kpi-unit">mm</span>`;
-    if (rainDesc) rainDesc.textContent = `${reference.name} · Probabilidade de ${formatWeatherValue(probability, 0)}% · Open-Meteo`;
-    const dashboardWeatherTemp = document.getElementById('weatherTemp');
-    const dashboardWeatherCondition = document.getElementById('weatherCondition');
-    if (dashboardWeatherTemp) dashboardWeatherTemp.textContent = `${temperature}°C`;
-    if (dashboardWeatherCondition) dashboardWeatherCondition.textContent = condition;
-
-    reference.temp = current.temperature_2m;
-    reference.moisture = current.relative_humidity_2m;
-    reference.rain = rain;
-    reference.wind = current.wind_speed_10m;
+    updateWeatherSummary(reference, normalized);
     if (document.getElementById('calGrid')) renderCalendar();
     if (document.getElementById('mapContainer')) renderTalhoes();
     if (document.getElementById('talhoesGrid')) renderDashboardTalhoes();
@@ -914,11 +1010,15 @@ async function loadLocalWeather(referenceTalhaoId = selectedTalhaoRefId) {
       window.GOLDCROP_WEATHER = reference.weather;
       applyWeatherToCalendar(reference.weather);
       updateSystemFromAnalysis();
-      if (weatherSummary) weatherSummary.textContent = `${reference.name} · usando última previsão salva`;
+      const savedAt = reference.weather.fetchedAt
+        ? new Date(reference.weather.fetchedAt).toLocaleString('pt-BR')
+        : 'horário desconhecido';
+      if (weatherSummary) weatherSummary.textContent = `${reference.name} · ${error.message || 'atualização indisponível'}; última previsão salva em ${savedAt}`;
+      updateWeatherSummary(reference, reference.weather, `última previsão salva (${savedAt})`);
       if (document.getElementById('calGrid')) renderCalendar();
       if (document.getElementById('mapContainer')) renderTalhoes();
       notifyWeatherUpdated(reference.id);
-    } else if (weatherSummary) weatherSummary.textContent = `${reference.name} · Clima local indisponível`;
+    } else if (weatherSummary) weatherSummary.textContent = `${reference.name} · ${error.message || 'previsão indisponível'}; tente atualizar novamente`;
     if (!reference.weather?.hourly?.timestamps?.length) notifyWeatherUpdated(reference.id);
     const dashboardWeatherTemp = document.getElementById('weatherTemp');
     const dashboardWeatherCondition = document.getElementById('weatherCondition');

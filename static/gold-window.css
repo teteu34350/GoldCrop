@@ -60,7 +60,7 @@
   .calendar-window-actions .btn-primary { justify-content: center; width: 100%; }
   .gold-window-intro { align-items: flex-start; padding: .85rem; }
   .gold-window-intro-mark { flex-basis: 36px; width: 36px; height: 36px; }
-  .gold-window-days .cal-day-window { display: none; }
+  #page-gold-window .gold-window-days .cal-day-window { display: none; }
 }
 
 .pesticide-label-form { margin-bottom: 1rem; padding: 1rem 1.1rem; }
@@ -91,12 +91,100 @@
 .pesticide-window-notes { margin-top: .65rem; color: var(--text-secondary); font-size: .7rem; line-height: 1.45; }
 .pesticide-window-notes strong { color: var(--text-primary); }
 .pesticide-window-notes ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+
+#page-pesticide-window,
+#page-pesticide-window .page-content,
+#page-pesticide-window .page-content > *,
+#page-pesticide-window .gold-window-layout > * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+#page-pesticide-window .pesticide-label-grid .form-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.pesticide-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+
+.pesticide-source-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pesticide-retry {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+#pesticideCalGrid[aria-busy="true"] { pointer-events: none; }
+#pesticideCalGrid.is-stale,
+#pesticideDayPanelContent.is-stale { opacity: .68; }
+
+#page-pesticide-window .cal-nav-btn {
+  width: 44px;
+  height: 44px;
+}
+
+#page-pesticide-window .pesticide-hour,
+#page-pesticide-window .pesticide-window-notes,
+#page-pesticide-window .pesticide-metric {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .pesticide-label-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
+  #page-pesticide-window .page-content { padding-right: .75rem; padding-left: .75rem; }
+  #page-pesticide-window .page-header { align-items: stretch; gap: .75rem; }
+  #page-pesticide-window .page-title { font-size: 1.45rem; }
+  #page-pesticide-window .page-sub { font-size: .78rem; line-height: 1.5; }
   .pesticide-label-form { padding: .85rem; }
   .pesticide-label-grid { grid-template-columns: minmax(0, 1fr); }
   .pesticide-label-footer { align-items: stretch; flex-direction: column; }
   .pesticide-label-footer .btn-primary { justify-content: center; width: 100%; }
+  .pesticide-status-row { align-items: stretch; flex-direction: column; }
+  .pesticide-retry { width: 100%; justify-content: center; }
+  #page-pesticide-window .calendar-card { padding: .75rem; }
+  #page-pesticide-window .cal-header { align-items: center; gap: .5rem; }
+  #page-pesticide-window .cal-month { font-size: .95rem; }
+  #page-pesticide-window .cal-weekdays { gap: 2px; }
+  #page-pesticide-window .cal-weekdays span { font-size: .56rem; }
+  #page-pesticide-window .cal-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+  #page-pesticide-window .cal-day {
+    min-width: 0;
+    min-height: 72px;
+    padding: .32rem .08rem;
+    gap: .18rem;
+  }
+  #page-pesticide-window .cal-day-iea {
+    max-width: 100%;
+    padding: 1px 2px;
+    font-size: .52rem;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  #page-pesticide-window .cal-day-window { display: block; font-size: .5rem; }
+  #page-pesticide-window .cal-day-num { font-size: .72rem; }
+  #page-pesticide-window .cal-day-markers { gap: 1px; }
+  #page-pesticide-window .cal-legend { gap: .5rem; }
+  #page-pesticide-window .cal-legend-item { font-size: .65rem; }
+  #page-pesticide-window .gold-window-detail { padding: .85rem; }
+  #page-pesticide-window .pesticide-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; }
+  #page-pesticide-window .pesticide-metric { flex-direction: column; gap: .1rem; font-size: .68rem; }
+  #page-pesticide-window .pesticide-metric strong { white-space: normal; }
+  #page-pesticide-window .pesticide-hour-heading { align-items: flex-start; flex-direction: column; gap: .2rem; }
+  #page-pesticide-window .pesticide-hour { padding: .7rem; }
+  #page-pesticide-window .pesticide-window-notes { font-size: .74rem; }
 }

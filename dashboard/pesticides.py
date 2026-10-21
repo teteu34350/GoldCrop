@@ -100,6 +100,67 @@ def _insufficient(message, *, product="", missing=None):
     }
 
 
+def weather_selection_score(weather, *, now=None):
+    if not isinstance(weather, dict):
+        return (0, 0, 0, 0)
+
+    try:
+        zone = ZoneInfo(weather.get("timezone"))
+    except (TypeError, ValueError, ZoneInfoNotFoundError):
+        return (0, 0, 0, 0)
+
+    fetched_at = _parse_time(weather.get("fetched_at"), zone)
+    current_time = now or datetime.now(zone)
+    if fetched_at is None:
+        return (0, 0, 0, 0)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=zone)
+    else:
+        current_time = current_time.astimezone(zone)
+
+    age = current_time.astimezone(dt_timezone.utc) - fetched_at.astimezone(dt_timezone.utc)
+    fresh = -MAX_CLOCK_SKEW <= age <= MAX_WEATHER_AGE
+    hourly = weather.get("hourly")
+    timestamps = hourly.get("timestamps") if isinstance(hourly, dict) else None
+    values = hourly.get("values") if isinstance(hourly, dict) else None
+    if not isinstance(timestamps, list) or not isinstance(values, dict):
+        return (int(fresh), 0, 0, -int(age.total_seconds() // 60))
+
+    aligned_fields = sum(
+        isinstance(values.get(field), list) and len(values[field]) == len(timestamps)
+        for field in WEATHER_FIELDS
+    )
+    parsed_times = [_parse_time(value, zone) for value in timestamps]
+    future_rows = [
+        index
+        for index, timestamp in enumerate(parsed_times)
+        if timestamp is not None
+        and timestamp.astimezone(dt_timezone.utc) + timedelta(hours=1)
+        > current_time.astimezone(dt_timezone.utc)
+    ]
+    complete_rows = sum(
+        all(
+            isinstance(values.get(field), list)
+            and index < len(values[field])
+            and _number(values[field][index]) is not None
+            for field in WEATHER_FIELDS
+        )
+        for index in future_rows
+    )
+    complete_forecast = (
+        bool(future_rows)
+        and all(timestamp is not None for timestamp in parsed_times)
+        and aligned_fields == len(WEATHER_FIELDS)
+        and complete_rows == len(future_rows)
+    )
+    return (
+        int(fresh),
+        int(fresh and complete_forecast),
+        complete_rows,
+        -max(0, int(age.total_seconds() // 60)),
+    )
+
+
 def evaluate_pesticide_windows(weather, label, *, now=None):
     rules, label_errors = _parse_label(label)
     product = str(label.get("product", "")).strip() if isinstance(label, dict) else ""

@@ -5,6 +5,7 @@
   const grid = document.getElementById('pesticideCalGrid');
   const monthLabel = document.getElementById('pesticideMonthLabel');
   const sourceLine = document.getElementById('pesticideSourceLine');
+  const retryButton = document.getElementById('pesticideRetry');
   const emptyPanel = document.getElementById('pesticideDayPanelEmpty');
   const panelContent = document.getElementById('pesticideDayPanelContent');
   const selector = document.getElementById('calendarTalhaoSelect');
@@ -36,6 +37,8 @@
   let calendarMonth = new Date();
   calendarMonth.setDate(1);
   let requestId = 0;
+  let requestController = null;
+  let weatherUpdateTimer = null;
 
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, character => ({
@@ -277,12 +280,36 @@
   async function analyze() {
     const id = ++requestId;
     const talhaoId = Number(selector.value);
-    sourceLine.textContent = 'Analisando a previsão mais recente do talhão...';
+    requestController?.abort();
+    requestController = new AbortController();
+    retryButton.hidden = true;
+    grid.setAttribute('aria-busy', 'true');
+    grid.classList.add('is-stale');
+    panelContent.classList.add('is-stale');
+    sourceLine.textContent = 'Atualizando a previsão fitossanitária; os resultados visíveis são da análise anterior.';
     if (!Number.isInteger(talhaoId) || talhaoId <= 0) {
       applyAnalysis({
         classification: 'insufficient',
         message: 'Cadastre ou selecione um talhão com previsão meteorológica.',
       });
+      grid.removeAttribute('aria-busy');
+      grid.classList.remove('is-stale');
+      panelContent.classList.remove('is-stale');
+      return;
+    }
+    if (analysis?.talhao_id && analysis.talhao_id !== talhaoId) {
+      analysis = null;
+      selectedDate = null;
+      grid.replaceChildren();
+      renderCalendar();
+      emptyPanel.style.display = 'flex';
+      panelContent.style.display = 'none';
+    }
+    if (!form.elements.product.value.trim() || !form.elements.label_confirmed.checked) {
+      sourceLine.textContent = 'Previsão meteorológica disponível. Informe o produto e confirme a consulta à bula/rótulo para analisar.';
+      grid.removeAttribute('aria-busy');
+      grid.classList.remove('is-stale');
+      panelContent.classList.remove('is-stale');
       return;
     }
 
@@ -290,6 +317,7 @@
       const response = await fetch('/api/pesticide-recommendations/', {
         method: 'POST',
         credentials: 'same-origin',
+        signal: requestController.signal,
         headers: {
           'Content-Type': 'application/json',
           'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
@@ -303,13 +331,27 @@
       if (id !== requestId) return;
       if (!response.ok) throw new Error(result.message || `Falha ao analisar: ${response.status}`);
       applyAnalysis(result);
+      grid.removeAttribute('aria-busy');
+      grid.classList.remove('is-stale');
+      panelContent.classList.remove('is-stale');
+      const weatherMessages = [
+        ...(result.missing || []),
+        ...(result.windows || []).flatMap(window => window.missing || []),
+      ];
+      const incompleteWeather = result.weather_refreshable !== false && (
+        result.weather_complete !== true
+        || weatherMessages.some(message =>
+          /^(previs|horários|fetched_at|timezone|temperatura|umidade relativa|probabilidade de chuva|precipitação|velocidade do vento|rajadas de vento)/i.test(message)
+        )
+      );
+      retryButton.hidden = !incompleteWeather;
     } catch (error) {
-      if (id !== requestId) return;
-      analysis = null;
-      sourceLine.textContent = error.message || 'Não foi possível calcular as janelas. Tente novamente.';
-      grid.replaceChildren();
-      emptyPanel.style.display = 'flex';
-      panelContent.style.display = 'none';
+      if (id !== requestId || error.name === 'AbortError') return;
+      sourceLine.textContent = `${error.message || 'Não foi possível calcular as janelas.'} A previsão anterior, se exibida, não foi atualizada.`;
+      grid.removeAttribute('aria-busy');
+      grid.classList.add('is-stale');
+      panelContent.classList.add('is-stale');
+      retryButton.hidden = false;
     }
   }
 
@@ -317,7 +359,24 @@
     event.preventDefault();
     analyze();
   });
-  window.addEventListener('goldcrop:weather-updated', analyze);
+  window.addEventListener('goldcrop:weather-updated', event => {
+    const updatedTalhaoId = Number(event.detail?.talhaoId);
+    if (!updatedTalhaoId || updatedTalhaoId !== Number(selector.value)) return;
+    window.clearTimeout(weatherUpdateTimer);
+    weatherUpdateTimer = window.setTimeout(analyze, 100);
+  });
+  retryButton.addEventListener('click', () => {
+    const talhaoId = Number(selector.value);
+    if (!Number.isInteger(talhaoId) || talhaoId <= 0) {
+      sourceLine.textContent = 'Selecione um talhão válido antes de atualizar a previsão.';
+      return;
+    }
+    retryButton.hidden = true;
+    sourceLine.textContent = 'Solicitando atualização da previsão meteorológica...';
+    window.dispatchEvent(new CustomEvent('goldcrop:weather-refresh-requested', {
+      detail: { talhaoId },
+    }));
+  });
   document.getElementById('pesticidePrev').addEventListener('click', () => {
     calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
     renderCalendar();

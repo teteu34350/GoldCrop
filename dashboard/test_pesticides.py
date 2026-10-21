@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import ColetaMeteorologica, ExecucaoAplicacao, Fazenda, RecomendacaoJanela, Talhao
-from .pesticides import evaluate_pesticide_windows
+from .pesticides import evaluate_pesticide_windows, weather_selection_score
 
 
 SAO_PAULO = ZoneInfo("America/Sao_Paulo")
@@ -142,6 +142,22 @@ class PesticideDecisionTests(SimpleTestCase):
         self.assertEqual(result["classification"], "insufficient")
         self.assertIn("A temperatura mínima da bula não pode exceder a máxima.", result["missing"])
 
+    def test_weather_selection_prefers_complete_fresh_forecast_over_newer_incomplete_one(self):
+        now = datetime(2025, 1, 15, 9, tzinfo=SAO_PAULO)
+        complete = sample_weather(now - timedelta(hours=2))
+        incomplete = sample_weather(now - timedelta(minutes=5))
+        del incomplete["hourly"]["values"]["wind_gusts_10m"]
+
+        self.assertGreater(
+            weather_selection_score(complete, now=now),
+            weather_selection_score(incomplete, now=now),
+        )
+
+    def test_stale_weather_is_never_ranked_as_fresh(self):
+        stale = sample_weather(self.now - timedelta(hours=13))
+
+        self.assertEqual(weather_selection_score(stale, now=self.now)[0], 0)
+
 
 class PesticideCalendarApiTests(TestCase):
     def setUp(self):
@@ -198,10 +214,25 @@ class PesticideCalendarApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["classification"], "insufficient")
         self.assertEqual(response.json()["talhao_id"], self.talhao.id)
+        self.assertFalse(response.json()["weather_complete"])
         self.assertEqual(
             [item["product"] for item in response.json()["operations"]["applications"]],
             ["Fungicida"],
         )
+
+    def test_api_marks_missing_plot_coordinates_as_not_refreshable(self):
+        self.talhao.latitude = None
+        self.talhao.longitude = None
+        self.talhao.save(update_fields=["latitude", "longitude"])
+
+        response = self.client.post(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": self.talhao.id, "product_label": sample_label()},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["weather_refreshable"])
 
     def test_api_evaluates_latest_weather_for_authorized_talhao(self):
         now = timezone.now()
@@ -225,6 +256,55 @@ class PesticideCalendarApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["classification"], "favorable")
         self.assertEqual(response.json()["source"], "open-meteo")
+        self.assertTrue(response.json()["weather_complete"])
+
+    def test_api_selects_complete_forecast_for_current_plot_coordinates(self):
+        now = timezone.now()
+        complete_weather = sample_weather((now - timedelta(hours=2)).astimezone(SAO_PAULO))
+        complete = ColetaMeteorologica.objects.create(
+            fazenda=self.farm,
+            talhao=self.talhao,
+            fonte="complete-forecast",
+            coletada_em=now - timedelta(hours=2),
+            latitude=self.talhao.latitude,
+            longitude=self.talhao.longitude,
+            timezone="America/Sao_Paulo",
+            dados_horarios=complete_weather["hourly"],
+        )
+        incomplete_weather = sample_weather((now - timedelta(minutes=5)).astimezone(SAO_PAULO))
+        del incomplete_weather["hourly"]["values"]["wind_gusts_10m"]
+        ColetaMeteorologica.objects.create(
+            fazenda=self.farm,
+            talhao=self.talhao,
+            fonte="newer-incomplete-forecast",
+            coletada_em=now - timedelta(minutes=5),
+            latitude=self.talhao.latitude,
+            longitude=self.talhao.longitude,
+            timezone="America/Sao_Paulo",
+            dados_horarios=incomplete_weather["hourly"],
+        )
+        ColetaMeteorologica.objects.create(
+            fazenda=self.farm,
+            talhao=self.talhao,
+            fonte="different-coordinates",
+            coletada_em=now,
+            latitude=self.talhao.latitude + 1,
+            longitude=self.talhao.longitude,
+            timezone="America/Sao_Paulo",
+            dados_horarios=complete_weather["hourly"],
+        )
+
+        response = self.client.post(
+            reverse("dashboard:pesticide_recommendations_api"),
+            {"talhao_id": self.talhao.id, "product_label": sample_label()},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["weather_collection_id"], complete.id)
+        self.assertEqual(response.json()["source"], "complete-forecast")
+        self.assertTrue(response.json()["weather_complete"])
+        self.assertEqual(response.json()["classification"], "favorable")
 
     def test_api_does_not_expose_other_farms_talhoes(self):
         other_user = User.objects.create_user(username="other-owner")

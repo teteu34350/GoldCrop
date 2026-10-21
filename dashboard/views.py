@@ -24,7 +24,7 @@ from .models import (
     NotificacaoFazenda, PerfilProdutor, PlanejamentoAplicacao, RecomendacaoJanela,
     SensorIoT, Talhao, Produto, MovimentacaoEstoque, generate_farm_access_code,
 )
-from .pesticides import evaluate_pesticide_windows
+from .pesticides import evaluate_pesticide_windows, weather_selection_score
 
 
 def _json_body(request):
@@ -759,10 +759,30 @@ def pesticide_recommendations_api(request):
     if talhao is None:
         return _error("Talhão não encontrado na fazenda ativa.", 404)
 
-    collection = ColetaMeteorologica.objects.filter(
-        fazenda=farm,
-        talhao=talhao,
-    ).order_by("-coletada_em").first()
+    collections = (
+        ColetaMeteorologica.objects.filter(
+            fazenda=farm,
+            talhao=talhao,
+            latitude=talhao.latitude,
+            longitude=talhao.longitude,
+        ).order_by("-coletada_em")
+        if talhao.latitude is not None and talhao.longitude is not None
+        else ColetaMeteorologica.objects.none()
+    )
+    collection = max(
+        collections,
+        key=lambda item: weather_selection_score({
+            "fetched_at": item.coletada_em.isoformat(),
+            "timezone": item.timezone,
+            "hourly": item.dados_horarios,
+        }),
+        default=None,
+    )
+    collection_score = weather_selection_score({
+        "fetched_at": collection.coletada_em.isoformat(),
+        "timezone": collection.timezone,
+        "hourly": collection.dados_horarios,
+    }) if collection else (0, 0, 0, 0)
     weather = None
     if collection:
         weather = {
@@ -778,6 +798,9 @@ def pesticide_recommendations_api(request):
         result.setdefault("timezone", weather["timezone"])
     result["talhao"] = talhao.nome
     result["talhao_id"] = talhao.id
+    result["weather_collection_id"] = collection.id if collection else None
+    result["weather_complete"] = bool(collection_score[0] and collection_score[1])
+    result["weather_refreshable"] = talhao.latitude is not None and talhao.longitude is not None
     pesticide_types = (
         Q(tipo_insumo__icontains="defensivo")
         | Q(tipo_insumo__icontains="agrotóxico")

@@ -4,7 +4,7 @@
 {% block breadcrumb %}Janela Fitossanitária{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=3" />
+  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=4" />
 {% endblock %}
 
 {% block content %}
@@ -80,7 +80,10 @@
       <p class="pesticide-form-note">A análise é uma referência meteorológica e não substitui a bula, a orientação de profissional habilitado nem a avaliação das condições reais da aplicação.</p>
     </div>
 
-    <div class="pesticide-source-line" id="pesticideSourceLine" role="status">Aguardando a atualização meteorológica do talhão.</div>
+    <div class="pesticide-status-row">
+      <div class="pesticide-source-line" id="pesticideSourceLine" role="status" aria-live="polite">Aguardando a atualização meteorológica do talhão.</div>
+      <button class="btn-ghost pesticide-retry" id="pesticideRetry" type="button" hidden>Atualizar previsão</button>
+    </div>
 
     <div class="calendar-layout gold-window-layout">
       <section class="card calendar-card gold-window-days" aria-label="Dias analisados para aplicação fitossanitária">
@@ -123,5 +126,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="{% static 'pesticide-calendar.js' %}?v=1"></script>
+  <script src="{% static 'pesticide-calendar.js' %}?v=2"></script>
 {% endblock %}
