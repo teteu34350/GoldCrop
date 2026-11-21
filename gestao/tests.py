@@ -3,17 +3,19 @@ from django.test import TestCase
 # Create your tests here.
 import json
 import os
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 from django.urls import reverse
 
 from dashboard.models import EventoCalendario, Fazenda, MovimentacaoEstoque, Produto, Talhao
-from pecuaria.models import Animal
+from pecuaria.models import Animal, ProducaoLeite
 
-from .models import LancamentoFinanceiro
+from .models import EquipamentoAgricola, LancamentoFinanceiro, ServicoFazenda
 
 
 class GestaoWorkflowTests(TestCase):
@@ -134,11 +136,147 @@ class GestaoWorkflowTests(TestCase):
         with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
             'gestao.views.urllib.request.urlopen',
         ) as openrouter:
-            for message in ('Quantos animais eu tenho?', 'Quantos animais eu tenho'):
+            for message, expected in (
+                ('Quantos animais eu tenho?', '1 animal ativo'),
+                ('Me diga quantas vacas eu tenho', '1 vaca ativa'),
+            ):
                 with self.subTest(message=message):
                     response = self.post_json('gestao:assistente_api', {'message': message})
                     self.assertEqual(response.status_code, 200)
-                    self.assertIn('1 animal ativo', response.json()['reply'])
+                    self.assertIn(expected, response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_milk_production_queries_are_local_and_farm_scoped(self):
+        today = timezone.localdate()
+        ProducaoLeite.objects.create(
+            fazenda=self.farm, data=today, quantidade=Decimal('12'),
+        )
+        ProducaoLeite.objects.create(
+            fazenda=self.farm, data=today - timedelta(days=3), quantidade=Decimal('5'),
+        )
+        ProducaoLeite.objects.create(
+            fazenda=self.farm,
+            data=today.replace(day=1) - timedelta(days=1),
+            quantidade=Decimal('100'),
+        )
+        other_farm = Fazenda.objects.create(
+            produtor=self.user,
+            nome='Outra Fazenda',
+            cep='37000001',
+            estado='MG',
+            cidade='Varginha',
+            bairro='Zona Rural',
+            area_hectares=5,
+            quantidade_talhoes=1,
+            culturas=['Café'],
+            tipo_cultivo='Convencional',
+            irrigacao='Gotejamento',
+        )
+        ProducaoLeite.objects.create(
+            fazenda=other_farm, data=today, quantidade=Decimal('50'),
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Quantos litros de leite produziu esta semana?',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('17 litros', response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_inventory_questions_distinguish_balances_from_low_stock(self):
+        low_product = Produto.objects.create(
+            fazenda=self.farm,
+            nome='Adubo orgânico',
+            categoria='Fertilizantes',
+            unidade='kg',
+            quantidade_atual=Decimal('5'),
+            estoque_minimo=Decimal('20'),
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            inventory = self.post_json('gestao:assistente_api', {
+                'message': 'Me diga como está meu estoque',
+            })
+            low_stock = self.post_json('gestao:assistente_api', {
+                'message': 'Quais produtos estão abaixo do mínimo?',
+            })
+
+        self.assertEqual(inventory.status_code, 200)
+        self.assertIn('Semente de milho: 320 kg', inventory.json()['reply'])
+        self.assertIn('Adubo orgânico: 5 kg', inventory.json()['reply'])
+        self.assertEqual(low_stock.status_code, 200)
+        self.assertIn(low_product.nome, low_stock.json()['reply'])
+        self.assertNotIn(self.seed_product.nome, low_stock.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_service_and_equipment_queries_use_farm_records(self):
+        ServicoFazenda.objects.create(
+            fazenda=self.farm, nome='Colheita', tipo=ServicoFazenda.Tipo.CONTRATADO,
+            data=timezone.localdate(), status=ServicoFazenda.Status.PENDENTE,
+        )
+        ServicoFazenda.objects.create(
+            fazenda=self.farm, nome='Transporte', tipo=ServicoFazenda.Tipo.PRESTADO,
+            data=timezone.localdate(), status=ServicoFazenda.Status.CONCLUIDO,
+        )
+        EquipamentoAgricola.objects.create(
+            fazenda=self.farm, nome='Trator', tipo='Trator',
+            status=EquipamentoAgricola.Status.MANUTENCAO,
+        )
+        EquipamentoAgricola.objects.create(
+            fazenda=self.farm, nome='Pulverizador', tipo='Implemento',
+            status=EquipamentoAgricola.Status.OPERACIONAL,
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            pending = self.post_json('gestao:assistente_api', {
+                'message': 'Quais serviços estão pendentes?',
+            })
+            maintenance = self.post_json('gestao:assistente_api', {
+                'message': 'Quais equipamentos estão em manutenção?',
+            })
+
+        self.assertEqual(pending.status_code, 200)
+        self.assertIn('1 serviço pendente registrado', pending.json()['reply'])
+        self.assertEqual(maintenance.status_code, 200)
+        self.assertIn('1 equipamento marcado', maintenance.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_monthly_expense_query_uses_local_records_only(self):
+        today = timezone.localdate()
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Diesel', categoria='Combustível', valor=Decimal('100'),
+            data=today,
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.COMPRA,
+            titulo='Sementes', categoria='Insumos', valor=Decimal('30'),
+            data=today,
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Lançamento futuro', categoria='Outros', valor=Decimal('999'),
+            data=today + timedelta(days=2),
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Me diga quanto gastei este mês',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('R$ 130,00', response.json()['reply'])
+        self.assertNotIn('999', response.json()['reply'])
         openrouter.assert_not_called()
 
     def test_ai_rejects_stock_confirmation_if_balance_changed(self):

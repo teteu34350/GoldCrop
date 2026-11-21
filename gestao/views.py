@@ -4,6 +4,7 @@ import re
 import unicodedata
 import urllib.error
 import urllib.request
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -17,7 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from dashboard.models import EventoCalendario, MovimentacaoEstoque, Produto, Talhao
 from dashboard.views import _current_farm, _has_farm_permission
-from pecuaria.models import Animal
+from pecuaria.models import Animal, ProducaoLeite
 
 from .models import EquipamentoAgricola, LancamentoFinanceiro, Safra, ServicoFazenda
 
@@ -83,6 +84,11 @@ def _date(value, field='data', *, required=True):
 def _format_brl(value):
     formatted = f'{value:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
     return f'R$ {formatted}'
+
+
+def _format_quantity(value):
+    formatted = format(value, 'f')
+    return formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
 
 
 def _validated(model):
@@ -473,11 +479,51 @@ def _stage_assistant_action(request, farm, kind, payload, description):
 
 def _local_assistant_reply(request, farm, message):
     normalized = _normalize(message)
-    is_question = '?' in message or re.match(r'^(quant[oa]s?|qual|quais|como|mostre|liste|consulte)\b', normalized)
+    is_question = '?' in message or re.match(
+        r'^(?:(?:me\s+)?(?:diga|fala|informe)\s+)?'
+        r'(quant[oa]s?|qual|quais|como|mostre|liste|consulte|tem)\b',
+        normalized,
+    )
     month_start = timezone.localdate().replace(day=1)
 
-    if is_question and re.search(r'\b(animal|animais|rebanho|gado)\b', normalized):
-        count = Animal.objects.filter(fazenda=farm, status='ATIVO', arquivado=False).count()
+    if is_question and re.search(
+        r'\b(animal|animais|rebanho|gado|vacas?|novilhas?|bezerros?|bezerras?|touros?)\b',
+        normalized,
+    ):
+        active_animals = Animal.objects.filter(fazenda=farm, status='ATIVO', arquivado=False)
+        category_counts = {
+            'vaca': ('VACA_LACTACAO', 'VACA_SECA'),
+            'novilha': ('NOVILHA',),
+            'bezerro': ('BEZERRO', 'BEZERRA'),
+            'bezerra': ('BEZERRA',),
+            'touro': ('TOURO',),
+        }
+        category = next(
+            (key for key in category_counts if re.search(rf'\b{key}s?\b', normalized)),
+            None,
+        )
+        if category:
+            count = active_animals.filter(categoria__in=category_counts[category]).count()
+            singular, plural, gender = {
+                'vaca': ('vaca', 'vacas', 'f'),
+                'novilha': ('novilha', 'novilhas', 'f'),
+                'bezerro': ('bezerro', 'bezerros', 'm'),
+                'bezerra': ('bezerra', 'bezerras', 'f'),
+                'touro': ('touro', 'touros', 'm'),
+            }[category]
+            noun = singular if count == 1 else plural
+            if gender == 'f':
+                adjective = 'ativa' if count == 1 else 'ativas'
+                participle = 'cadastrada' if count == 1 else 'cadastradas'
+            else:
+                adjective = 'ativo' if count == 1 else 'ativos'
+                participle = 'cadastrado' if count == 1 else 'cadastrados'
+            return JsonResponse({
+                'ok': True,
+                'reply': f'A fazenda atual tem {count} {noun} {adjective} {participle} no GoldCrop.',
+            })
+
+        count = active_animals.count()
         noun = 'animal' if count == 1 else 'animais'
         adjective = 'ativo' if count == 1 else 'ativos'
         participle = 'cadastrado' if count == 1 else 'cadastrados'
@@ -486,35 +532,98 @@ def _local_assistant_reply(request, farm, message):
             'reply': f'A fazenda atual tem {count} {noun} {adjective} {participle} no GoldCrop.',
         })
 
+    if is_question and re.search(r'\b(leite|litros?)\b', normalized) and re.search(
+        r'\b(producao|produziu|produzimos|ordenha|litros?)\b',
+        normalized,
+    ):
+        today = timezone.localdate()
+        if re.search(r'\b(semana|semanal|ultimos?\s+7\s+dias)\b', normalized):
+            start_date = today - timedelta(days=6)
+            period = 'nos últimos 7 dias'
+        elif re.search(r'\b(mes|mensal)\b', normalized):
+            start_date = today.replace(day=1)
+            period = 'neste mês'
+        else:
+            start_date = today
+            period = 'hoje'
+        total = ProducaoLeite.objects.filter(
+            fazenda=farm, data__gte=start_date, data__lte=today,
+        ).aggregate(total=Sum('quantidade'))['total'] or Decimal('0')
+        return JsonResponse({
+            'ok': True,
+            'reply': f'A produção de leite registrada {period} soma {total} litros.',
+        })
+
+    if is_question and re.search(r'\b(servico|servicos|pendente|pendentes)\b', normalized):
+        count = ServicoFazenda.objects.filter(
+            fazenda=farm, status=ServicoFazenda.Status.PENDENTE,
+        ).count()
+        noun = 'serviço pendente registrado' if count == 1 else 'serviços pendentes registrados'
+        return JsonResponse({
+            'ok': True,
+            'reply': f'A fazenda tem {count} {noun} no GoldCrop.',
+        })
+
+    if is_question and re.search(r'\b(equipamento|equipamentos|maquina|maquinas|manutencao)\b', normalized):
+        equipment = EquipamentoAgricola.objects.filter(fazenda=farm)
+        if re.search(r'\b(manutencao|conserto|oficina)\b', normalized):
+            count = equipment.filter(status=EquipamentoAgricola.Status.MANUTENCAO).count()
+            noun = 'equipamento marcado' if count == 1 else 'equipamentos marcados'
+            reply = f'{count} {noun} para manutenção no GoldCrop.'
+        else:
+            count = equipment.exclude(status=EquipamentoAgricola.Status.INATIVO).count()
+            noun = 'equipamento ativo cadastrado' if count == 1 else 'equipamentos ativos cadastrados'
+            reply = f'A fazenda tem {count} {noun} no GoldCrop.'
+        return JsonResponse({'ok': True, 'reply': reply})
+
     if is_question and re.search(r'\b(quanto|total|soma|saldo)\b', normalized):
         if re.search(r'\b(gastei|gasto|despesa|despesas|compras?)\b', normalized):
-            rows = LancamentoFinanceiro.objects.filter(fazenda=farm, data__gte=month_start).exclude(
+            rows = LancamentoFinanceiro.objects.filter(
+                fazenda=farm, data__gte=month_start, data__lte=timezone.localdate(),
+            ).exclude(
                 tipo=LancamentoFinanceiro.Tipo.RECEITA,
             )
             total = rows.aggregate(total=Sum('valor'))['total'] or Decimal('0')
             return JsonResponse({'ok': True, 'reply': f'As despesas e compras registradas neste mês somam {_format_brl(total)}.'})
         if re.search(r'\b(receita|receitas|recebi|venda|vendi)\b', normalized):
             total = LancamentoFinanceiro.objects.filter(
-                fazenda=farm, data__gte=month_start, tipo=LancamentoFinanceiro.Tipo.RECEITA,
+                fazenda=farm, data__gte=month_start, data__lte=timezone.localdate(),
+                tipo=LancamentoFinanceiro.Tipo.RECEITA,
             ).aggregate(total=Sum('valor'))['total'] or Decimal('0')
             return JsonResponse({'ok': True, 'reply': f'As receitas registradas neste mês somam {_format_brl(total)}.'})
         if 'saldo' in normalized:
             income = LancamentoFinanceiro.objects.filter(
-                fazenda=farm, data__gte=month_start, tipo=LancamentoFinanceiro.Tipo.RECEITA,
+                fazenda=farm, data__gte=month_start, data__lte=timezone.localdate(),
+                tipo=LancamentoFinanceiro.Tipo.RECEITA,
             ).aggregate(total=Sum('valor'))['total'] or Decimal('0')
             expenses = LancamentoFinanceiro.objects.filter(
-                fazenda=farm, data__gte=month_start,
+                fazenda=farm, data__gte=month_start, data__lte=timezone.localdate(),
             ).exclude(tipo=LancamentoFinanceiro.Tipo.RECEITA).aggregate(total=Sum('valor'))['total'] or Decimal('0')
             return JsonResponse({'ok': True, 'reply': f'O saldo dos lançamentos deste mês é {_format_brl(income - expenses)}.'})
 
-    if is_question and re.search(r'\b(estoque|semente|adubo|fertilizante|defensivo|diesel)\b', normalized):
+    if is_question and re.search(
+        r'\b(estoque|produto|produtos|semente|adubo|fertilizante|defensivo|diesel|minimo|minima)\b',
+        normalized,
+    ):
         products = _stock_products(farm, normalized)
         if products:
-            summary = '; '.join(f'{product.nome}: {product.quantidade_atual} {product.unidade}' for product in products)
+            summary = '; '.join(
+                f'{product.nome}: {_format_quantity(product.quantidade_atual)} {product.unidade}'
+                for product in products
+            )
             return JsonResponse({'ok': True, 'reply': f'Saldo no estoque do GoldCrop: {summary}.'})
-        low_stock = Produto.objects.filter(fazenda=farm, ativo=True, quantidade_atual__lte=F('estoque_minimo'))
-        names = list(low_stock.values_list('nome', flat=True)[:8])
-        reply = f'Encontrei {len(names)} produto(s) no mínimo ou abaixo dele: {", ".join(names)}.' if names else 'Não há produtos abaixo do estoque mínimo.'
+        if re.search(r'\b(baixo|baixa|abaixo|minimo|minima|alerta|alertas|falta|acabando)\b', normalized):
+            low_stock = Produto.objects.filter(fazenda=farm, ativo=True, quantidade_atual__lte=F('estoque_minimo'))
+            count = low_stock.count()
+            names = list(low_stock.values_list('nome', flat=True)[:8])
+            reply = f'Encontrei {count} produto(s) no mínimo ou abaixo dele: {", ".join(names)}.' if names else 'Não há produtos abaixo do estoque mínimo.'
+            return JsonResponse({'ok': True, 'reply': reply})
+        products = Produto.objects.filter(fazenda=farm, ativo=True).order_by('nome')[:10]
+        rows = [
+            f'{product.nome}: {_format_quantity(product.quantidade_atual)} {product.unidade}'
+            for product in products
+        ]
+        reply = f'Saldos atuais: {"; ".join(rows)}.' if rows else 'Não há produtos ativos cadastrados no estoque desta fazenda.'
         return JsonResponse({'ok': True, 'reply': reply})
 
     if not is_question and re.search(r'\b(despesa|despesas|gastei|gasto|paguei|comprei|compra|compras|receita|recebi|vendi)\b', normalized):
