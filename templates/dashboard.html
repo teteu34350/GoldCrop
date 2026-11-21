@@ -34,6 +34,25 @@
       <span id="talhaoAnalysisState" role="status">Aguardando dados do talhão</span>
     </div>
 
+    <section class="gc-ai-launcher" aria-labelledby="gcAiHeading">
+      <div class="gc-ai-launcher-copy">
+        <span class="gc-ai-mark" aria-hidden="true">✦</span>
+        <div>
+          <p class="gc-ai-eyebrow">ASSISTENTE DE GESTÃO</p>
+          <h2 id="gcAiHeading">O que está acontecendo na fazenda?</h2>
+          <p>Consulte seus registros ou conte o que precisa anotar. Alterações só são salvas depois da sua confirmação.</p>
+        </div>
+      </div>
+      <div class="gc-ai-launcher-actions">
+        <a class="gc-ai-primary" href="{% url 'gestao:assistente' %}">Conversar com a IA <span aria-hidden="true">→</span></a>
+        <div class="gc-ai-prompts" aria-label="Perguntas rápidas">
+          <a href="{% url 'gestao:assistente' %}?pergunta=Quanto%20tenho%20de%20sementes%3F">Consultar estoque</a>
+          <a href="{% url 'gestao:assistente' %}?pergunta=Quanto%20gastei%20este%20m%C3%AAs%3F">Ver despesas</a>
+          <a href="{% url 'gestao:assistente' %}?pergunta=Quais%20atividades%20est%C3%A3o%20registradas%3F">Ver atividades</a>
+        </div>
+      </div>
+    </section>
+
     <!-- KPI SECTION -->
     <div class="dashboard-kpis">
       <div class="kpi-card">
@@ -95,21 +114,10 @@
         <article class="gestao-kpi"><span>Saldo</span><strong id="dashboardFinanceBalance">Carregando…</strong></article>
       </div>
       <p class="gestao-dashboard-error" id="dashboardFinanceError" role="status" hidden></p>
-    </section>
-
-    <section class="pecuaria-farm-summary" aria-labelledby="farmLivestockHeading">
-      <div>
-        <p class="pecuaria-eyebrow">Resumo da criação</p>
-        <h2 id="farmLivestockHeading">Pecuária</h2>
+      <div class="gestao-dashboard-recent">
+        <div class="gestao-dashboard-recent-heading"><strong>Movimentações recentes</strong><a href="{% url 'gestao:financeiro' %}">Ver todas <span aria-hidden="true">→</span></a></div>
+        <div class="gestao-dashboard-recent-list" id="dashboardFinanceMovements" aria-live="polite"><p class="gestao-dashboard-empty">Carregando movimentações…</p></div>
       </div>
-      <div class="pecuaria-farm-summary-stats">
-        <div><strong id="farmLivestockCount">—</strong><span>animais</span></div>
-        <div><strong id="farmMilkToday">—</strong><span>litros hoje</span></div>
-        <div><strong id="farmMilkAverage">—</strong><span>L/vaca/dia</span></div>
-        <div><strong id="farmLivestockAlerts">—</strong><span>alertas</span></div>
-      </div>
-      <a href="{% url 'pecuaria:dashboard' %}">Abrir Pecuária <span aria-hidden="true">→</span></a>
-      <p class="pecuaria-farm-summary-error" id="farmLivestockError" hidden>Não foi possível carregar o resumo da pecuária.</p>
     </section>
 
     <!-- GOLDEN WINDOW SECTION -->
@@ -189,6 +197,24 @@
       </div>
     </div>
 
+    <section class="pecuaria-farm-summary" aria-labelledby="farmLivestockHeading">
+      <div>
+        <p class="pecuaria-eyebrow">Resumo da criação</p>
+        <h2 id="farmLivestockHeading">Pecuária</h2>
+      </div>
+      <div class="pecuaria-farm-summary-stats">
+        <div><strong id="farmLivestockCount">—</strong><span>animais</span></div>
+        <div><strong id="farmMilkToday">—</strong><span>litros hoje</span></div>
+        <div><strong id="farmMilkAverage">—</strong><span>L/vaca/dia</span></div>
+        <div><strong id="farmLivestockAlerts">—</strong><span>alertas</span></div>
+      </div>
+      <a href="{% url 'pecuaria:dashboard' %}">Abrir Pecuária <span aria-hidden="true">→</span></a>
+      <p class="pecuaria-farm-summary-error" id="farmLivestockError" hidden>Não foi possível carregar o resumo da pecuária.</p>
+    </section>
+
+    <details class="gc-dashboard-more">
+      <summary><span>Outros dados da fazenda</span><small>Talhões, clima e aplicações</small></summary>
+      <div class="gc-dashboard-more-content">
     <!-- TALHOES STATUS SECTION -->
     <div class="talhoes-status-section">
       <div class="section-header">
@@ -254,6 +280,8 @@
         </div>
       </div>
     </div>
+      </div>
+    </details>
 
     <!-- ALERTS SECTION -->
     <div class="alerts-section" id="alertsSection" style="display: none;">
@@ -286,4 +314,4 @@
 <script src="{% static 'pecuaria-dashboard.js' %}?v=1" defer></script>
 {% endblock %}
 
-{% block extra_scripts %}{{ block.super }}<script src="{% static 'gestao-dashboard.js' %}?v=1" defer></script>{% endblock %}
+{% block extra_scripts %}{{ block.super }}<script src="{% static 'gestao-dashboard.js' %}?v=2" defer></script>{% endblock %}

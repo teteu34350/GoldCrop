@@ -386,6 +386,9 @@ def relatorios_api(request):
     low_items = products.filter(quantidade_atual__lte=F('estoque_minimo')).values(
         'nome', 'quantidade_atual', 'unidade', 'estoque_minimo',
     )
+    recent_movements = LancamentoFinanceiro.objects.filter(
+        fazenda=farm,
+    ).order_by('-data', '-criado_em')[:5]
     return JsonResponse({
         'ok': True,
         'periodo': f'{month_start.isoformat()} a {today.isoformat()}',
@@ -393,6 +396,13 @@ def relatorios_api(request):
             'receitas': str(total_income), 'despesas': str(total_expense),
             'saldo': str(total_income - total_expense),
         },
+        'movimentacoes_recentes': [{
+            'tipo': row.tipo,
+            'titulo': row.titulo,
+            'categoria': row.categoria,
+            'valor': str(row.valor),
+            'data': row.data.isoformat(),
+        } for row in recent_movements],
         'estoque_baixo': [{
             'nome': row['nome'], 'quantidade': str(row['quantidade_atual']),
             'unidade': row['unidade'], 'estoque_minimo': str(row['estoque_minimo']),

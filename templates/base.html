@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="{% static 'styles.css' %}?v=10" />
 <link rel="stylesheet" href="{% static 'responsive.css' %}?v=7" />
     {% block extra_head %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'goldcrop-refresh.css' %}?v=1" />
   </head>
 <body>
   {{ auth_user_data|json_script:"auth-user-data" }}
@@ -44,7 +45,7 @@
         </button>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav class="sidebar-nav" aria-label="Navegação principal">
         <div class="nav-section">
           <a href="{% url 'dashboard:dashboard' %}" class="nav-item {% if request.resolver_match.namespace == 'dashboard' and request.resolver_match.url_name == 'dashboard' %}active{% endif %}" id="nav-dashboard">
             <span class="nav-icon">
@@ -52,6 +53,11 @@
             </span>
             <span class="nav-label">Visão Geral</span>
           </a>
+        </div>
+
+        <details class="gc-nav-group" {% if request.resolver_match.url_name == 'calendar' or request.resolver_match.url_name == 'gold_window' or request.resolver_match.url_name == 'pesticide_window' or request.resolver_match.url_name == 'talhoes' or request.resolver_match.url_name == 'estoque' or request.resolver_match.namespace == 'pecuaria' or request.resolver_match.url_name == 'fazenda' or request.resolver_match.url_name == 'sensores' or request.resolver_match.url_name == 'aplicacoes' or request.resolver_match.url_name == 'historico' %}open{% endif %}>
+          <summary><span>Campo</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <div class="nav-section">
           <a href="{% url 'dashboard:calendar' %}" class="nav-item {% if request.resolver_match.url_name == 'calendar' %}active{% endif %}" id="nav-calendar">
             <span class="nav-icon">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -114,9 +120,12 @@
             <span class="nav-label">Histórico</span>
           </a>
         </div>
+        </details>
 
         <div class="nav-divider"></div>
-        <div class="nav-section">
+        <details class="gc-nav-group" {% if request.resolver_match.namespace == 'gestao' and request.resolver_match.url_name != 'assistente' %}open{% endif %}>
+          <summary><span>Gestão</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
+          <div class="nav-section">
           <a href="{% url 'gestao:financeiro' %}" class="nav-item {% if request.resolver_match.namespace == 'gestao' and request.resolver_match.url_name == 'financeiro' %}active{% endif %}" id="nav-financeiro">
             <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></span>
             <span class="nav-label">Financeiro</span>
@@ -141,6 +150,10 @@
             <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-5 5"/></svg></span>
             <span class="nav-label">Relatórios</span>
           </a>
+        </div>
+        </details>
+
+        <div class="nav-section nav-priority">
           <a href="{% url 'gestao:assistente' %}" class="nav-item {% if request.resolver_match.namespace == 'gestao' and request.resolver_match.url_name == 'assistente' %}active{% endif %}" id="nav-assistente">
             <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 14 9l6 3-6 3-2 6-2-6-6-3 6-3 2-6Z"/></svg></span>
             <span class="nav-label">Assistente IA</span>
@@ -254,6 +267,21 @@
 
     </main>
   </div>
+
+  <nav class="gc-mobile-nav" aria-label="Atalhos">
+    <a class="gc-mobile-nav-item {% if request.resolver_match.namespace == 'dashboard' and request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard:dashboard' %}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg><span>Início</span>
+    </a>
+    <a class="gc-mobile-nav-item {% if request.resolver_match.url_name == 'calendar' or request.resolver_match.url_name == 'gold_window' or request.resolver_match.url_name == 'pesticide_window' or request.resolver_match.url_name == 'talhoes' or request.resolver_match.url_name == 'estoque' or request.resolver_match.namespace == 'pecuaria' or request.resolver_match.url_name == 'fazenda' or request.resolver_match.url_name == 'sensores' or request.resolver_match.url_name == 'aplicacoes' or request.resolver_match.url_name == 'historico' %}active{% endif %}" href="{% url 'dashboard:talhoes' %}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg><span>Campo</span>
+    </a>
+    <a class="gc-mobile-nav-item {% if request.resolver_match.namespace == 'gestao' and request.resolver_match.url_name == 'assistente' %}active{% endif %}" href="{% url 'gestao:assistente' %}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/></svg><span>Assistente</span>
+    </a>
+    <button class="gc-mobile-nav-item" type="button" aria-label="Abrir mais opções" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg><span>Mais</span>
+    </button>
+  </nav>
 
   <!-- ===================== MODAL: REGISTRAR APLICAÇÃO ===================== -->
   <div class="modal-overlay" id="modalRegistrar" style="display:none">

@@ -336,7 +336,55 @@ class GestaoWorkflowTests(TestCase):
                 self.assertEqual(response.status_code, 200)
         self.assertContains(self.client.get(reverse('gestao:assistente')), 'Assistente IA')
         self.assertContains(self.client.get(reverse('gestao:assistente')), 'Confirmar e salvar')
-        self.assertContains(self.client.get(reverse('dashboard:dashboard')), 'Resumo deste mês')
+        dashboard = self.client.get(reverse('dashboard:dashboard'))
+        self.assertContains(dashboard, 'Resumo deste mês')
+        self.assertContains(dashboard, 'gc-ai-launcher')
+        self.assertContains(dashboard, 'dashboardFinanceMovements')
+        self.assertContains(dashboard, 'gc-mobile-nav')
+        self.assertContains(dashboard, 'gc-nav-group')
+        self.assertContains(dashboard, '?pergunta=')
+
+    def test_reports_include_five_recent_financial_movements_for_current_farm(self):
+        today = timezone.localdate()
+        entries = []
+        for days_ago in range(6):
+            entries.append(LancamentoFinanceiro.objects.create(
+                fazenda=self.farm,
+                tipo=LancamentoFinanceiro.Tipo.RECEITA if days_ago == 0 else LancamentoFinanceiro.Tipo.DESPESA,
+                titulo=f'Lançamento {days_ago}',
+                categoria='Teste',
+                valor=Decimal('10'),
+                data=today - timedelta(days=days_ago),
+            ))
+        other_farm = Fazenda.objects.create(
+            produtor=self.user,
+            nome='Outra Fazenda',
+            cep='37000001',
+            estado='MG',
+            cidade='Varginha',
+            bairro='Zona Rural',
+            area_hectares=5,
+            quantidade_talhoes=1,
+            culturas=['Café'],
+            tipo_cultivo='Convencional',
+            irrigacao='Gotejamento',
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=other_farm,
+            tipo=LancamentoFinanceiro.Tipo.RECEITA,
+            titulo='Movimentação de outra fazenda',
+            categoria='Teste',
+            valor=Decimal('999'),
+            data=today,
+        )
+
+        response = self.client.get(reverse('gestao:relatorios_api'))
+
+        self.assertEqual(response.status_code, 200)
+        recent = response.json()['movimentacoes_recentes']
+        self.assertEqual(len(recent), 5)
+        self.assertEqual([row['titulo'] for row in recent], [entry.titulo for entry in entries[:5]])
+        self.assertNotIn('Movimentação de outra fazenda', [row['titulo'] for row in recent])
 
     def test_safra_servico_equipamento_e_atividade_uses_current_farm(self):
         talhao = Talhao.objects.create(fazenda=self.farm, nome='Talhão 01', cultura='Café')

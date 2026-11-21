@@ -165,6 +165,8 @@
     const pending = document.getElementById('assistantPendingActions');
     const confirmButton = document.getElementById('assistantConfirm');
     const cancelButton = document.getElementById('assistantCancel');
+    const suggestedPrompt = new URLSearchParams(window.location.search).get('pergunta');
+    if (suggestedPrompt) input.value = suggestedPrompt.slice(0, 4000);
     let busy = false;
 
     function appendMessage(text, from = 'bot') {
