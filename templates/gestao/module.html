@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'gestao.css' %}?v=1" />{% endblock %}
+
+{% block content %}
+<section class="page active" id="page-gestao" data-gestao-module="{{ module }}">
+  <div class="page-content gestao-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ module_title }}</h1>
+        <p class="page-sub">{{ module_description }}</p>
+      </div>
+      {% if module == 'financeiro' or module == 'servicos' or module == 'equipamentos' or module == 'safras' or module == 'registros' %}
+      <span class="gestao-farm-badge">{{ auth_user_data.farm }}</span>
+      {% endif %}
+    </div>
+
+    <p class="gestao-feedback" id="gestaoFeedback" role="status" hidden></p>
+
+    {% if module == 'assistente' %}
+    <section class="gestao-card assistant-card" aria-label="Assistente GoldCrop">
+      <div class="assistant-heading">
+        <div class="assistant-mark" aria-hidden="true">✦</div>
+        <div><p class="gestao-eyebrow">ASSISTENTE DA FAZENDA</p><h2>Como posso ajudar?</h2></div>
+      </div>
+      <p class="assistant-privacy">Consultas de estoque e financeiro são respondidas pelo GoldCrop usando os dados da fazenda atual. Perguntas gerais são enviadas ao OpenRouter; os dados da fazenda não acompanham essas mensagens.</p>
+      <div class="assistant-messages" id="assistantMessages" aria-live="polite">
+        <p class="assistant-message assistant-message-bot">Posso consultar o estoque e o financeiro, ou preparar uma alteração para sua confirmação.</p>
+      </div>
+      <div class="assistant-pending-actions" id="assistantPendingActions" hidden>
+        <button class="btn-primary" type="button" id="assistantConfirm">Confirmar e salvar</button>
+        <button class="btn-ghost" type="button" id="assistantCancel">Cancelar</button>
+      </div>
+      <form class="assistant-composer" id="assistantForm">
+        {% csrf_token %}
+        <label class="sr-only" for="assistantInput">Mensagem para o assistente</label>
+        <input class="form-input" id="assistantInput" name="message" maxlength="4000" placeholder="Ex.: Quanto tenho de sementes?" required />
+        <button class="btn-primary" type="submit">Enviar</button>
+      </form>
+      <div class="assistant-suggestions">
+        <button type="button" data-assistant-prompt="Quanto tenho de sementes?">Consultar sementes</button>
+        <button type="button" data-assistant-prompt="Quanto gastei este mês?">Consultar despesas</button>
+        <button type="button" data-assistant-prompt="Tive uma despesa de R$ 350 com diesel">Preparar despesa</button>
+      </div>
+    </section>
+
+    {% elif module == 'financeiro' %}
+    <div class="gestao-kpis">
+      <article class="gestao-kpi"><span>Receitas do mês</span><strong id="financeIncome">R$ 0,00</strong></article>
+      <article class="gestao-kpi"><span>Despesas do mês</span><strong id="financeExpenses">R$ 0,00</strong></article>
+      <article class="gestao-kpi"><span>Saldo do mês</span><strong id="financeBalance">R$ 0,00</strong></article>
+    </div>
+    <div class="gestao-columns">
+      <section class="gestao-card">
+        <h2>Novo lançamento</h2>
+        <form class="gestao-form" data-api="{% url 'gestao:financeiro_api' %}">
+          {% csrf_token %}
+          <label>Descrição<input class="form-input" name="titulo" maxlength="160" required /></label>
+          <div class="gestao-form-row">
+            <label>Tipo<select class="form-input" name="tipo"><option value="DESPESA">Despesa</option><option value="RECEITA">Receita</option><option value="COMPRA">Compra</option></select></label>
+            <label>Valor (R$)<input class="form-input" name="valor" type="number" min="0.01" step="0.01" required /></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Categoria<input class="form-input" name="categoria" maxlength="80" value="Outros" /></label>
+            <label>Data<input class="form-input" name="data" type="date" required /></label>
+          </div>
+          <label>Observação<textarea class="form-input" name="observacao" rows="3"></textarea></label>
+          <button class="btn-primary" type="submit">Salvar lançamento</button>
+        </form>
+      </section>
+      <section class="gestao-card">
+        <h2>Movimentações recentes</h2>
+        <div class="gestao-list" id="financeList" aria-live="polite"></div>
+      </section>
+    </div>
+
+    {% elif module == 'safras' %}
+    <div class="gestao-columns">
+      <section class="gestao-card">
+        <h2>Cadastrar safra</h2>
+        <form class="gestao-form" data-api="{% url 'gestao:safras_api' %}">
+          {% csrf_token %}
+          <label>Cultura<input class="form-input" name="cultura" maxlength="100" required /></label>
+          <div class="gestao-form-row">
+            <label>Variedade<input class="form-input" name="variedade" maxlength="100" /></label>
+            <label>Ano da safra<input class="form-input" name="ano_safra" placeholder="2026/2027" maxlength="20" required /></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Área (ha)<input class="form-input" name="area_hectares" type="number" min="0.01" step="0.01" required /></label>
+            <label>Status<select class="form-input" name="status"><option value="PLANEJAMENTO">Planejamento</option><option value="EM_ANDAMENTO">Em andamento</option><option value="CONCLUIDA">Concluída</option><option value="ENCERRADA">Encerrada</option></select></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Plantio<input class="form-input" name="data_plantio" type="date" /></label>
+            <label>Colheita prevista<input class="form-input" name="colheita_prevista" type="date" /></label>
+          </div>
+          <label>Talhões<select class="form-input" name="talhoes" multiple size="4">{% for talhao in talhoes %}<option value="{{ talhao.id }}">{{ talhao.nome }}</option>{% endfor %}</select></label>
+          <label>Observação<textarea class="form-input" name="observacao" rows="3"></textarea></label>
+          <button class="btn-primary" type="submit">Salvar safra</button>
+        </form>
+      </section>
+      <section class="gestao-card"><h2>Safras da fazenda</h2><div class="gestao-list" id="safrasList"></div></section>
+    </div>
+
+    {% elif module == 'servicos' %}
+    <div class="gestao-columns">
+      <section class="gestao-card">
+        <h2>Registrar serviço</h2>
+        <form class="gestao-form" data-api="{% url 'gestao:servicos_api' %}">
+          {% csrf_token %}
+          <label>Serviço<input class="form-input" name="nome" maxlength="160" required /></label>
+          <div class="gestao-form-row">
+            <label>Tipo<select class="form-input" name="tipo"><option value="CONTRATADO">Contratado</option><option value="PRESTADO">Prestado</option></select></label>
+            <label>Data<input class="form-input" name="data" type="date" required /></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Pessoa/empresa<input class="form-input" name="pessoa" maxlength="150" /></label>
+            <label>Local<input class="form-input" name="local" maxlength="150" /></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Quantidade<input class="form-input" name="quantidade" maxlength="80" placeholder="Ex.: 10 ha" /></label>
+            <label>Valor (R$)<input class="form-input" name="valor" type="number" min="0" step="0.01" /></label>
+          </div>
+          <label>Status<select class="form-input" name="status"><option value="PENDENTE">Pendente</option><option value="CONCLUIDO">Concluído</option><option value="CANCELADO">Cancelado</option></select></label>
+          <button class="btn-primary" type="submit">Salvar serviço</button>
+        </form>
+      </section>
+      <section class="gestao-card"><h2>Serviços registrados</h2><div class="gestao-list" id="servicosList"></div></section>
+    </div>
+
+    {% elif module == 'equipamentos' %}
+    <div class="gestao-columns">
+      <section class="gestao-card">
+        <h2>Cadastrar equipamento</h2>
+        <form class="gestao-form" data-api="{% url 'gestao:equipamentos_api' %}">
+          {% csrf_token %}
+          <label>Nome<input class="form-input" name="nome" maxlength="150" required /></label>
+          <div class="gestao-form-row">
+            <label>Tipo<input class="form-input" name="tipo" maxlength="80" required /></label>
+            <label>Identificação<input class="form-input" name="identificacao" maxlength="80" /></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Horímetro<input class="form-input" name="horimetro" type="number" min="0" step="0.1" /></label>
+            <label>Status<select class="form-input" name="status"><option value="OPERACIONAL">Operacional</option><option value="MANUTENCAO">Em manutenção</option><option value="INATIVO">Inativo</option></select></label>
+          </div>
+          <div class="gestao-form-row">
+            <label>Última manutenção<input class="form-input" name="ultima_manutencao" type="date" /></label>
+            <label>Próxima manutenção<input class="form-input" name="proxima_manutencao" type="date" /></label>
+          </div>
+          <label>Observação<textarea class="form-input" name="observacao" rows="3"></textarea></label>
+          <button class="btn-primary" type="submit">Salvar equipamento</button>
+        </form>
+      </section>
+      <section class="gestao-card"><h2>Equipamentos da fazenda</h2><div class="gestao-list" id="equipamentosList"></div></section>
+    </div>
+
+    {% elif module == 'registros' %}
+    <div class="gestao-columns">
+      <section class="gestao-card">
+        <h2>Registrar atividade</h2>
+        <form class="gestao-form" data-api="{% url 'gestao:registros_api' %}">
+          {% csrf_token %}
+          <label>Atividade<input class="form-input" name="titulo" maxlength="160" required /></label>
+          <div class="gestao-form-row">
+            <label>Tipo<select class="form-input" name="categoria">{% for value,label in event_categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+            <label>Data<input class="form-input" name="data" type="date" required /></label>
+          </div>
+          <label>Talhão<select class="form-input" name="talhao_id"><option value="">Fazenda</option>{% for talhao in talhoes %}<option value="{{ talhao.id }}">{{ talhao.nome }}</option>{% endfor %}</select></label>
+          <label>Descrição<textarea class="form-input" name="descricao" rows="3"></textarea></label>
+          <button class="btn-primary" type="submit">Salvar atividade</button>
+        </form>
+      </section>
+      <section class="gestao-card"><h2>Atividades recentes</h2><div class="gestao-list" id="registrosList"></div></section>
+    </div>
+
+    {% elif module == 'relatorios' %}
+    <section class="gestao-card">
+      <h2>Resumo da fazenda</h2>
+      <p class="gestao-period" id="reportPeriod"></p>
+      <div class="gestao-kpis">
+        <article class="gestao-kpi"><span>Receitas</span><strong id="reportIncome">—</strong></article>
+        <article class="gestao-kpi"><span>Despesas e compras</span><strong id="reportExpenses">—</strong></article>
+        <article class="gestao-kpi"><span>Saldo</span><strong id="reportBalance">—</strong></article>
+      </div>
+      <div class="gestao-columns">
+        <div><h3>Estoque no mínimo ou abaixo</h3><div class="gestao-list" id="reportStock"></div></div>
+        <div><h3>Operação</h3><div class="gestao-list" id="reportOperations"></div></div>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}<script src="{% static 'gestao.js' %}?v=1" defer></script>{% endblock %}

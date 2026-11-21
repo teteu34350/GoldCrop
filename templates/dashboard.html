@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block extra_head %}<link rel="stylesheet" href="{% static 'pecuaria.css' %}?v=2" />{% endblock %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'pecuaria.css' %}?v=2" /><link rel="stylesheet" href="{% static 'gestao.css' %}?v=1" />{% endblock %}
 {% block content %}
 
 <!-- ===================== PAGE: DASHBOARD ===================== -->
@@ -80,6 +80,22 @@
         </div>
       </div>
     </div>
+
+    <section class="gestao-dashboard-summary" aria-labelledby="dashboardFinanceHeading">
+      <div class="gestao-dashboard-summary-heading">
+        <div><p class="gestao-eyebrow">VISÃO FINANCEIRA</p><h2 id="dashboardFinanceHeading">Resumo deste mês</h2></div>
+        <div class="gestao-dashboard-links">
+          <a href="{% url 'gestao:financeiro' %}">Abrir financeiro</a>
+          <a href="{% url 'gestao:assistente' %}">Falar com a IA</a>
+        </div>
+      </div>
+      <div class="gestao-kpis">
+        <article class="gestao-kpi"><span>Receitas</span><strong id="dashboardFinanceIncome">Carregando…</strong></article>
+        <article class="gestao-kpi"><span>Despesas e compras</span><strong id="dashboardFinanceExpenses">Carregando…</strong></article>
+        <article class="gestao-kpi"><span>Saldo</span><strong id="dashboardFinanceBalance">Carregando…</strong></article>
+      </div>
+      <p class="gestao-dashboard-error" id="dashboardFinanceError" role="status" hidden></p>
+    </section>
 
     <section class="pecuaria-farm-summary" aria-labelledby="farmLivestockHeading">
       <div>
@@ -269,3 +285,5 @@
 </section>
 <script src="{% static 'pecuaria-dashboard.js' %}?v=1" defer></script>
 {% endblock %}
+
+{% block extra_scripts %}{{ block.super }}<script src="{% static 'gestao-dashboard.js' %}?v=1" defer></script>{% endblock %}

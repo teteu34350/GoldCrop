@@ -1,0 +1,22 @@
+OPENROUTER NO GOLDCROP
+======================
+
+O assistente geral usa a API OpenAI-compatible da OpenRouter. A chave deve
+existir somente no ambiente do servidor, com o nome OPENROUTER_API_KEY.
+OPENROUTER_MODEL e opcional; o padrao atual e openrouter/free.
+
+Windows PowerShell (defina a chave sem coloca-la no codigo):
+
+  $env:OPENROUTER_API_KEY = "sua-chave"
+  $env:OPENROUTER_MODEL = "openrouter/free"
+  .\.venv\Scripts\python.exe manage.py runserver
+
+Em producao, configure as mesmas variaveis no painel do ambiente de deploy e
+reinicie o servico. Nao coloque a chave no frontend, em templates, em arquivos
+versionados ou em mensagens do assistente.
+
+As consultas suportadas de financeiro e estoque sao processadas pelo Django
+diretamente no banco da fazenda selecionada. Esse contexto nao e enviado a
+OpenRouter. Mensagens gerais nao reconhecidas localmente enviam somente a
+mensagem atual ao provedor. Lancamentos financeiros, baixas de estoque e
+atividades propostos pelo assistente so sao gravados apos confirmacao explicita.

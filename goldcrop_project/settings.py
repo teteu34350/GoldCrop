@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'dashboard',
     'pecuaria',
+    'gestao.apps.GestaoConfig',
 ]
 
 MIDDLEWARE = [
