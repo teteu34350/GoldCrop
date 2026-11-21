@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block extra_head %}<link rel="stylesheet" href="{% static 'gestao.css' %}?v=1" />{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'gestao.css' %}?v=2" />{% endblock %}
 
 {% block content %}
 <section class="page active" id="page-gestao" data-gestao-module="{{ module }}">
@@ -19,25 +19,29 @@
     <p class="gestao-feedback" id="gestaoFeedback" role="status" hidden></p>
 
     {% if module == 'assistente' %}
-    <section class="gestao-card assistant-card" aria-label="Assistente GoldCrop">
+    <section class="assistant-card" aria-label="Assistente GoldCrop" data-confirm-label="Confirmar e salvar">
       <div class="assistant-heading">
         <div class="assistant-mark" aria-hidden="true">✦</div>
-        <div><p class="gestao-eyebrow">ASSISTENTE DA FAZENDA</p><h2>Como posso ajudar?</h2></div>
+        <div><p class="gestao-eyebrow">ASSISTENTE GOLDCROP</p><h2>Como posso ajudar?</h2></div>
       </div>
-      <p class="assistant-privacy">Consultas de estoque e financeiro são respondidas pelo GoldCrop usando os dados da fazenda atual. Perguntas gerais são enviadas ao OpenRouter; os dados da fazenda não acompanham essas mensagens.</p>
+      <p class="assistant-privacy">Consultas locais usam os dados desta fazenda. Nenhuma alteração é feita sem a sua confirmação.</p>
       <div class="assistant-messages" id="assistantMessages" aria-live="polite">
-        <p class="assistant-message assistant-message-bot">Posso consultar o estoque e o financeiro, ou preparar uma alteração para sua confirmação.</p>
+        <div class="assistant-message assistant-message-bot">Posso consultar dados da fazenda e preparar lançamentos para você revisar antes de salvar.</div>
       </div>
-      <div class="assistant-pending-actions" id="assistantPendingActions" hidden>
-        <button class="btn-primary" type="button" id="assistantConfirm">Confirmar e salvar</button>
-        <button class="btn-ghost" type="button" id="assistantCancel">Cancelar</button>
-      </div>
+      <form class="assistant-edit-form" id="assistantEditForm" hidden>
+        <label for="assistantEditInput">Corrija a solicitação antes de confirmar</label>
+        <div class="assistant-edit-row"><input class="form-input" id="assistantEditInput" maxlength="4000" /><button class="btn-primary" type="submit">Atualizar proposta</button></div>
+      </form>
       <form class="assistant-composer" id="assistantForm">
         {% csrf_token %}
         <label class="sr-only" for="assistantInput">Mensagem para o assistente</label>
-        <input class="form-input" id="assistantInput" name="message" maxlength="4000" placeholder="Ex.: Quanto tenho de sementes?" required />
-        <button class="btn-primary" type="submit">Enviar</button>
+        <div class="assistant-input-wrap">
+          <input class="form-input" id="assistantInput" name="message" maxlength="4000" placeholder="Pergunte ou descreva o que deseja registrar…" required autocomplete="off" />
+          <button class="assistant-mic" id="assistantMic" type="button" aria-label="Iniciar ditado por voz" title="Falar mensagem"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/></svg></button>
+        </div>
+        <button class="assistant-send" type="submit" aria-label="Enviar mensagem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8z"/><path d="M7 12h13"/></svg><span>Enviar</span></button>
       </form>
+      <p class="assistant-recording" id="assistantRecording" role="status" hidden><span></span><span id="assistantRecordingText">Ouvindo… fale naturalmente.</span></p>
       <div class="assistant-suggestions">
         <button type="button" data-assistant-prompt="Quanto tenho de sementes?">Consultar sementes</button>
         <button type="button" data-assistant-prompt="Quanto gastei este mês?">Consultar despesas</button>
@@ -192,4 +196,4 @@
 </section>
 {% endblock %}
 
-{% block extra_scripts %}<script src="{% static 'gestao.js' %}?v=2" defer></script>{% endblock %}
+{% block extra_scripts %}<script src="{% static 'gestao.js' %}?v=3" defer></script>{% endblock %}

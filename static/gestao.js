@@ -162,26 +162,67 @@
   if (assistantForm) {
     const messages = document.getElementById('assistantMessages');
     const input = document.getElementById('assistantInput');
-    const pending = document.getElementById('assistantPendingActions');
-    const confirmButton = document.getElementById('assistantConfirm');
-    const cancelButton = document.getElementById('assistantCancel');
+    const editForm = document.getElementById('assistantEditForm');
+    const editInput = document.getElementById('assistantEditInput');
+    const mic = document.getElementById('assistantMic');
+    const recording = document.getElementById('assistantRecording');
+    const recordingText = document.getElementById('assistantRecordingText');
     const suggestedPrompt = new URLSearchParams(window.location.search).get('pergunta');
     if (suggestedPrompt) input.value = suggestedPrompt.slice(0, 4000);
     let busy = false;
 
+    function scrollMessages() { messages.scrollTop = messages.scrollHeight; }
+    function removeConfirmationCards() { messages.querySelectorAll('.assistant-confirmation').forEach(card => card.remove()); }
+
     function appendMessage(text, from = 'bot') {
-      const message = document.createElement('p');
+      const message = document.createElement('div');
       message.className = `assistant-message assistant-message-${from}`;
       message.textContent = text;
       messages.append(message);
-      messages.scrollTop = messages.scrollHeight;
+      scrollMessages();
     }
 
-    async function sendAssistant(payload) {
+    function appendConfirmation(data, sourceMessage) {
+      const card = document.createElement('section');
+      card.className = 'assistant-confirmation';
+      const title = document.createElement('h3');
+      title.textContent = data.title || 'Confirmar ação?';
+      const action = document.createElement('p');
+      action.className = 'assistant-confirmation-action';
+      action.textContent = data.action || 'Alteração no sistema';
+      const details = document.createElement('dl');
+      (data.details || []).forEach(item => {
+        const term = document.createElement('dt');
+        term.textContent = item.label;
+        const value = document.createElement('dd');
+        value.textContent = item.value;
+        details.append(term, value);
+      });
+      const actions = document.createElement('div');
+      actions.className = 'assistant-confirmation-actions';
+      const confirm = document.createElement('button');
+      confirm.type = 'button'; confirm.className = 'btn-primary'; confirm.textContent = 'Confirmar e salvar';
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'btn-ghost'; edit.textContent = 'Editar';
+      const cancel = document.createElement('button');
+      cancel.type = 'button'; cancel.className = 'btn-ghost'; cancel.textContent = 'Cancelar';
+      confirm.addEventListener('click', () => void sendAssistant({ action: 'confirm' }, card));
+      cancel.addEventListener('click', () => void sendAssistant({ action: 'cancel' }, card));
+      edit.addEventListener('click', () => {
+        editInput.value = sourceMessage || '';
+        editForm.hidden = false;
+        editInput.focus();
+      });
+      actions.append(confirm, edit, cancel);
+      card.append(title, action, details, actions);
+      messages.append(card);
+      scrollMessages();
+    }
+
+    async function sendAssistant(payload, actionCard = null) {
       if (busy) return;
       busy = true;
-      confirmButton.disabled = true;
-      cancelButton.disabled = true;
+      if (actionCard) actionCard.querySelectorAll('button').forEach(button => { button.disabled = true; });
       try {
         const result = await requestJson('/gestao/api/assistente/', {
           method: 'POST',
@@ -189,15 +230,13 @@
           body: JSON.stringify(payload),
         });
         appendMessage(result.reply);
-        pending.hidden = !result.confirmation_required;
-        if (result.saved) pending.hidden = true;
+        if (result.confirmation_required && result.confirmation) appendConfirmation(result.confirmation, result.source_message);
+        if (actionCard && !result.confirmation_required) actionCard.remove();
       } catch (error) {
         appendMessage(error.message);
-        pending.hidden = true;
+        if (actionCard) actionCard.querySelectorAll('button').forEach(button => { button.disabled = false; });
       } finally {
         busy = false;
-        confirmButton.disabled = false;
-        cancelButton.disabled = false;
         input.focus();
       }
     }
@@ -206,19 +245,55 @@
       event.preventDefault();
       const message = input.value.trim();
       if (!message) return;
+      removeConfirmationCards();
       appendMessage(message, 'user');
       input.value = '';
-      pending.hidden = true;
       void sendAssistant({ message });
     });
-    confirmButton.addEventListener('click', () => void sendAssistant({ action: 'confirm' }));
-    cancelButton.addEventListener('click', () => void sendAssistant({ action: 'cancel' }));
+    editForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const message = editInput.value.trim();
+      if (!message) return;
+      removeConfirmationCards();
+      appendMessage(message, 'user');
+      editForm.hidden = true;
+      void sendAssistant({ message });
+    });
     document.querySelectorAll('[data-assistant-prompt]').forEach(button => {
       button.addEventListener('click', () => {
         input.value = button.dataset.assistantPrompt;
         input.focus();
       });
     });
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      mic.disabled = true;
+      mic.title = 'O ditado por voz não é compatível com este navegador';
+    } else {
+      const recognition = new Recognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      let committedText = '';
+      recognition.onstart = () => {
+        committedText = input.value.trim();
+        mic.classList.add('is-recording'); mic.setAttribute('aria-label', 'Parar ditado por voz');
+        recording.hidden = false; recordingText.textContent = 'Ouvindo… fale naturalmente.';
+      };
+      recognition.onresult = event => {
+        let finalText = ''; let interimText = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          else interimText += event.results[i][0].transcript;
+        }
+        if (finalText) committedText = `${committedText} ${finalText}`.trim();
+        input.value = `${committedText} ${interimText}`.trim();
+        recordingText.textContent = interimText ? `Reconhecido: ${input.value}` : 'Transcrição pronta. Você pode revisar antes de enviar.';
+      };
+      recognition.onerror = event => { recordingText.textContent = event.error === 'not-allowed' ? 'Permita o uso do microfone para ditar sua mensagem.' : 'Não foi possível reconhecer a fala. Tente novamente.'; };
+      recognition.onend = () => { mic.classList.remove('is-recording'); mic.setAttribute('aria-label', 'Iniciar ditado por voz'); setTimeout(() => { recording.hidden = true; }, 1800); input.focus(); };
+      mic.addEventListener('click', () => { if (mic.classList.contains('is-recording')) recognition.stop(); else recognition.start(); });
+    }
   }
 
   loadModule().catch(error => showFeedback(error.message, true));

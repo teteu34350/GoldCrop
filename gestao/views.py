@@ -472,18 +472,38 @@ def _normalize_unit(value):
     return unit
 
 
-def _stage_assistant_action(request, farm, kind, payload, description):
+def _assistant_confirmation(kind, payload, description):
+    """Presentation data for the UI; session data remains authoritative."""
+    if kind == 'financeiro':
+        return {
+            'title': 'Confirmar lançamento?',
+            'action': f"Adicionar {payload['tipo'].lower()}",
+            'details': [
+                {'label': 'Valor', 'value': _format_brl(Decimal(payload['valor']))},
+                {'label': 'Descrição', 'value': payload['titulo']},
+                {'label': 'Categoria', 'value': payload['categoria']},
+            ],
+        }
+    if kind == 'estoque':
+        return {'title': 'Confirmar movimentação?', 'action': 'Atualizar estoque', 'details': [{'label': 'Ação', 'value': description}]}
+    return {'title': 'Confirmar registro?', 'action': 'Adicionar atividade', 'details': [{'label': 'Ação', 'value': description}]}
+
+
+def _stage_assistant_action(request, farm, kind, payload, description, source_message=None):
     request.session['gestao_assistente_pendente'] = {
         'user_id': request.user.id,
         'farm_id': farm.id,
         'kind': kind,
         'payload': payload,
+        'source_message': source_message or '',
         'created_at': timezone.now().timestamp(),
     }
     return JsonResponse({
         'ok': True,
         'reply': f'Posso fazer esta alteração no banco do GoldCrop: {description}. Deseja confirmar?',
         'confirmation_required': True,
+        'confirmation': _assistant_confirmation(kind, payload, description),
+        'source_message': source_message or '',
     })
 
 
@@ -586,6 +606,14 @@ def _local_assistant_reply(request, farm, message):
             reply = f'A fazenda tem {count} {noun} no GoldCrop.'
         return JsonResponse({'ok': True, 'reply': reply})
 
+    if not is_question and re.search(
+        r'\b(adicionar|adicione|inserir|insira|cadastrar|cadastre|registrar|registre)\b', normalized,
+    ) and re.search(r'\b(animal|animais|rebanho|gado|vacas?|novilhas?|bezerros?|bezerras?|touros?)\b', normalized):
+        return JsonResponse({
+            'ok': True,
+            'reply': 'Entendi que você quer cadastrar animais. Cada animal precisa de um brinco/identificação única, categoria e sexo; por isso não é seguro registrar um lote apenas pela quantidade. Complete esses dados na área Pecuária e eu posso ajudar com consultas sobre o rebanho.',
+        })
+
     if is_question and re.search(r'\b(quanto|total|soma|saldo)\b', normalized):
         if re.search(r'\b(gastei|gasto|despesa|despesas|compras?)\b', normalized):
             rows = LancamentoFinanceiro.objects.filter(
@@ -666,7 +694,7 @@ def _local_assistant_reply(request, farm, message):
             'data': timezone.localdate().isoformat(),
             'observacao': 'Lançamento preparado pelo assistente.',
         }
-        return _stage_assistant_action(request, farm, 'financeiro', payload, f'{kind.title()} de {_format_brl(value)} para "{payload["titulo"]}"')
+        return _stage_assistant_action(request, farm, 'financeiro', payload, f'{kind.title()} de {_format_brl(value)} para "{payload["titulo"]}"', message)
 
     if not is_question and re.search(r'\b(zerar|zere|zera|zerou|acabou|acabaram|esgotar|esgotou|usei|consumi|retirei|baixar|dei baixa)\b', normalized) and re.search(r'\b(estoque|sementes?|adubo|fertilizante|defensivo|diesel|combustivel|pecas?)\b', normalized):
         if not _has_farm_permission(farm, request.user, 'record'):
@@ -686,7 +714,7 @@ def _local_assistant_reply(request, farm, message):
             if not changes:
                 return JsonResponse({'ok': True, 'reply': 'O estoque correspondente já está zerado.'})
             names = ', '.join(product.nome for product in products if product.quantidade_atual > 0)
-            return _stage_assistant_action(request, farm, 'estoque', {'movimentos': changes}, f'zerar o estoque de {names}')
+            return _stage_assistant_action(request, farm, 'estoque', {'movimentos': changes}, f'zerar o estoque de {names}', message)
         match = re.search(r'((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)\s*(kg|litros?|l|unidades?|un\.?|ha)(?=\s|$|[.,!?])', normalized)
         if not match:
             return JsonResponse({'ok': True, 'reply': 'Qual quantidade e unidade devo dar baixa? Exemplo: “Usei 50 kg de sementes”.'})
@@ -706,7 +734,7 @@ def _local_assistant_reply(request, farm, message):
             'quantidade': str(quantity),
             'saldo_esperado': str(product.quantidade_atual),
         }]}
-        return _stage_assistant_action(request, farm, 'estoque', payload, f'dar baixa de {quantity} {product.unidade} em {product.nome}')
+        return _stage_assistant_action(request, farm, 'estoque', payload, f'dar baixa de {quantity} {product.unidade} em {product.nome}', message)
 
     if not is_question and re.search(r'\b(plantei|apliquei|colhi|irriguei|abasteci)\b', normalized):
         if not _has_farm_permission(farm, request.user, 'record'):
@@ -740,7 +768,7 @@ def _local_assistant_reply(request, farm, message):
             'categoria': event_type,
             'data': timezone.localdate().isoformat(),
             'talhao_id': talhao.id if talhao else None,
-        }, f'registrar {activity_name.lower()}' + (f' em {talhao.nome}' if talhao else ''))
+        }, f'registrar {activity_name.lower()}' + (f' em {talhao.nome}' if talhao else ''), message)
 
     return None
 
