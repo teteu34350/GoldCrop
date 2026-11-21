@@ -1,12 +1,18 @@
 Janela Fitossanitaria — analise meteorologica automatica
 ========================================================
 
-Objetivo
---------
+Objetivo e experiencia da tela
+------------------------------
 A tela apresenta uma triagem meteorologica para planejamento de aplicacoes,
-por talhao. O usuario apenas seleciona o talhao; produto e limites de bula nao
-sao solicitados. O resultado nao aprova produto ou aplicacao e nao substitui
-a bula, a orientacao profissional ou a avaliacao das condicoes reais.
+por talhao. A entrada principal e um calendario mensal com classificacoes por
+dia. Ao selecionar uma data, o usuario consulta o resumo meteorologico e os
+periodos horarios daquele dia, incluindo classificacoes, variaveis disponiveis,
+alertas e motivos. Dias mistos nao sao apresentados como inteiramente
+favoraveis; cada periodo conserva sua classificacao.
+
+O usuario apenas seleciona o talhao; produto e limites de bula nao sao
+solicitados. O resultado nao aprova produto ou aplicacao e nao substitui a bula,
+a orientacao profissional ou a avaliacao das condicoes reais.
 
 Fonte, localizacao e atualizacao
 -------------------------------
@@ -49,8 +55,12 @@ da chuva resulta em dados insuficientes, nunca em valores presumidos.
 
 API e arquivos
 --------------
-- Interface: `templates/janela_fitossanitaria.html`
-- Renderizacao e eventos: `static/pesticide-calendar.js`
+- Interface com calendario mensal e painel de detalhes por data:
+  `templates/janela_fitossanitaria.html`
+- Renderizacao do calendario, resumo diario, janelas e horarios:
+  `static/pesticide-calendar.js`
+- Estilos compartilhados com a Janela de Ouro e responsividade fitossanitaria:
+  `static/gold-window.css`
 - Integracao meteorologica compartilhada: `static/app.js`
 - Analise automatica e criterios: `dashboard/pesticides.py`
 - Endpoint de leitura/análise automatica (GET):
@@ -60,5 +70,8 @@ API e arquivos
 - Testes: `dashboard/test_pesticides.py`
 
 Falhas, ausencia de previsao e talhoes sem coordenadas sao comunicados na tela.
-O botao de atualizacao reutiliza o evento da integracao existente. Resultados
-sao atualizados ao trocar o talhao e quando a coleta desse talhao e atualizada.
+Datas passadas sao diferenciadas e nao reutilizam previsoes vencidas. O
+calendario nao exibe percentuais que possam ser confundidos com probabilidade
+meteorologica ou pontuacao do algoritmo. O botao de atualizacao reutiliza o
+evento da integracao existente. Resultados sao atualizados ao trocar o talhao e
+quando a coleta desse talhao e atualizada.

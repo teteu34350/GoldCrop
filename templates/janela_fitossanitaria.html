@@ -4,7 +4,7 @@
 {% block breadcrumb %}Janela Fitossanitária{% endblock %}
 
 {% block extra_head %}
-  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=5" />
+  <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=9" />
 {% endblock %}
 
 {% block content %}
@@ -14,7 +14,7 @@
       <div>
         <p class="calendar-eyebrow">Aplicação fitossanitária · análise por talhão</p>
         <h1 class="page-title">Janela Fitossanitária</h1>
-        <p class="page-sub">Consulte os melhores períodos meteorológicos para planejar aplicações.</p>
+        <p class="page-sub">Encontre as melhores condições meteorológicas para aplicar.</p>
       </div>
       <div class="calendar-window-actions">
         <label class="calendar-reference-select">
@@ -29,80 +29,119 @@
       </div>
     </header>
 
+    <div class="gold-window-intro card">
+      <div class="gold-window-intro-mark" aria-hidden="true">✦</div>
+      <div>
+        <strong>Consulte as condições previstas para cada dia.</strong>
+        <p>Identifique possíveis riscos meteorológicos durante a aplicação de defensivos agrícolas. Selecione uma data para consultar os horários e seus detalhes.</p>
+      </div>
+    </div>
+
     <div class="pesticide-status-row">
       <div class="pesticide-source-line" id="pesticideSourceLine" role="status" aria-live="polite">Carregando previsão do talhão...</div>
       <button class="btn-ghost pesticide-retry" id="pesticideRetry" type="button" hidden>Atualizar previsão</button>
     </div>
 
-    <section class="pesticide-weather-summary" aria-label="Resumo meteorológico atual">
-      <article class="card pesticide-current-card">
-        <span class="pesticide-summary-label">Condição atual</span>
-        <strong id="pesticideCurrentCondition">—</strong>
-        <span id="pesticideUpdatedAt">Atualização indisponível</span>
-      </article>
-      <article class="card pesticide-summary-card">
-        <span class="pesticide-summary-label">Temperatura</span>
-        <strong id="pesticideTemperature">—</strong>
-        <span id="pesticideFeelsLike"></span>
-      </article>
-      <article class="card pesticide-summary-card">
-        <span class="pesticide-summary-label">Umidade relativa</span>
-        <strong id="pesticideHumidity">—</strong>
-      </article>
-      <article class="card pesticide-summary-card">
-        <span class="pesticide-summary-label">Vento e rajadas</span>
-        <strong id="pesticideWind">—</strong>
-      </article>
-      <article class="card pesticide-summary-card">
-        <span class="pesticide-summary-label">Previsão de chuva</span>
-        <strong id="pesticideRain">—</strong>
-        <span id="pesticideRainDaily"></span>
-      </article>
-    </section>
-
-    <section class="card pesticide-windows-section" aria-labelledby="pesticideWindowsTitle">
-      <div class="pesticide-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Planejamento meteorológico</span>
-          <h2 id="pesticideWindowsTitle">Melhores janelas</h2>
+    <div class="calendar-layout gold-window-layout pesticide-calendar-layout">
+      <section class="card calendar-card gold-window-days pesticide-calendar" aria-label="Calendário de condições fitossanitárias">
+        <div class="cal-header">
+          <div>
+            <span class="calendar-eyebrow">Condições por dia</span>
+            <h2 class="cal-month" id="pesticideMonthLabel">Carregando previsão...</h2>
+          </div>
+          <div class="gold-window-period-nav">
+            <button class="cal-nav-btn" id="pesticidePrev" type="button" aria-label="Mês anterior">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="cal-nav-btn" id="pesticideNext" type="button" aria-label="Próximo mês">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
-        <span class="pesticide-window-legend">Favorável · Atenção · Desfavorável · Dados insuficientes</span>
-      </div>
-      <div id="pesticideWindows" class="pesticide-windows" aria-live="polite">
-        <p class="pesticide-empty">Aguardando previsão horária do talhão.</p>
-      </div>
-    </section>
-
-    <section class="card pesticide-daily-section" aria-labelledby="pesticideDailyTitle">
-      <div class="pesticide-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Tendência meteorológica</span>
-          <h2 id="pesticideDailyTitle">Previsão diária</h2>
+        <div class="cal-legend pesticide-calendar-legend" aria-label="Legenda das classificações">
+          <span class="cal-legend-item"><span class="cal-dot green"></span>Favorável</span>
+          <span class="cal-legend-item"><span class="cal-dot yellow"></span>Atenção</span>
+          <span class="cal-legend-item"><span class="cal-dot red"></span>Desfavorável</span>
+          <span class="cal-legend-item"><span class="cal-dot gray"></span>Dados insuficientes</span>
         </div>
-      </div>
-      <div id="pesticideDailyForecast" class="pesticide-daily-forecast" aria-live="polite">
-        <p class="pesticide-empty">Aguardando previsão diária do talhão.</p>
-      </div>
-    </section>
-
-    <section class="card pesticide-timeline-section" aria-labelledby="pesticideTimelineTitle">
-      <div class="pesticide-section-heading">
-        <div>
-          <span class="calendar-eyebrow">Evolução das condições</span>
-          <h2 id="pesticideTimelineTitle">Previsão por hora</h2>
+        <div class="cal-weekdays" aria-hidden="true">
+          <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
         </div>
-        <p class="pesticide-timeline-caption">Deslize para consultar os próximos horários disponíveis.</p>
-      </div>
-      <div class="pesticide-timeline-scroll" id="pesticideTimelineScroll">
-        <div class="pesticide-timeline" id="pesticideTimeline" aria-live="polite"></div>
-      </div>
-    </section>
+        <div class="cal-grid pesticide-calendar-grid" id="pesticideCalendarGrid" aria-live="polite"></div>
+        <p class="pesticide-calendar-hint">Os dias resumem os períodos meteorológicos previstos. Se houver condições variadas, consulte os horários para ver cada classificação.</p>
+      </section>
 
-    <p class="pesticide-form-note">A classificação é meteorológica e usa critérios gerais de triagem operacional documentados no GoldCrop. Ela não aprova o uso de um produto nem substitui a verificação da bula e das condições reais da operação.</p>
+      <aside class="card day-panel gold-window-detail pesticide-detail-panel" id="pesticideDayPanel" aria-label="Detalhes da data selecionada">
+        <div class="day-panel-empty" id="pesticideDayPanelEmpty">
+          <span class="gold-window-empty-mark" aria-hidden="true">✦</span>
+          <strong>Consulte as condições do dia</strong>
+          <p>Selecione uma data no calendário para ver as janelas meteorológicas, os riscos e os dados disponíveis.</p>
+        </div>
+        <div class="pesticide-detail-content" id="pesticideDayPanelContent" hidden>
+          <header class="pesticide-day-heading">
+            <span class="calendar-eyebrow">Análise da data</span>
+            <h2 id="pesticideSelectedDate">—</h2>
+            <span class="pesticide-day-status" id="pesticideDayStatus">Dados insuficientes</span>
+            <p id="pesticideDayOverview"></p>
+            <p class="pesticide-best-window" id="pesticideBestWindow" hidden></p>
+          </header>
+
+          <section class="pesticide-current-summary" aria-label="Condições meteorológicas atuais">
+            <article class="pesticide-current-card">
+              <span class="pesticide-summary-label">Condição atual</span>
+              <strong id="pesticideCurrentCondition">—</strong>
+              <span id="pesticideUpdatedAt">Atualização indisponível</span>
+            </article>
+            <article class="pesticide-summary-card">
+              <span class="pesticide-summary-label">Temperatura</span>
+              <strong id="pesticideTemperature">—</strong>
+              <span id="pesticideFeelsLike"></span>
+            </article>
+            <article class="pesticide-summary-card">
+              <span class="pesticide-summary-label">Umidade relativa</span>
+              <strong id="pesticideHumidity">—</strong>
+            </article>
+            <article class="pesticide-summary-card">
+              <span class="pesticide-summary-label">Vento / rajadas</span>
+              <strong id="pesticideWind">—</strong>
+            </article>
+            <article class="pesticide-summary-card">
+              <span class="pesticide-summary-label">Chuva nas próximas 24h</span>
+              <strong id="pesticideRain">—</strong>
+              <span id="pesticideRainDaily"></span>
+            </article>
+          </section>
+
+          <section class="pesticide-detail-section" aria-labelledby="pesticideDailyTitle">
+            <div class="pesticide-section-heading">
+              <div><span class="calendar-eyebrow">Resumo do dia</span><h3 id="pesticideDailyTitle">Previsão diária</h3></div>
+            </div>
+            <div id="pesticideDailyForecast" class="pesticide-daily-forecast" aria-live="polite"></div>
+          </section>
+
+          <section class="pesticide-detail-section" aria-labelledby="pesticideWindowsTitle">
+            <div class="pesticide-section-heading">
+              <div><span class="calendar-eyebrow">Períodos analisados</span><h3 id="pesticideWindowsTitle">Janelas do dia</h3></div>
+            </div>
+            <div id="pesticideWindows" class="pesticide-windows" aria-live="polite">
+              <p class="pesticide-empty">Selecione uma data com previsão para ver os períodos analisados.</p>
+            </div>
+          </section>
+
+          <section class="pesticide-detail-section" aria-labelledby="pesticideTimelineTitle">
+            <div class="pesticide-section-heading">
+              <div><span class="calendar-eyebrow">Detalhes por horário</span><h3 id="pesticideTimelineTitle">Condições hora a hora</h3></div>
+            </div>
+            <div id="pesticideTimeline" class="pesticide-hour-list" aria-live="polite"></div>
+          </section>
+        </div>
+      </aside>
+    </div>
+    <p class="pesticide-form-note">A classificação é uma triagem meteorológica com critérios gerais do GoldCrop. Ela não confirma a segurança ou eficácia da aplicação e não substitui a bula, a avaliação técnica nem as condições reais da operação.</p>
   </div>
 </section>
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="{% static 'pesticide-calendar.js' %}?v=3"></script>
+  <script src="{% static 'pesticide-calendar.js' %}?v=6"></script>
 {% endblock %}

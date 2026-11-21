@@ -253,7 +253,11 @@ class PesticideCalendarApiTests(TestCase):
         self.assertContains(response, "Janela Fitossanitária")
         self.assertContains(response, "Janela de Ouro")
         self.assertContains(response, 'id="calendarTalhaoSelect"')
+        self.assertContains(response, 'id="pesticideCalendarGrid"')
+        self.assertContains(response, 'id="pesticidePrev"')
+        self.assertContains(response, 'id="pesticideDayPanelContent"')
         self.assertContains(response, 'id="pesticideTimeline"')
+        self.assertContains(response, "Dados insuficientes")
         self.assertNotContains(response, 'id="pesticideLabelForm"')
         self.assertNotContains(response, 'name="max_wind_speed"')
 

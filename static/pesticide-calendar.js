@@ -2,26 +2,30 @@
   const selector = document.getElementById('calendarTalhaoSelect');
   if (!selector) return;
 
-  const sourceLine = document.getElementById('pesticideSourceLine');
-  const retryButton = document.getElementById('pesticideRetry');
-  const windowsContainer = document.getElementById('pesticideWindows');
-  const dailyContainer = document.getElementById('pesticideDailyForecast');
-  const timelineContainer = document.getElementById('pesticideTimeline');
-  const currentCondition = document.getElementById('pesticideCurrentCondition');
-  const updatedAt = document.getElementById('pesticideUpdatedAt');
+  const byId = id => document.getElementById(id);
+  const sourceLine = byId('pesticideSourceLine');
+  const currentCondition = byId('pesticideCurrentCondition');
+  const retryButton = byId('pesticideRetry');
+  const calendarGrid = byId('pesticideCalendarGrid');
+  const monthLabel = byId('pesticideMonthLabel');
+  const emptyPanel = byId('pesticideDayPanelEmpty');
+  const detailPanel = byId('pesticideDayPanelContent');
+  const windowsContainer = byId('pesticideWindows');
+  const dailyContainer = byId('pesticideDailyForecast');
+  const hoursContainer = byId('pesticideTimeline');
   const classifications = {
-    favorable: { label: 'Favorável', className: 'is-favorable' },
-    attention: { label: 'Atenção', className: 'is-attention' },
-    unfavorable: { label: 'Desfavorável', className: 'is-unfavorable' },
-    insufficient: { label: 'Dados insuficientes', className: 'is-insufficient' },
+    favorable: { label: 'Favorável', icon: '✓', className: 'is-favorable' },
+    attention: { label: 'Atenção', icon: '!', className: 'is-attention' },
+    unfavorable: { label: 'Desfavorável', icon: '×', className: 'is-unfavorable' },
+    insufficient: { label: 'Dados insuficientes', icon: '?', className: 'is-insufficient' },
   };
   const metrics = [
     ['temperature_2m', 'Temperatura', '°C'],
-    ['relative_humidity_2m', 'Umidade', '%'],
-    ['wind_speed_10m', 'Vento', 'km/h'],
+    ['relative_humidity_2m', 'Umidade relativa', '%'],
+    ['wind_speed_10m', 'Vento médio', 'km/h'],
     ['wind_gusts_10m', 'Rajadas', 'km/h'],
     ['precipitation_probability', 'Prob. chuva', '%'],
-    ['precipitation', 'Chuva', 'mm'],
+    ['precipitation', 'Precipitação', 'mm'],
   ];
   const weatherCodes = {
     0: 'Céu limpo', 1: 'Pouco nublado', 2: 'Parcialmente nublado', 3: 'Nublado',
@@ -33,12 +37,16 @@
   let requestId = 0;
   let requestController = null;
   let weatherUpdateTimer = null;
-  let selectedWindowDate = null;
+  let resultData = null;
+  let weatherData = null;
+  let timezone = 'UTC';
+  let selectedDate = null;
+  let displayedMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, character => ({
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[character]));
+    })[character]);
   }
 
   function number(value, digits = 1) {
@@ -48,15 +56,35 @@
       : '—';
   }
 
-  function formatDate(value, timezone, options) {
+  function formatDate(value, zone, options) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Horário não disponível';
     try {
-      return new Intl.DateTimeFormat('pt-BR', { timeZone: timezone, ...options }).format(date);
+      return new Intl.DateTimeFormat('pt-BR', { timeZone: zone, ...options }).format(date);
     } catch (error) {
       console.warn('Fuso horário meteorológico inválido:', error);
       return new Intl.DateTimeFormat('pt-BR', options).format(date);
     }
+  }
+
+  function dateInTimezone(value, zone) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    try {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(date);
+      const part = type => parts.find(item => item.type === type)?.value || '';
+      return `${part('year')}-${part('month')}-${part('day')}`;
+    } catch (error) {
+      console.warn('Fuso horário meteorológico inválido:', error);
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
+  function dateLabel(value, options = {}) {
+    const date = new Date(`${value}T12:00:00Z`);
+    return new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', ...options }).format(date);
   }
 
   function metricValue(hour, key, unit) {
@@ -79,159 +107,320 @@
   }
 
   function setSummary(weather, result) {
-    const current = weather?.current?.values || {};
+    const current = weather?.current?.values || weather?.current || {};
     const hourly = weather?.hourly?.values || {};
-    const timezone = result.timezone || weather?.location?.timezone || 'UTC';
-    const code = current.weather_code;
-    currentCondition.textContent = weatherCodes[code] || 'Condição não informada';
-    updatedAt.textContent = `Previsão atualizada em ${formatDate(result.fetched_at, timezone, {
+    timezone = result.timezone || weather?.location?.timezone || 'UTC';
+    currentCondition.textContent = weatherCodes[current.weather_code] || 'Condição não informada';
+    byId('pesticideUpdatedAt').textContent = `Previsão atualizada em ${formatDate(result.fetched_at, timezone, {
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     })}`;
-    document.getElementById('pesticideTemperature').textContent = `${number(current.temperature_2m)} °C`;
-    document.getElementById('pesticideFeelsLike').textContent = current.apparent_temperature == null
+    byId('pesticideTemperature').textContent = current.temperature_2m == null ? '—' : `${number(current.temperature_2m)} °C`;
+    byId('pesticideFeelsLike').textContent = current.apparent_temperature == null
       ? 'Sensação térmica indisponível'
       : `Sensação ${number(current.apparent_temperature)} °C`;
-    document.getElementById('pesticideHumidity').textContent = current.relative_humidity_2m == null
+    byId('pesticideHumidity').textContent = current.relative_humidity_2m == null
       ? '—'
       : `${number(current.relative_humidity_2m, 0)}%`;
-    document.getElementById('pesticideWind').textContent =
+    byId('pesticideWind').textContent =
       `${number(current.wind_speed_10m)} / ${number(current.wind_gusts_10m)} km/h`;
 
     const probabilities = (hourly.precipitation_probability || [])
-      .slice(0, 24).map(value => Number(value)).filter(Number.isFinite);
+      .slice(0, 24).map(Number).filter(Number.isFinite);
     const probability = probabilities.length ? Math.max(...probabilities) : null;
     const precipitation = (weather?.daily?.values?.precipitation_sum || [])[0];
-    document.getElementById('pesticideRain').textContent =
-      `${number(probability, 0)}% de prob. · ${number(precipitation)} mm`;
-    document.getElementById('pesticideRainDaily').textContent = 'probabilidade nas próximas 24h · volume diário previsto';
+    byId('pesticideRain').textContent =
+      `${probability == null ? '—' : `${number(probability, 0)}%`} · ${precipitation == null ? '—' : `${number(precipitation)} mm`}`;
+    byId('pesticideRainDaily').textContent = 'probabilidade máxima · volume diário previsto';
   }
 
-  function renderDailyForecast(weather) {
+  function hoursForDate(data, date) {
+    return (data?.hours || [])
+      .filter(hour => (hour.date || dateInTimezone(hour.start, data.timezone || timezone)) === date)
+      .slice()
+      .sort((a, b) => a.start.localeCompare(b.start));
+  }
+
+  function groupHours(hours) {
+    const groups = [];
+    hours.forEach(hour => {
+      const classification = classifications[hour.classification] ? hour.classification : 'insufficient';
+      const previous = groups[groups.length - 1];
+      if (
+        previous
+        && previous.classification === classification
+        && previous.hours[previous.hours.length - 1].end === hour.start
+      ) {
+        previous.hours.push(hour);
+      } else {
+        groups.push({ classification, hours: [hour] });
+      }
+    });
+    return groups.map(group => ({
+      ...group,
+      date: group.hours[0].date,
+      start: group.hours[0].start,
+      end: group.hours[group.hours.length - 1].end,
+      duration_hours: group.hours.length,
+      alerts: [...new Set(group.hours.flatMap(hour => hour.alerts || []))],
+      reasons: [...new Set(group.hours.flatMap(hour => hour.reasons || []))],
+      missing: [...new Set(group.hours.flatMap(hour => hour.missing || []))],
+    }));
+  }
+
+  function windowsForDate(data, date) {
+    return groupHours(hoursForDate(data, date));
+  }
+
+  function summarizeDay(data, date) {
+    const windows = windowsForDate(data, date);
+    if (!windows.length) {
+      return {
+        classification: 'insufficient', windows, favorableHours: 0,
+        overview: 'Não há dados horários suficientes para classificar esta data.',
+      };
+    }
+
+    const favorable = windows.filter(window => window.classification === 'favorable');
+    const attention = windows.filter(window => window.classification === 'attention');
+    const unfavorable = windows.filter(window => window.classification === 'unfavorable');
+    const insufficient = windows.filter(window => window.classification === 'insufficient');
+    const favorableHours = favorable.reduce((total, window) => total + window.duration_hours, 0);
+    let classification;
+    if (favorable.length && unfavorable.length) classification = 'attention';
+    else if (unfavorable.length) classification = 'unfavorable';
+    else if (!favorable.length && !attention.length && insufficient.length) classification = 'insufficient';
+    else if (attention.length || insufficient.length || favorableHours < (Number(data.minimum_window_hours) || 2)) classification = 'attention';
+    else classification = 'favorable';
+
+    const parts = [];
+    if (favorable.length) parts.push(`${favorable.length} ${favorable.length === 1 ? 'período favorável' : 'períodos favoráveis'}`);
+    if (attention.length) parts.push(`${attention.length} ${attention.length === 1 ? 'período em atenção' : 'períodos em atenção'}`);
+    if (unfavorable.length) parts.push(`${unfavorable.length} ${unfavorable.length === 1 ? 'período desfavorável' : 'períodos desfavoráveis'}`);
+    if (insufficient.length) parts.push(`${insufficient.length} ${insufficient.length === 1 ? 'período com dados insuficientes' : 'períodos com dados insuficientes'}`);
+    const overview = parts.length
+      ? `A previsão inclui ${parts.join(', ')}. Consulte cada horário: as condições podem variar ao longo do dia.`
+      : 'A previsão não contém períodos classificáveis para esta data.';
+    return { classification, windows, favorableHours, overview };
+  }
+
+  function renderCalendar() {
+    if (!calendarGrid || !monthLabel) return;
+    monthLabel.textContent = new Intl.DateTimeFormat('pt-BR', {
+      month: 'long', year: 'numeric',
+    }).format(displayedMonth);
+    const year = displayedMonth.getFullYear();
+    const month = displayedMonth.getMonth();
+    const today = dateInTimezone(new Date().toISOString(), timezone);
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    calendarGrid.innerHTML = '';
+
+    for (let empty = 0; empty < firstWeekday; empty += 1) {
+      const placeholder = document.createElement('span');
+      placeholder.className = 'cal-day empty';
+      placeholder.setAttribute('aria-hidden', 'true');
+      calendarGrid.appendChild(placeholder);
+    }
+
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const summary = resultData ? summarizeDay(resultData, date) : {
+        classification: 'insufficient', windows: [], favorableHours: 0,
+        overview: 'A previsão desta data não está disponível.',
+      };
+      const status = classifications[summary.classification] || classifications.insufficient;
+      const isPast = date < today;
+      const isToday = date === today;
+      const best = summary.windows.find(window => window.classification === 'favorable');
+      const time = best
+        ? `${formatDate(best.start, timezone, { hour: '2-digit', minute: '2-digit' })}–${formatDate(best.end, timezone, { hour: '2-digit', minute: '2-digit' })}`
+        : '';
+      const label = isPast ? 'Período passado' : status.label;
+      const button = document.createElement(isPast ? 'div' : 'button');
+      button.className = [
+        'cal-day', 'pesticide-calendar-day', isPast ? 'past' : status.className,
+        isToday ? 'today' : '', selectedDate === date ? 'selected' : '',
+      ].filter(Boolean).join(' ');
+      if (!isPast) {
+        button.type = 'button';
+        button.dataset.date = date;
+        button.setAttribute('aria-pressed', String(selectedDate === date));
+        button.setAttribute('aria-label', `${dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' })}: ${label}`);
+      } else {
+        button.setAttribute('aria-label', `${dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' })}: período passado`);
+        button.setAttribute('aria-disabled', 'true');
+      }
+      button.innerHTML = `
+        <span class="cal-day-num">${day}</span>
+        <span class="pesticide-day-indicator" aria-hidden="true">${isPast ? '—' : status.icon}</span>
+        <span class="pesticide-day-label">${isPast ? 'Passado' : status.label}</span>
+        ${time && !isPast ? `<span class="pesticide-day-window">${escapeHtml(time)}</span>` : ''}`;
+      if (!isPast) {
+        button.addEventListener('click', () => selectDate(date, true));
+      }
+      calendarGrid.appendChild(button);
+    }
+  }
+
+  function selectDate(date, shouldScroll = false) {
+    selectedDate = date;
+    renderCalendar();
+    renderDayDetails(date);
+    if (shouldScroll && window.matchMedia('(max-width: 900px)').matches) {
+      byId('pesticideDayPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function renderDailyForecast(weather, date) {
     const daily = weather?.daily || {};
     const dates = daily.timestamps || [];
-    const values = daily.values || {};
-    if (!dates.length) {
-      dailyContainer.innerHTML = '<p class="pesticide-empty">Previsão diária indisponível para este talhão.</p>';
+    const index = dates.indexOf(date);
+    if (index < 0) {
+      dailyContainer.innerHTML = '<p class="pesticide-empty">Resumo diário indisponível para esta data.</p>';
       return;
     }
-    dailyContainer.innerHTML = dates.map((date, index) => {
-      const midday = new Date(`${date}T12:00:00Z`);
-      const dateLabel = Number.isNaN(midday.getTime())
-        ? date
-        : new Intl.DateTimeFormat('pt-BR', {
-          timeZone: 'UTC', weekday: 'short', day: '2-digit', month: 'short',
-        }).format(midday);
-      const code = values.weather_code?.[index];
-      return `
-        <article class="pesticide-daily-card">
-          <strong>${escapeHtml(dateLabel)}</strong>
-          <span class="pesticide-daily-condition">${escapeHtml(weatherCodes[code] || 'Condição não informada')}</span>
-          <span class="pesticide-daily-temperature">${number(values.temperature_2m_min?.[index])}–${number(values.temperature_2m_max?.[index])} °C</span>
-          <span>Chuva: ${number(values.precipitation_probability_max?.[index], 0)}% · ${number(values.precipitation_sum?.[index])} mm</span>
-          <span>Rajadas máx.: ${number(values.wind_gusts_10m_max?.[index])} km/h</span>
-        </article>`;
-    }).join('');
-  }
-
-  function renderWindow(window, timezone) {
-    const status = classifications[window.classification] || classifications.insufficient;
-    const first = window.hours?.[0];
-    const last = window.hours?.[window.hours.length - 1];
-    const temperatureValues = numericValues(window.hours, 'temperature_2m');
-    const windValues = numericValues(window.hours, 'wind_speed_10m');
-    const rainProbabilities = numericValues(window.hours, 'precipitation_probability');
-    const temperatureRange = temperatureValues.length
-      ? `${number(Math.min(...temperatureValues))}–${number(Math.max(...temperatureValues))} °C`
-      : '—';
-    const start = formatDate(window.start, timezone, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const end = formatDate(window.end, timezone, { hour: '2-digit', minute: '2-digit' });
-    const reasons = (window.reasons || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
-    const alerts = (window.alerts || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
-    return `
-      <article class="pesticide-window-card ${status.className}${selectedWindowDate === window.date && window.classification === 'favorable' ? ' is-selected' : ''}">
-        <div class="pesticide-window-card-heading">
-          <span class="pesticide-window-badge">${status.label}</span>
-          <span>${window.duration_hours}h</span>
-        </div>
-        <h3>${escapeHtml(start)} – ${escapeHtml(end)}</h3>
-        <div class="pesticide-window-conditions">
-          <span>Temperatura<strong>${temperatureRange}</strong></span>
-          <span>Vento máx.<strong>${number(windValues.length ? Math.max(...windValues) : null)} km/h</strong></span>
-          <span>Chuva máx.<strong>${number(rainProbabilities.length ? Math.max(...rainProbabilities) : null, 0)}%</strong></span>
-        </div>
-        ${reasons ? `<div class="pesticide-window-reasons"><strong>Motivos</strong><ul>${reasons}</ul></div>` : ''}
-        ${alerts ? `<div class="pesticide-window-alerts"><strong>Alertas</strong><ul>${alerts}</ul></div>` : ''}
-        ${window.missing?.length ? `<div class="pesticide-window-alerts"><strong>Dados ausentes</strong><ul>${window.missing.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
-        ${first && last ? `<button type="button" class="pesticide-window-select" data-window-date="${escapeHtml(window.date)}" data-window-start="${escapeHtml(window.start)}">Ver no horário</button>` : ''}
+    const values = daily.values || {};
+    const code = values.weather_code?.[index];
+    const min = values.temperature_2m_min?.[index];
+    const max = values.temperature_2m_max?.[index];
+    const rainProbability = values.precipitation_probability_max?.[index];
+    const rainVolume = values.precipitation_sum?.[index];
+    const gusts = values.wind_gusts_10m_max?.[index];
+    dailyContainer.innerHTML = `
+      <article class="pesticide-daily-card">
+        <strong>${escapeHtml(dateLabel(date, { weekday: 'long', day: '2-digit', month: 'long' }))}</strong>
+        <span class="pesticide-daily-condition">${escapeHtml(weatherCodes[code] || 'Condição não informada')}</span>
+        <span class="pesticide-daily-temperature">${min == null || max == null ? 'Temperatura indisponível' : `${number(min)}–${number(max)} °C`}</span>
+        <span>Chuva: ${rainProbability == null ? '—' : `${number(rainProbability, 0)}%`} · ${rainVolume == null ? '—' : `${number(rainVolume)} mm`}</span>
+        <span>Rajadas máximas: ${gusts == null ? '—' : `${number(gusts)} km/h`}</span>
       </article>`;
   }
 
-  function renderWindows(result) {
-    const timezone = result.timezone || 'UTC';
-    const windows = result.windows || [];
-    const favorableWindows = windows.filter(window => window.classification === 'favorable');
-    selectedWindowDate = favorableWindows[0]?.date || null;
-    if (!windows.length || !favorableWindows.length) {
-      const emptyMessage = result.message || 'Nenhuma janela favorável com duração mínima foi encontrada.';
-      windowsContainer.innerHTML = `<p class="pesticide-empty">${escapeHtml(emptyMessage)} Consulte os horários de atenção e os alertas antes de planejar.</p>`;
-    }
-    if (windows.length) {
-      windowsContainer.insertAdjacentHTML('beforeend', windows.map(window => renderWindow(window, timezone)).join(''));
-    }
-    windowsContainer.querySelectorAll('[data-window-date]').forEach(button => {
-      button.addEventListener('click', () => {
-        const date = button.dataset.windowDate;
-        selectedWindowDate = date;
-        windowsContainer.querySelectorAll('.pesticide-window-card.is-selected')
-          .forEach(card => card.classList.remove('is-selected'));
-        button.closest('.pesticide-window-card')?.classList.add('is-selected');
-        const item = (result.hours || []).find(hour => hour.start === button.dataset.windowStart);
-        if (!item) return;
-        const timelineItem = document.getElementById(`pesticide-hour-${(result.hours || []).indexOf(item)}`);
-        timelineItem?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      });
-    });
+  function renderWindow(window) {
+    const status = classifications[window.classification] || classifications.insufficient;
+    const temps = numericValues(window.hours, 'temperature_2m');
+    const humidity = numericValues(window.hours, 'relative_humidity_2m');
+    const winds = numericValues(window.hours, 'wind_speed_10m');
+    const gusts = numericValues(window.hours, 'wind_gusts_10m');
+    const probabilities = numericValues(window.hours, 'precipitation_probability');
+    const rainfall = numericValues(window.hours, 'precipitation');
+    const start = formatDate(window.start, timezone, { hour: '2-digit', minute: '2-digit' });
+    const end = formatDate(window.end, timezone, { hour: '2-digit', minute: '2-digit' });
+    const reasons = (window.reasons || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+    const alerts = (window.alerts || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+    const missing = (window.missing || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+    return `
+      <article class="pesticide-window-card ${status.className}">
+        <div class="pesticide-window-card-heading">
+          <span class="pesticide-window-badge"><span aria-hidden="true">${status.icon}</span> ${status.label}</span>
+          <span>${window.duration_hours}h</span>
+        </div>
+        <h4>${escapeHtml(start)}–${escapeHtml(end)}</h4>
+        <div class="pesticide-window-conditions">
+          <span>Temperatura<strong>${temps.length ? `${number(Math.min(...temps))}–${number(Math.max(...temps))} °C` : '—'}</strong></span>
+          <span>Umidade<strong>${humidity.length ? `${number(Math.min(...humidity), 0)}–${number(Math.max(...humidity), 0)}%` : '—'}</strong></span>
+          <span>Vento médio máx.<strong>${number(winds.length ? Math.max(...winds) : null)} km/h</strong></span>
+          <span>Rajadas máx.<strong>${number(gusts.length ? Math.max(...gusts) : null)} km/h</strong></span>
+          <span>Prob. chuva máx.<strong>${probabilities.length ? `${number(Math.max(...probabilities), 0)}%` : '—'}</strong></span>
+          <span>Precipitação<strong>${rainfall.length ? `${number(rainfall.reduce((sum, value) => sum + value, 0))} mm` : '—'}</strong></span>
+        </div>
+        ${reasons ? `<div class="pesticide-window-reasons"><strong>Por que recebeu esta classificação</strong><ul>${reasons}</ul></div>` : ''}
+        ${alerts ? `<div class="pesticide-window-alerts"><strong>Alertas</strong><ul>${alerts}</ul></div>` : ''}
+        ${missing ? `<div class="pesticide-window-alerts"><strong>Dados ausentes</strong><ul>${missing}</ul></div>` : ''}
+      </article>`;
   }
 
-  function renderTimeline(result) {
-    const hours = result.hours || [];
-    if (!hours.length) {
-      timelineContainer.innerHTML = '<p class="pesticide-empty">Previsão horária indisponível para exibir.</p>';
+  function renderWindows(date, windows) {
+    if (!windows.length) {
+      const message = resultData?.message || 'Não há janelas horárias disponíveis para esta data.';
+      windowsContainer.innerHTML = `<p class="pesticide-empty">${escapeHtml(message)}</p>`;
       return;
     }
-    const timezone = result.timezone || 'UTC';
-    timelineContainer.innerHTML = hours.map((hour, index) => {
+    windowsContainer.innerHTML = windows.map(renderWindow).join('');
+  }
+
+  function renderHours(date, hours) {
+    if (!hours.length) {
+      hoursContainer.innerHTML = '<p class="pesticide-empty">Não há horários previstos para esta data. Consulte a atualização da previsão ou selecione outro dia.</p>';
+      return;
+    }
+    hoursContainer.innerHTML = hours.map((hour, index) => {
       const status = classifications[hour.classification] || classifications.insufficient;
-      const code = hour.metrics.weather_code;
-      const condition = weatherCodes[code] || '';
+      const condition = weatherCodes[hour.metrics?.weather_code] || '';
+      const alerts = (hour.alerts || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      const missing = (hour.missing || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
       return `
-        <article id="pesticide-hour-${index}" class="pesticide-timeline-hour ${status.className}">
+        <article class="pesticide-timeline-hour ${status.className}">
           <div class="pesticide-timeline-time">
             <strong>${escapeHtml(formatDate(hour.start, timezone, { hour: '2-digit', minute: '2-digit' }))}</strong>
-            <span>${escapeHtml(formatDate(hour.start, timezone, { weekday: 'short', day: '2-digit', month: 'short' }))}</span>
+            <span>${index + 1}º período</span>
           </div>
-          <span class="pesticide-timeline-status">${status.label}</span>
+          <span class="pesticide-timeline-status"><span aria-hidden="true">${status.icon}</span> ${status.label}</span>
           ${condition ? `<span class="pesticide-timeline-condition">${escapeHtml(condition)}</span>` : ''}
           <div class="pesticide-timeline-metrics">${renderMetricList(hour)}</div>
-          ${(hour.alerts || []).length ? `<p class="pesticide-timeline-alert">${escapeHtml(hour.alerts.join(' '))}</p>` : ''}
-          ${(hour.missing || []).length ? `<p class="pesticide-timeline-alert">${escapeHtml(`Dados insuficientes: ${hour.missing.join(', ')}`)}</p>` : ''}
+          ${alerts ? `<p class="pesticide-timeline-alert">${alerts}</p>` : ''}
+          ${missing ? `<p class="pesticide-timeline-alert">Dados insuficientes: ${missing}</p>` : ''}
         </article>`;
     }).join('');
   }
 
+  function renderDayDetails(date) {
+    emptyPanel.hidden = true;
+    detailPanel.hidden = false;
+    const heading = byId('pesticideSelectedDate');
+    const statusElement = byId('pesticideDayStatus');
+    heading.textContent = dateLabel(date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    if (!resultData || !weatherData) {
+      statusElement.className = 'pesticide-day-status is-insufficient';
+      statusElement.textContent = 'Dados insuficientes';
+      byId('pesticideDayOverview').textContent = sourceLine.textContent || 'Previsão indisponível para esta data.';
+      byId('pesticideBestWindow').hidden = true;
+      dailyContainer.innerHTML = '<p class="pesticide-empty">Resumo diário indisponível.</p>';
+      windowsContainer.innerHTML = '<p class="pesticide-empty">Não há previsão meteorológica disponível para esta data.</p>';
+      hoursContainer.innerHTML = '<p class="pesticide-empty">Atualize a previsão ou selecione outro dia com dados.</p>';
+      return;
+    }
+
+    const summary = summarizeDay(resultData, date);
+    const hours = hoursForDate(resultData, date);
+    statusElement.className = `pesticide-day-status ${classifications[summary.classification].className}`;
+    statusElement.textContent = classifications[summary.classification].label;
+    byId('pesticideDayOverview').textContent = summary.overview;
+    const best = summary.windows.find(window => window.classification === 'favorable');
+    const bestElement = byId('pesticideBestWindow');
+    if (best) {
+      bestElement.hidden = false;
+      bestElement.textContent = `Melhor período identificado: ${formatDate(best.start, timezone, { hour: '2-digit', minute: '2-digit' })}–${formatDate(best.end, timezone, { hour: '2-digit', minute: '2-digit' })}. Confirme as condições reais e a bula antes de decidir.`;
+    } else {
+      bestElement.hidden = false;
+      bestElement.textContent = summary.classification === 'insufficient'
+        ? 'Não foi possível identificar uma janela: faltam dados horários confiáveis.'
+        : 'Nenhum período favorável com duração mínima foi identificado nesta data.';
+    }
+    renderDailyForecast(weatherData, date);
+    renderWindows(date, summary.windows);
+    renderHours(date, hours);
+  }
+
   function showNoForecast(message, refreshable) {
+    resultData = null;
+    weatherData = null;
     sourceLine.textContent = message;
     retryButton.hidden = !refreshable;
-    currentCondition.textContent = 'Previsão indisponível';
-    updatedAt.textContent = '';
+    byId('pesticideCurrentCondition').textContent = 'Previsão indisponível';
+    byId('pesticideUpdatedAt').textContent = '';
     ['pesticideTemperature', 'pesticideHumidity', 'pesticideWind', 'pesticideRain'].forEach(id => {
-      document.getElementById(id).textContent = '—';
+      byId(id).textContent = '—';
     });
-    document.getElementById('pesticideFeelsLike').textContent = '';
-    document.getElementById('pesticideRainDaily').textContent = '';
-    windowsContainer.innerHTML = `<p class="pesticide-empty">${escapeHtml(message)}</p>`;
-    dailyContainer.innerHTML = `<p class="pesticide-empty">${escapeHtml(message)}</p>`;
-    timelineContainer.innerHTML = `<p class="pesticide-empty">${escapeHtml(message)}</p>`;
+    byId('pesticideFeelsLike').textContent = '';
+    byId('pesticideRainDaily').textContent = '';
+    renderCalendar();
+    if (selectedDate) renderDayDetails(selectedDate);
+    else {
+      emptyPanel.hidden = false;
+      detailPanel.hidden = true;
+    }
   }
 
   async function analyze() {
@@ -245,7 +434,7 @@
       return;
     }
     sourceLine.textContent = 'Analisando a previsão horária do talhão...';
-    windowsContainer.setAttribute('aria-busy', 'true');
+    calendarGrid.setAttribute('aria-busy', 'true');
     try {
       const response = await fetch(`/api/pesticide-recommendations/?talhao_id=${encodeURIComponent(talhaoId)}`, {
         credentials: 'same-origin',
@@ -256,38 +445,57 @@
       if (id !== requestId) return;
       if (!response.ok) throw new Error(result.message || `Falha ao consultar a previsão (HTTP ${response.status}).`);
       if (result.talhao_id !== talhaoId) return;
-      if (result.weather) {
+      if (result.weather && Array.isArray(result.hours) && result.hours.length) {
+        resultData = result;
+        weatherData = result.weather;
+        timezone = result.timezone || result.weather?.location?.timezone || 'UTC';
         setSummary(result.weather, result);
-        renderWindows(result);
-        renderDailyForecast(result.weather);
-        renderTimeline(result);
         const quality = result.confidence === 'high' ? 'dados meteorológicos completos' : 'dados meteorológicos parciais';
-        sourceLine.textContent = `${result.talhao} · ${result.source || 'Previsão meteorológica'} · atualizada ${updatedAt.textContent.replace('Previsão atualizada em ', '')} · ${quality}`;
+        sourceLine.textContent = `${result.talhao} · ${result.source || 'Previsão meteorológica'} · ${byId('pesticideUpdatedAt').textContent.replace('Previsão atualizada em ', '')} · ${quality}`;
         retryButton.hidden = Boolean(result.weather_complete) || !result.weather_refreshable;
       } else {
-        showNoForecast(result.message || 'Previsão meteorológica ainda não disponível para este talhão.', result.weather_refreshable);
+        showNoForecast(
+          result.message || 'Não há horários futuros válidos para analisar neste talhão.',
+          result.weather_refreshable,
+        );
       }
+      renderCalendar();
+      if (selectedDate) renderDayDetails(selectedDate);
     } catch (error) {
       if (id !== requestId || error.name === 'AbortError') return;
       console.error('Falha ao analisar a previsão fitossanitária:', error);
       showNoForecast(`${error.message || 'Não foi possível carregar a análise meteorológica.'} Tente novamente.`, true);
     } finally {
-      if (id === requestId) windowsContainer.removeAttribute('aria-busy');
+      if (id === requestId) calendarGrid.removeAttribute('aria-busy');
     }
   }
 
   window.openPesticideApplication = () => {
     if (typeof window.openRegistrar !== 'function') return;
     window.openRegistrar(Number(selector.value) || undefined);
-    const type = document.getElementById('formTipo');
-    const date = document.getElementById('formData');
+    const type = byId('formTipo');
+    const date = byId('formData');
     if (type) type.value = 'Defensivo';
-    if (date && selectedWindowDate) date.value = selectedWindowDate;
+    if (date && selectedDate) date.value = selectedDate;
   };
 
   selector.addEventListener('change', () => {
-    selectedWindowDate = null;
+    selectedDate = null;
     showNoForecast('Carregando previsão do talhão selecionado...', false);
+  });
+  byId('pesticidePrev').addEventListener('click', () => {
+    displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() - 1, 1);
+    selectedDate = null;
+    renderCalendar();
+    emptyPanel.hidden = false;
+    detailPanel.hidden = true;
+  });
+  byId('pesticideNext').addEventListener('click', () => {
+    displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() + 1, 1);
+    selectedDate = null;
+    renderCalendar();
+    emptyPanel.hidden = false;
+    detailPanel.hidden = true;
   });
   window.addEventListener('goldcrop:weather-updated', event => {
     const updatedTalhaoId = Number(event.detail?.talhaoId);
@@ -304,5 +512,5 @@
     window.dispatchEvent(new CustomEvent('goldcrop:weather-refresh-requested', { detail: { talhaoId } }));
   });
 
-  renderTimeline({});
+  renderCalendar();
 })();

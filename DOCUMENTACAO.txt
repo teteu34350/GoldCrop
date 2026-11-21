@@ -185,10 +185,13 @@ APIs da agenda:
 Rota: /janela-de-ouro/
 Arquivo: templates/janela_ouro.html
 
-Este módulo analítico é independente da agenda operacional e preserva o motor
-GoldCropAnalysisEngine, a seleção de talhão, a previsão e o painel de recomendação.
-Uma recomendação pode ser encaminhada ao formulário de atividade do Calendário,
-mas só é persistida como evento após confirmação explícita do usuário.
+Este módulo analítico é voltado à adubação: indica períodos favoráveis para
+aplicar fertilizantes, considerando as condições do talhão e a previsão
+meteorológica. É independente da agenda operacional e preserva o motor
+GoldCropAnalysisEngine, a seleção de talhão, a previsão e o painel de
+recomendação. Uma recomendação pode ser encaminhada ao formulário de atividade
+do Calendário, mas só é persistida como evento após confirmação explícita do
+usuário.
 
 5.4.2. Janela Fitossanitária
 Rota: /janela-fitossanitaria/

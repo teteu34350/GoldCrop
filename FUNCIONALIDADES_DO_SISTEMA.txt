@@ -1,0 +1,133 @@
+GOLDCROP — FUNCIONALIDADES DO SISTEMA
+=====================================
+
+RESUMO
+------
+O GoldCrop é um sistema web para organizar operações agrícolas e pecuárias.
+Reúne informações da fazenda, talhões, previsão do tempo, recomendações,
+aplicações, calendário e estoque em um só lugar.
+
+ACESSO E CONTA
+--------------
+- Cadastro de usuário com dados pessoais e validação dos campos.
+- Login, encerramento da sessão e recuperação de senha.
+- Edição dos dados do perfil, como nome, e-mail e telefone.
+- Proteção das páginas e dos dados para usuários autenticados.
+
+FAZENDAS E EQUIPE
+-----------------
+- Criação de fazenda e entrada em uma fazenda existente por código de acesso.
+- Alternância entre fazendas associadas à conta.
+- Consulta e atualização de dados básicos da propriedade, como nome, cultura
+  principal e área total.
+- Visualização dos membros da fazenda e de atividades recentes.
+- Compartilhamento de acesso por código e gerenciamento de membros conforme
+  as permissões disponíveis.
+- Notificações da fazenda, com indicação e marcação de itens lidos.
+- Os dados operacionais são vinculados à fazenda selecionada.
+
+VISÃO GERAL
+-----------
+- Painel com resumo da fazenda e dos talhões.
+- Exibição de indicadores e condições meteorológicas do talhão selecionado.
+- Consulta de temperatura, chuva, vento e recomendações disponíveis.
+- Atualização dos dados meteorológicos e indicação quando não há dados
+  suficientes para análise.
+
+TALHÕES E MAPA
+--------------
+- Cadastro, edição e exclusão de talhões.
+- Registro de informações como nome, área, cultura, variedade, idade, tipo de
+  solo, coordenadas e raio aproximado.
+- Visualização dos talhões georreferenciados em mapa interativo.
+- Seleção de um talhão para consultar suas próprias condições e operações.
+- Acesso a detalhes, localização, clima, planejamentos e histórico do talhão.
+- Talhões sem coordenadas permanecem cadastrados, mas não podem ser usados
+  para análise meteorológica por localização.
+
+CLIMA E RECOMENDAÇÕES
+---------------------
+- Consulta de previsão meteorológica para as coordenadas do talhão selecionado.
+- Análise automatizada de períodos favoráveis para adubação (aplicação de
+  fertilizantes) na Janela de Ouro, com indicadores, riscos e nível de confiança.
+- Triagem fitossanitária por horário, considerando vento, rajadas, temperatura,
+  umidade, chuva e probabilidade de chuva.
+- Exibição das condições por hora e por dia, com atualização da previsão.
+- Associação das coletas e recomendações ao talhão correspondente.
+- Possibilidade de encaminhar uma recomendação para o calendário, mediante
+  confirmação do usuário.
+
+As recomendações são ferramentas de apoio à decisão: não substituem a bula,
+a avaliação das condições reais nem a orientação de um profissional. Quando
+faltam dados necessários, o sistema indica insuficiência em vez de presumir
+valores. A previsão estimada não representa leitura de sensor instalado.
+
+CALENDÁRIO
+----------
+- Agenda de atividades da fazenda com visualizações mensal, semanal, diária e
+  em lista.
+- Filtros por categoria, responsável e talhão.
+- Criação, edição, atualização de status e exclusão de atividades.
+- Registro de data, horário, prioridade, responsável e observações.
+- Vínculo opcional com talhão, aplicação, produto de estoque ou recomendação.
+
+APLICAÇÕES E HISTÓRICO
+----------------------
+- Planejamento de aplicações e registro de sua execução.
+- Registro de aplicações realizadas, com associação ao talhão e aos dados
+  informados na operação.
+- Indicadores resumidos de aplicações e aproveitamento.
+- Consulta do histórico de execuções e planejamentos, com filtros visuais.
+- Integração dos registros com o calendário e com o estoque quando aplicável.
+
+ESTOQUE
+-------
+- Cadastro de produtos e insumos, com categoria, unidade, saldo, estoque
+  mínimo, local de armazenamento e observações.
+- Registro de entradas e saídas, incluindo motivo, fornecedor, valor e talhão
+  quando informado.
+- Indicadores de produtos cadastrados, estoque baixo e itens sem saldo.
+- Filtros por categoria e busca por produto.
+- Histórico recente de movimentações.
+- Relatórios de estoque atual, estoque baixo/zerado e movimentações, preparados
+  para impressão ou salvamento em PDF pelo navegador.
+- Bloqueio de saídas que excedam o saldo disponível.
+- Associação de saídas do tipo aplicação ao talhão e ao registro de execução,
+  quando os dados correspondentes são informados.
+
+PECUÁRIA
+--------
+- Painel com quantidade de animais por categoria, produção de leite, alertas,
+  próximos eventos e resumo de estoque relacionado ao rebanho.
+- Cadastro, edição, pesquisa, filtros e arquivamento de animais, preservando
+  seu histórico.
+- Ficha individual do animal com linha do tempo de produção, manejo,
+  reprodução, alimentação, pesagens e mudanças de categoria.
+- Registro e consulta de produção de leite, com filtros por período e totais
+  agrupados por data e animal.
+- Registro de manejo, incluindo vacinas, tratamentos, pesagens e ocorrências.
+- Registro de eventos reprodutivos, acompanhamento de diagnósticos e previsão
+  de partos quando aplicável.
+- Registro de alimentação e consumo por produto.
+- Integração com o estoque agrícola: o consumo de produto registrado em manejo
+  ou alimentação gera uma saída correspondente no estoque.
+- Estimativa de autonomia de estoque com base no consumo recente e alertas
+  relacionados a estoque baixo, manejo e reprodução.
+
+SENSORES
+--------
+- A tela apresenta o módulo planejado para monitoramento de umidade do solo.
+- A leitura por sensor real e o histórico de telemetria estão indisponíveis no
+  momento; o módulo aparece bloqueado.
+
+CONFIGURAÇÕES E ADMINISTRAÇÃO
+-----------------------------
+- Consulta e edição dos dados básicos da fazenda conforme as permissões.
+- Consulta das informações meteorológicas carregadas para o talhão selecionado.
+- Administração de dados do sistema disponível para usuários autorizados pelo
+  painel administrativo do Django.
+
+OBSERVAÇÃO
+----------
+As funcionalidades dependem dos dados cadastrados, das permissões da conta,
+da disponibilidade da previsão meteorológica e da configuração do sistema.

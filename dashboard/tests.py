@@ -942,9 +942,10 @@ class CalendarioDaFazendaApiTests(TestCase):
     def test_janela_de_ouro_e_pagina_independente_no_menu(self):
         response = self.client.get(reverse("dashboard:gold_window"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Encontre o melhor momento para realizar suas aplicações")
+        self.assertContains(response, "Encontre o melhor momento para adubar sua lavoura")
+        self.assertContains(response, "antes de aplicar fertilizantes")
         self.assertContains(response, 'id="calGrid"')
-        self.assertContains(response, 'id="dayPanel" aria-label="Análise da janela selecionada"')
+        self.assertContains(response, 'id="dayPanel" aria-label="Análise da janela de adubação selecionada"')
         self.assertContains(response, 'class="card day-panel gold-window-detail"')
         self.assertNotContains(response, 'id="farmCalendarMonth"')
         self.assertContains(response, 'id="nav-gold-window"')
