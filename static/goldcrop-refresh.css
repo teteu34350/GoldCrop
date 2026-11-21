@@ -224,7 +224,6 @@ body { background: var(--bg-primary); color: var(--text-primary); }
 .gestao-dashboard-links a { color: var(--green-700); }
 .gestao-dashboard-error { color: #a1322b; }
 
-.pecuaria-farm-summary { margin-bottom: 1rem; border-radius: 16px; }
 .golden-window-section,
 .talhoes-status-section,
 .weather-section,

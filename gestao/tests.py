@@ -13,8 +13,6 @@ from django.utils import timezone
 from django.urls import reverse
 
 from dashboard.models import EventoCalendario, Fazenda, MovimentacaoEstoque, Produto, Talhao
-from pecuaria.models import Animal, ProducaoLeite
-
 from .models import EquipamentoAgricola, LancamentoFinanceiro, ServicoFazenda
 
 
@@ -102,89 +100,73 @@ class GestaoWorkflowTests(TestCase):
         self.assertEqual(movement.tipo, MovimentacaoEstoque.Tipo.SAIDA)
         self.assertEqual(movement.quantidade, Decimal('320'))
 
-    def test_ai_animal_count_uses_active_farm_data_without_openrouter(self):
-        Animal.objects.create(
-            fazenda=self.farm, identificacao='VACA-01',
-            categoria='VACA_LACTACAO', sexo='F',
+    def test_ai_coffee_variety_and_area_queries_use_active_farm_records(self):
+        Talhao.objects.create(
+            fazenda=self.farm, nome='Talhão 01', cultura='Café',
+            variedade='Mundo Novo', area_hectares=Decimal('4.5'),
         )
-        Animal.objects.create(
-            fazenda=self.farm, identificacao='VACA-02',
-            categoria='VACA_SECA', sexo='F', status='VENDIDO',
-        )
-        Animal.objects.create(
-            fazenda=self.farm, identificacao='BEZERRA-01',
-            categoria='BEZERRA', sexo='F', arquivado=True,
+        Talhao.objects.create(
+            fazenda=self.farm, nome='Talhão 02', cultura='Café',
+            variedade='Catuaí', area_hectares=Decimal('2.5'),
         )
         other_farm = Fazenda.objects.create(
-            produtor=self.user,
-            nome='Outra Fazenda',
-            cep='37000001',
-            estado='MG',
-            cidade='Varginha',
-            bairro='Zona Rural',
-            area_hectares=5,
-            quantidade_talhoes=1,
-            culturas=['Café'],
-            tipo_cultivo='Convencional',
-            irrigacao='Gotejamento',
+            produtor=self.user, nome='Outra Fazenda', cep='37000001',
+            estado='MG', cidade='Varginha', bairro='Zona Rural',
+            area_hectares=5, quantidade_talhoes=1, culturas=['Café'],
+            tipo_cultivo='Convencional', irrigacao='Gotejamento',
         )
-        Animal.objects.create(
-            fazenda=other_farm, identificacao='VACA-03',
-            categoria='VACA_LACTACAO', sexo='F',
+        Talhao.objects.create(
+            fazenda=other_farm, nome='Talhão alheio', cultura='Café',
+            variedade='Bourbon', area_hectares=Decimal('50'),
         )
 
         with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
             'gestao.views.urllib.request.urlopen',
         ) as openrouter:
-            for message, expected in (
-                ('Quantos animais eu tenho?', '1 animal ativo'),
-                ('Me diga quantas vacas eu tenho', '1 vaca ativa'),
-            ):
-                with self.subTest(message=message):
-                    response = self.post_json('gestao:assistente_api', {'message': message})
-                    self.assertEqual(response.status_code, 200)
-                    self.assertIn(expected, response.json()['reply'])
+            varieties = self.post_json('gestao:assistente_api', {
+                'message': 'Quais variedades de café estão cadastradas?',
+            })
+            area = self.post_json('gestao:assistente_api', {
+                'message': 'Qual é a área plantada nos talhões?',
+            })
+
+        self.assertEqual(varieties.status_code, 200)
+        self.assertIn('Mundo Novo', varieties.json()['reply'])
+        self.assertIn('Catuaí', varieties.json()['reply'])
+        self.assertNotIn('Bourbon', varieties.json()['reply'])
+        self.assertEqual(area.status_code, 200)
+        self.assertIn('7 ha', area.json()['reply'])
         openrouter.assert_not_called()
 
-    def test_ai_milk_production_queries_are_local_and_farm_scoped(self):
-        today = timezone.localdate()
-        ProducaoLeite.objects.create(
-            fazenda=self.farm, data=today, quantidade=Decimal('12'),
-        )
-        ProducaoLeite.objects.create(
-            fazenda=self.farm, data=today - timedelta(days=3), quantidade=Decimal('5'),
-        )
-        ProducaoLeite.objects.create(
-            fazenda=self.farm,
-            data=today.replace(day=1) - timedelta(days=1),
-            quantidade=Decimal('100'),
-        )
-        other_farm = Fazenda.objects.create(
-            produtor=self.user,
-            nome='Outra Fazenda',
-            cep='37000001',
-            estado='MG',
-            cidade='Varginha',
-            bairro='Zona Rural',
-            area_hectares=5,
-            quantidade_talhoes=1,
-            culturas=['Café'],
-            tipo_cultivo='Convencional',
-            irrigacao='Gotejamento',
-        )
-        ProducaoLeite.objects.create(
-            fazenda=other_farm, data=today, quantidade=Decimal('50'),
-        )
-
+    def test_ai_coffee_yield_query_does_not_invent_production_values(self):
         with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
             'gestao.views.urllib.request.urlopen',
         ) as openrouter:
             response = self.post_json('gestao:assistente_api', {
-                'message': 'Quantos litros de leite produziu esta semana?',
+                'message': 'Qual foi a produtividade em sacas?',
             })
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('17 litros', response.json()['reply'])
+        self.assertIn('não possui registros estruturados de produção', response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_coffee_calendar_query_lists_upcoming_flowering(self):
+        flowering = EventoCalendario.objects.create(
+            fazenda=self.farm,
+            titulo='Florada do Talhão 01',
+            data=timezone.localdate() + timedelta(days=4),
+            categoria=EventoCalendario.Categoria.FLORADA,
+            status=EventoCalendario.Status.PLANEJADA,
+        )
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Quando será a florada?',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(flowering.titulo, response.json()['reply'])
         openrouter.assert_not_called()
 
     def test_ai_inventory_questions_distinguish_balances_from_low_stock(self):
@@ -297,7 +279,7 @@ class GestaoWorkflowTests(TestCase):
     def test_ai_activity_write_requires_confirmation_and_uses_farm_plot(self):
         talhao = Talhao.objects.create(fazenda=self.farm, nome='Talhão 01', cultura='Café')
         proposal = self.post_json('gestao:assistente_api', {
-            'message': 'Plantei milho no Talhão 01',
+            'message': 'Planeje a florada do Talhão 01',
         })
 
         self.assertEqual(proposal.status_code, 200)
@@ -309,7 +291,24 @@ class GestaoWorkflowTests(TestCase):
         activity = EventoCalendario.objects.get()
         self.assertEqual(activity.fazenda, self.farm)
         self.assertEqual(activity.talhao, talhao)
-        self.assertEqual(activity.categoria, EventoCalendario.Categoria.PLANTIO)
+        self.assertEqual(activity.categoria, EventoCalendario.Categoria.FLORADA)
+        self.assertEqual(activity.status, EventoCalendario.Status.PLANEJADA)
+
+    def test_ai_plans_coffee_operations_in_the_matching_calendar_categories(self):
+        cases = (
+            ('Planeje a pós-colheita', EventoCalendario.Categoria.POS_COLHEITA),
+            ('Registre a aplicação de adubo', EventoCalendario.Categoria.ADUBACAO),
+            ('Planeje o controle fitossanitário', EventoCalendario.Categoria.PULVERIZACAO),
+        )
+        for message, category in cases:
+            with self.subTest(message=message):
+                proposal = self.post_json('gestao:assistente_api', {'message': message})
+                self.assertEqual(proposal.status_code, 200)
+                self.assertTrue(proposal.json()['confirmation_required'])
+
+                confirmed = self.post_json('gestao:assistente_api', {'action': 'confirm'})
+                self.assertEqual(confirmed.status_code, 200)
+                self.assertEqual(EventoCalendario.objects.latest('id').categoria, category)
 
     def test_general_openrouter_message_does_not_include_farm_data(self):
         response_body = json.dumps({
@@ -343,6 +342,8 @@ class GestaoWorkflowTests(TestCase):
         self.assertContains(dashboard, 'gc-mobile-nav')
         self.assertContains(dashboard, 'gc-nav-group')
         self.assertContains(dashboard, '?pergunta=')
+        self.assertNotContains(dashboard, 'nav-pecuaria')
+        self.assertNotContains(dashboard, 'Resumo da criação')
 
     def test_reports_include_five_recent_financial_movements_for_current_farm(self):
         today = timezone.localdate()
@@ -420,3 +421,14 @@ class GestaoWorkflowTests(TestCase):
         self.assertEqual(self.farm.servicos.count(), 1)
         self.assertEqual(self.farm.equipamentos.count(), 1)
         self.assertEqual(self.farm.eventos_calendario.count(), 1)
+
+    def test_safra_api_rejects_noncoffee_culture(self):
+        response = self.post_json('gestao:safras_api', {
+            'cultura': 'Milho',
+            'ano_safra': '2026/2027',
+            'area_hectares': '8.5',
+            'talhoes': [],
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.farm.safras.count(), 0)

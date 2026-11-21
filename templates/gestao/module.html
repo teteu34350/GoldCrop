@@ -85,7 +85,7 @@
         <h2>Cadastrar safra</h2>
         <form class="gestao-form" data-api="{% url 'gestao:safras_api' %}">
           {% csrf_token %}
-          <label>Cultura<input class="form-input" name="cultura" maxlength="100" required /></label>
+          <label>Cultura<input class="form-input" name="cultura" value="Café" maxlength="100" readonly required /></label>
           <div class="gestao-form-row">
             <label>Variedade<input class="form-input" name="variedade" maxlength="100" /></label>
             <label>Ano da safra<input class="form-input" name="ano_safra" placeholder="2026/2027" maxlength="20" required /></label>

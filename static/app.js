@@ -161,7 +161,7 @@ async function loadDatabaseState() {
       return {
         ...item,
         variety: item.variety || '',
-        age: item.age ? `${item.age} anos` : '',
+        age: item.age !== null && item.age !== undefined ? `${item.age} anos` : '',
         soil: item.soil || 'Não informado',
         sensor: item.sensor || 'Não disponível',
         temp: bestRecommendation?.metrics?.temperature ?? null,
@@ -1521,7 +1521,7 @@ function openCadastrarTalhaoModal() {
     return;
   }
   document.getElementById('cadastroTalhaoForm')?.reset();
-  document.getElementById('novoTalhaoCultura').value = FARM.culture || '';
+  document.getElementById('novoTalhaoCultura').value = 'Café';
   document.getElementById('modalCadastrarTalhao').style.display = 'flex';
   document.body.style.overflow = 'hidden';
   window.setTimeout(() => {
@@ -1546,6 +1546,9 @@ function openEditarTalhaoModal(talhaoId) {
   document.getElementById('editarTalhaoNome').value = t.name;
   document.getElementById('editarTalhaoArea').value = t.area ?? '';
   document.getElementById('editarTalhaoCultura').value = t.culture || '';
+  document.getElementById('editarTalhaoVariedade').value = t.variety || '';
+  const ageYears = Number.parseInt(t.age, 10);
+  document.getElementById('editarTalhaoIdade').value = Number.isNaN(ageYears) ? '' : ageYears;
   document.getElementById('editarTalhaoLatitude').value = t.latitude ?? '';
   document.getElementById('editarTalhaoLongitude').value = t.longitude ?? '';
   document.getElementById('editarTalhaoRaio').value = t.radius || 80;
@@ -1652,7 +1655,8 @@ async function cadastrarTalhao(e) {
   try {
     const name = document.getElementById('novoTalhaoNome').value.trim();
     const area = Number(document.getElementById('novoTalhaoArea').value);
-    const culture = document.getElementById('novoTalhaoCultura').value.trim();
+    const variety = document.getElementById('novoTalhaoVariedade').value.trim();
+    const age = document.getElementById('novoTalhaoIdade').value;
     const latitude = Number(document.getElementById('novoTalhaoLatitude').value);
     const longitude = Number(document.getElementById('novoTalhaoLongitude').value);
     const radius = Number(document.getElementById('novoTalhaoRaio').value) || 80;
@@ -1661,7 +1665,10 @@ async function cadastrarTalhao(e) {
       return;
     }
 
-    const response = await apiRequest('/api/talhoes/', { method: 'POST', body: JSON.stringify({ nome: name, area, cultura: culture, latitude, longitude, raio: radius }) });
+    const response = await apiRequest('/api/talhoes/', { method: 'POST', body: JSON.stringify({
+      nome: name, area, cultura: 'Café', variedade: variety, idade_anos: age || null,
+      latitude, longitude, raio: radius,
+    }) });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       showToast(error.message || 'Não foi possível salvar o talhão no banco.', 'error');
@@ -1690,7 +1697,9 @@ async function atualizarTalhao(e) {
     const payload = {
       nome: document.getElementById('editarTalhaoNome').value.trim(),
       area: Number(document.getElementById('editarTalhaoArea').value),
-      cultura: document.getElementById('editarTalhaoCultura').value.trim(),
+      cultura: 'Café',
+      variedade: document.getElementById('editarTalhaoVariedade').value.trim(),
+      idade_anos: document.getElementById('editarTalhaoIdade').value || null,
       latitude: Number(document.getElementById('editarTalhaoLatitude').value),
       longitude: Number(document.getElementById('editarTalhaoLongitude').value),
       raio: Number(document.getElementById('editarTalhaoRaio').value) || 80,
@@ -1714,6 +1723,8 @@ async function atualizarTalhao(e) {
       latitude: updated.latitude ?? talhao.latitude,
       longitude: updated.longitude ?? talhao.longitude,
       radius: updated.radius ?? talhao.radius,
+      variety: updated.variety ?? talhao.variety,
+      age: updated.age !== null && updated.age !== undefined ? `${updated.age} anos` : '',
     });
 
     selectedTalhaoRefId = id;
@@ -2126,7 +2137,7 @@ function renderSettings() {
           </div>
           <div class="form-group" style="margin-bottom:.75rem">
             <label class="form-label" for="farmSettingCulture">Cultura principal</label>
-            <input class="form-input" id="farmSettingCulture" value="${escapeHtml(FARM.culture || '')}" ${canManage ? '' : 'readonly'} />
+            <input class="form-input" id="farmSettingCulture" value="Café" readonly />
           </div>
           <div class="form-group">
             <label class="form-label" for="farmSettingArea">Área total (ha)</label>

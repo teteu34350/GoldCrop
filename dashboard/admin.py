@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin
 
 from .models import (
@@ -35,8 +36,25 @@ class PerfilProdutorAdmin(admin.ModelAdmin):
 @admin.register(Fazenda)
 class FazendaAdmin(admin.ModelAdmin):
     list_display = ("nome", "produtor", "cidade", "estado", "area_hectares", "criada_em")
-    list_filter = ("estado", "tipo_cultivo", "irrigacao")
+    list_filter = ("estado", "irrigacao")
     search_fields = ("nome", "produtor__email", "cidade")
+
+    class FazendaAdminForm(forms.ModelForm):
+        class Meta:
+            model = Fazenda
+            fields = "__all__"
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            choices = [
+                choice for choice in self.fields["tipo_cultivo"].choices
+                if choice[0] != Fazenda.TipoCultivo.ILPF
+            ]
+            if self.instance.pk and self.instance.tipo_cultivo == Fazenda.TipoCultivo.ILPF:
+                choices.append((Fazenda.TipoCultivo.ILPF, "Registro legado"))
+            self.fields["tipo_cultivo"].choices = choices
+
+    form = FazendaAdminForm
 
 
 @admin.register(MembroFazenda)

@@ -4,7 +4,6 @@ import re
 import unicodedata
 import urllib.error
 import urllib.request
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -17,8 +16,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from dashboard.models import EventoCalendario, MovimentacaoEstoque, Produto, Talhao
-from dashboard.views import _current_farm, _has_farm_permission
-from pecuaria.models import Animal, ProducaoLeite
+from dashboard.views import _current_farm, _has_farm_permission, _is_coffee_culture
 
 from .models import EquipamentoAgricola, LancamentoFinanceiro, Safra, ServicoFazenda
 
@@ -211,7 +209,10 @@ def safras_api(request):
     if error:
         return error
     if request.method == 'GET':
-        rows = Safra.objects.filter(fazenda=farm).prefetch_related('talhoes')
+        rows = [
+            row for row in Safra.objects.filter(fazenda=farm).prefetch_related('talhoes')
+            if _is_coffee_culture(row.cultura)
+        ][:200]
         return JsonResponse({'ok': True, 'safras': [{
             'id': row.id, 'cultura': row.cultura, 'variedade': row.variedade,
             'ano_safra': row.ano_safra, 'area_hectares': str(row.area_hectares),
@@ -231,8 +232,8 @@ def safras_api(request):
     cultura = str(data.get('cultura', '')).strip()
     ano_safra = str(data.get('ano_safra', '')).strip()
     talhao_ids = data.get('talhoes', [])
-    if not cultura or not ano_safra or not isinstance(talhao_ids, list):
-        return _error('Informe cultura, ano da safra e talhões válidos.')
+    if not _is_coffee_culture(cultura) or not ano_safra or not isinstance(talhao_ids, list):
+        return _error('Informe uma safra de café, o ano da safra e talhões válidos.')
     try:
         parsed_ids = [int(value) for value in talhao_ids]
     except (TypeError, ValueError):
@@ -241,7 +242,7 @@ def safras_api(request):
     if len(talhoes) != len(set(parsed_ids)):
         return _error('Um ou mais talhões não pertencem a esta fazenda.')
     row = Safra(
-        fazenda=farm, cultura=cultura, variedade=str(data.get('variedade', '')).strip(),
+        fazenda=farm, cultura='Café', variedade=str(data.get('variedade', '')).strip(),
         ano_safra=ano_safra, area_hectares=area, data_plantio=data_plantio,
         colheita_prevista=colheita, status=data.get('status') or Safra.Status.PLANEJAMENTO,
         observacao=str(data.get('observacao', '')).strip(), criado_por=request.user,
@@ -507,82 +508,147 @@ def _stage_assistant_action(request, farm, kind, payload, description, source_me
     })
 
 
+def _coffee_assistant_reply(farm, normalized):
+    today = timezone.localdate()
+    coffee_plots = [
+        plot for plot in Talhao.objects.filter(fazenda=farm, ativo=True)
+        if _is_coffee_culture(plot.cultura)
+    ]
+    if re.search(r'\b(variedade|variedades|cultivar|cultivares)\b', normalized):
+        plot_varieties = [
+            (plot.nome, plot.variedade) for plot in coffee_plots if plot.variedade
+        ]
+        harvest_varieties = [
+            row.variedade for row in Safra.objects.filter(fazenda=farm).exclude(variedade='')
+            if _is_coffee_culture(row.cultura)
+        ]
+        varieties = sorted({
+            f'{name}: {variety}' for name, variety in plot_varieties
+        } | set(harvest_varieties))
+        reply = ', '.join(varieties[:12]) if varieties else 'Nenhuma variedade foi informada nos talhões ou safras.'
+        return JsonResponse({'ok': True, 'reply': f'Variedades cadastradas: {reply}.'})
+
+    if re.search(r'\b(hectare|hectares|area|plantada)\b', normalized):
+        areas = [plot.area_hectares for plot in coffee_plots if plot.area_hectares is not None]
+        if not areas:
+            return JsonResponse({'ok': True, 'reply': 'Não há área informada nos talhões de café desta fazenda.'})
+        area = sum(areas, Decimal('0'))
+        return JsonResponse({
+            'ok': True,
+            'reply': f'A área informada nos talhões de café é {_format_quantity(area)} ha.',
+        })
+
+    if re.search(r'\b(talhao|talhoes|cafezal|cafezais)\b', normalized) and re.search(
+        r'\b(quantos?|quantas?|total|liste|mostre|quais|tem|possuo)\b', normalized,
+    ):
+        if re.search(r'\b(liste|mostre|quais)\b', normalized):
+            names = [plot.nome for plot in sorted(coffee_plots, key=lambda plot: plot.nome)[:20]]
+            reply = ', '.join(names) if names else 'Nenhum talhão ativo está cadastrado.'
+            return JsonResponse({'ok': True, 'reply': f'Talhões de café: {reply}.'})
+        count = len(coffee_plots)
+        noun = 'talhão ativo' if count == 1 else 'talhões ativos'
+        return JsonResponse({'ok': True, 'reply': f'A fazenda tem {count} {noun} cadastrados.'})
+
+    if re.search(r'\b(safra|safras|ano agricola)\b', normalized):
+        rows = [
+            row for row in Safra.objects.filter(fazenda=farm).order_by('-ano_safra')
+            if _is_coffee_culture(row.cultura)
+        ][:8]
+        if not rows:
+            return JsonResponse({'ok': True, 'reply': 'Nenhuma safra de café foi cadastrada nesta fazenda.'})
+        summaries = [
+            f'{row.ano_safra}: {row.variedade or "variedade não informada"}, '
+            f'{_format_quantity(row.area_hectares)} ha, {row.get_status_display()}'
+            for row in rows
+        ]
+        return JsonResponse({'ok': True, 'reply': f'Safras de café cadastradas: {"; ".join(summaries)}.'})
+
+    stages = (
+        (
+            EventoCalendario.Categoria.FLORADA,
+            ('florada', 'florescimento'),
+            'florada',
+        ),
+        (
+            EventoCalendario.Categoria.FORMACAO_FRUTOS,
+            ('formacao dos frutos', 'formacao de frutos', 'frutificacao'),
+            'formação dos frutos',
+        ),
+        (
+            EventoCalendario.Categoria.MATURACAO,
+            ('maturacao',),
+            'maturação',
+        ),
+        (
+            EventoCalendario.Categoria.POS_COLHEITA,
+            ('pos colheita', 'pos-colheita', 'secagem', 'beneficiamento'),
+            'pós-colheita',
+        ),
+        (
+            EventoCalendario.Categoria.COLHEITA,
+            ('colheita',),
+            'colheita',
+        ),
+        (
+            EventoCalendario.Categoria.ADUBACAO,
+            ('adubacao', 'adubar', 'adubo'),
+            'adubação',
+        ),
+        (
+            EventoCalendario.Categoria.IRRIGACAO,
+            ('irrigacao', 'irrigar'),
+            'irrigação',
+        ),
+        (
+            EventoCalendario.Categoria.PULVERIZACAO,
+            ('pulverizacao', 'aplicacao fitossanitaria', 'controle fitossanitario'),
+            'controle fitossanitário',
+        ),
+        (
+            EventoCalendario.Categoria.APLICACAO,
+            ('aplicacao',),
+            'aplicação',
+        ),
+    )
+    requested_stage = next(
+        (stage for stage in stages if any(term in normalized for term in stage[1])),
+        None,
+    )
+    if requested_stage:
+        category, terms, label = requested_stage
+        events = EventoCalendario.objects.filter(
+            fazenda=farm, categoria=category, data__gte=today,
+        ).exclude(status=EventoCalendario.Status.CANCELADA).select_related('talhao').order_by('data')[:5]
+        if not events:
+            return JsonResponse({'ok': True, 'reply': f'Não há registros futuros de {label} no calendário desta fazenda.'})
+        summaries = [
+            f'{event.data:%d/%m/%Y}: {event.titulo}'
+            + (f' ({event.talhao.nome})' if event.talhao else '')
+            for event in events
+        ]
+        return JsonResponse({'ok': True, 'reply': f'Próximos registros de {label}: {"; ".join(summaries)}.'})
+
+    if re.search(r'\b(producao|produtividade|sacas|rendimento)\b', normalized):
+        return JsonResponse({
+            'ok': True,
+            'reply': 'O GoldCrop não possui registros estruturados de produção colhida em sacas e não calcula produtividade. Use o calendário para registrar a colheita e as safras para acompanhar área, variedade e talhões.',
+        })
+    return None
+
+
 def _local_assistant_reply(request, farm, message):
     normalized = _normalize(message)
     is_question = '?' in message or re.match(
         r'^(?:(?:me\s+)?(?:diga|fala|informe)\s+)?'
-        r'(quant[oa]s?|qual|quais|como|mostre|liste|consulte|tem)\b',
+        r'(quant[oa]s?|qual|quais|quando|como|mostre|liste|consulte|tem)\b',
         normalized,
     )
     month_start = timezone.localdate().replace(day=1)
 
-    if is_question and re.search(
-        r'\b(animal|animais|rebanho|gado|vacas?|novilhas?|bezerros?|bezerras?|touros?)\b',
-        normalized,
-    ):
-        active_animals = Animal.objects.filter(fazenda=farm, status='ATIVO', arquivado=False)
-        category_counts = {
-            'vaca': ('VACA_LACTACAO', 'VACA_SECA'),
-            'novilha': ('NOVILHA',),
-            'bezerro': ('BEZERRO', 'BEZERRA'),
-            'bezerra': ('BEZERRA',),
-            'touro': ('TOURO',),
-        }
-        category = next(
-            (key for key in category_counts if re.search(rf'\b{key}s?\b', normalized)),
-            None,
-        )
-        if category:
-            count = active_animals.filter(categoria__in=category_counts[category]).count()
-            singular, plural, gender = {
-                'vaca': ('vaca', 'vacas', 'f'),
-                'novilha': ('novilha', 'novilhas', 'f'),
-                'bezerro': ('bezerro', 'bezerros', 'm'),
-                'bezerra': ('bezerra', 'bezerras', 'f'),
-                'touro': ('touro', 'touros', 'm'),
-            }[category]
-            noun = singular if count == 1 else plural
-            if gender == 'f':
-                adjective = 'ativa' if count == 1 else 'ativas'
-                participle = 'cadastrada' if count == 1 else 'cadastradas'
-            else:
-                adjective = 'ativo' if count == 1 else 'ativos'
-                participle = 'cadastrado' if count == 1 else 'cadastrados'
-            return JsonResponse({
-                'ok': True,
-                'reply': f'A fazenda atual tem {count} {noun} {adjective} {participle} no GoldCrop.',
-            })
-
-        count = active_animals.count()
-        noun = 'animal' if count == 1 else 'animais'
-        adjective = 'ativo' if count == 1 else 'ativos'
-        participle = 'cadastrado' if count == 1 else 'cadastrados'
-        return JsonResponse({
-            'ok': True,
-            'reply': f'A fazenda atual tem {count} {noun} {adjective} {participle} no GoldCrop.',
-        })
-
-    if is_question and re.search(r'\b(leite|litros?)\b', normalized) and re.search(
-        r'\b(producao|produziu|produzimos|ordenha|litros?)\b',
-        normalized,
-    ):
-        today = timezone.localdate()
-        if re.search(r'\b(semana|semanal|ultimos?\s+7\s+dias)\b', normalized):
-            start_date = today - timedelta(days=6)
-            period = 'nos últimos 7 dias'
-        elif re.search(r'\b(mes|mensal)\b', normalized):
-            start_date = today.replace(day=1)
-            period = 'neste mês'
-        else:
-            start_date = today
-            period = 'hoje'
-        total = ProducaoLeite.objects.filter(
-            fazenda=farm, data__gte=start_date, data__lte=today,
-        ).aggregate(total=Sum('quantidade'))['total'] or Decimal('0')
-        return JsonResponse({
-            'ok': True,
-            'reply': f'A produção de leite registrada {period} soma {total} litros.',
-        })
+    if is_question:
+        coffee_reply = _coffee_assistant_reply(farm, normalized)
+        if coffee_reply:
+            return coffee_reply
 
     if is_question and re.search(r'\b(servico|servicos|pendente|pendentes)\b', normalized):
         count = ServicoFazenda.objects.filter(
@@ -605,14 +671,6 @@ def _local_assistant_reply(request, farm, message):
             noun = 'equipamento ativo cadastrado' if count == 1 else 'equipamentos ativos cadastrados'
             reply = f'A fazenda tem {count} {noun} no GoldCrop.'
         return JsonResponse({'ok': True, 'reply': reply})
-
-    if not is_question and re.search(
-        r'\b(adicionar|adicione|inserir|insira|cadastrar|cadastre|registrar|registre)\b', normalized,
-    ) and re.search(r'\b(animal|animais|rebanho|gado|vacas?|novilhas?|bezerros?|bezerras?|touros?)\b', normalized):
-        return JsonResponse({
-            'ok': True,
-            'reply': 'Entendi que você quer cadastrar animais. Cada animal precisa de um brinco/identificação única, categoria e sexo; por isso não é seguro registrar um lote apenas pela quantidade. Complete esses dados na área Pecuária e eu posso ajudar com consultas sobre o rebanho.',
-        })
 
     if is_question and re.search(r'\b(quanto|total|soma|saldo)\b', normalized):
         if re.search(r'\b(gastei|gasto|despesa|despesas|compras?)\b', normalized):
@@ -736,39 +794,56 @@ def _local_assistant_reply(request, farm, message):
         }]}
         return _stage_assistant_action(request, farm, 'estoque', payload, f'dar baixa de {quantity} {product.unidade} em {product.nome}', message)
 
-    if not is_question and re.search(r'\b(plantei|apliquei|colhi|irriguei|abasteci)\b', normalized):
+    coffee_activities = (
+        (r'\b(florada|florescimento)\b', EventoCalendario.Categoria.FLORADA, 'Florada'),
+        (r'\b(formacao (?:dos|de) frutos|frutificacao)\b', EventoCalendario.Categoria.FORMACAO_FRUTOS, 'Formação dos frutos'),
+        (r'\b(maturacao)\b', EventoCalendario.Categoria.MATURACAO, 'Maturação'),
+        (r'\b(pos[- ]colheita|secagem|beneficiamento)\b', EventoCalendario.Categoria.POS_COLHEITA, 'Pós-colheita'),
+        (r'\b(colheita|colhi|colher)\b', EventoCalendario.Categoria.COLHEITA, 'Colheita'),
+        (r'\b(adubacao|adubei|adubar|adubo)\b', EventoCalendario.Categoria.ADUBACAO, 'Adubação'),
+        (r'\b(irrigacao|irriguei|irrigar)\b', EventoCalendario.Categoria.IRRIGACAO, 'Irrigação'),
+        (r'\b(pulverizacao|aplicacao fitossanitaria|controle fitossanitario|defensivo)\b', EventoCalendario.Categoria.PULVERIZACAO, 'Controle fitossanitário'),
+        (r'\b(apliquei|aplicacao)\b', EventoCalendario.Categoria.APLICACAO, 'Aplicação'),
+        (r'\b(plantio|plantei|plantar)\b', EventoCalendario.Categoria.PLANTIO, 'Plantio'),
+    )
+    activity = next(
+        (item for item in coffee_activities if re.search(item[0], normalized)),
+        None,
+    )
+    action_intent = re.search(
+        r'\b(plantei|apliquei|colhi|irriguei|adubei|registrei|registre|registrar|anote|anotar|'
+        r'adicione|adicionar|planeje|planejar|agende|agendar|programe|programar|fiz|realizei)\b',
+        normalized,
+    )
+    if not is_question and activity and action_intent:
         if not _has_farm_permission(farm, request.user, 'record'):
             return _error('Você não tem permissão para propor registros nesta fazenda.', 403)
-        action = re.search(r'\b(plantei|apliquei|colhi|irriguei|abasteci)\b', normalized).group(1)
-        event_type = {
-            'plantei': EventoCalendario.Categoria.PLANTIO,
-            'apliquei': EventoCalendario.Categoria.APLICACAO,
-            'colhi': EventoCalendario.Categoria.COLHEITA,
-            'irriguei': EventoCalendario.Categoria.IRRIGACAO,
-            'abasteci': EventoCalendario.Categoria.TAREFA,
-        }[action]
-        activity_name = {
-            'plantei': 'Plantio',
-            'apliquei': 'Aplicação',
-            'colhi': 'Colheita',
-            'irriguei': 'Irrigação',
-            'abasteci': 'Abastecimento',
-        }[action]
+        event_type, activity_name = activity[1], activity[2]
+        planned = bool(re.search(r'\b(planeje|planejar|agende|agendar|programe|programar)\b', normalized))
         talhao_match = re.search(r'\b(talh[aã]o\s+[\w-]+)\b', message, re.IGNORECASE)
         talhao = None
         if talhao_match:
             talhao = Talhao.objects.filter(fazenda=farm, nome__iexact=talhao_match.group(1)).first()
             if not talhao:
                 return JsonResponse({'ok': True, 'reply': f'Não encontrei {talhao_match.group(1)} nesta fazenda. Confira o nome do talhão.'})
-        details = re.sub(r'\b(eu|plantei|apliquei|colhi|irriguei|abasteci|hoje|ontem|no|na|do|da|talh[aã]o\s+[\w-]+)\b', ' ', message, flags=re.IGNORECASE)
+        details = re.sub(
+            r'\b(eu|plantei|apliquei|colhi|irriguei|adubei|registrei|registre|registrar|anote|anotar|'
+            r'adicione|adicionar|planeje|planejar|agende|agendar|programe|programar|hoje|ontem|'
+            r'no|na|do|da|florada|florescimento|formacao (?:dos|de) frutos|frutificacao|maturacao|'
+            r'pos colheita|secagem|beneficiamento|colheita|adubacao|irrigacao|pulverizacao|'
+            r'plantio|talh[aã]o\s+[\w-]+|fiz|realizei)\b',
+            ' ', normalized,
+        )
         details = re.sub(r'\s+', ' ', details).strip(' ,.!?')
-        title = f'{activity_name} registrado' + (f': {details[:100]}' if details else '')
+        title = f'{activity_name} {"planejada" if planned else "registrada"}' + (f': {details[:100]}' if details else '')
+        event_date = re.search(r'\b\d{4}-\d{2}-\d{2}\b', normalized)
         return _stage_assistant_action(request, farm, 'atividade', {
             'titulo': title[:160],
             'categoria': event_type,
-            'data': timezone.localdate().isoformat(),
+            'data': event_date.group(0) if event_date else timezone.localdate().isoformat(),
+            'status': EventoCalendario.Status.PLANEJADA if planned else EventoCalendario.Status.CONCLUIDA,
             'talhao_id': talhao.id if talhao else None,
-        }, f'registrar {activity_name.lower()}' + (f' em {talhao.nome}' if talhao else ''), message)
+        }, f'{"planejar" if planned else "registrar"} {activity_name.lower()}' + (f' em {talhao.nome}' if talhao else ''), message)
 
     return None
 
@@ -845,7 +920,7 @@ def _confirm_assistant_action(request, farm):
             titulo=payload['titulo'],
             data=parse_date(payload['data']),
             categoria=payload['categoria'],
-            status=EventoCalendario.Status.CONCLUIDA,
+            status=payload.get('status', EventoCalendario.Status.CONCLUIDA),
             prioridade=EventoCalendario.Prioridade.MEDIA,
             talhao=talhao,
             origem=EventoCalendario.Origem.USUARIO,
@@ -891,7 +966,7 @@ def assistente_api(request):
     body = json.dumps({
         'model': model,
         'messages': [
-            {'role': 'system', 'content': 'Você é o assistente do GoldCrop. Responda em português brasileiro, de forma prática e concisa. Você não recebe dados da fazenda e não deve inventar consultas ou alterações no banco.'},
+            {'role': 'system', 'content': 'Você é o assistente do GoldCrop, plataforma especializada em cafeicultura. Responda em português brasileiro, de forma prática e concisa. Não afirme que consultou dados da fazenda, não invente cálculos agronômicos nem alterações no banco; para dados específicos, oriente a consulta aos módulos de talhões, safras, calendário, estoque e gestão.'},
             {'role': 'user', 'content': message[:4000]},
         ],
         'temperature': 0.3,

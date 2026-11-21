@@ -8,10 +8,10 @@
 
 ## 1. Visão geral
 
-O GoldCrop é uma aplicação web em português para organizar operações de
-fazendas agrícolas e pecuárias. Reúne cadastro de fazenda e equipe, talhões,
+O GoldCrop é uma aplicação web em português especializada em propriedades
+produtoras de café. Reúne cadastro de fazenda e equipe, talhões de café,
 previsão meteorológica, análises de janelas operacionais, planejamentos,
-aplicações, calendário, estoque, pecuária e rotinas administrativas.
+aplicações, calendário, estoque e rotinas administrativas.
 
 O projeto é uma aplicação Django monolítica: o Django entrega páginas HTML por
 templates, fornece APIs JSON para o navegador e persiste os dados pelo ORM.
@@ -60,7 +60,7 @@ ou esquema OpenAPI no projeto.
 goldcrop_project/       Configuração, rotas raiz e análise auxiliar Python
 dashboard/              Fazendas, talhões, clima, aplicações, estoque e calendário
 gestao/                 Financeiro, safras, serviços, máquinas, relatórios e assistente
-pecuaria/               Animais, produção, manejo, reprodução e alimentação
+pecuaria/               Modelos e migrações históricos, sem interface ativa
 templates/              Páginas e componentes HTML do Django
 static/                 CSS, JavaScript e motor de análise do navegador
 tests/                  Testes JavaScript com Node
@@ -75,11 +75,12 @@ Arquivos principais:
 
 - `goldcrop_project/settings.py`: ambiente, banco, autenticação, segurança,
   templates e arquivos estáticos.
-- `goldcrop_project/urls.py`: inclui as rotas `dashboard`, `pecuaria` e
-  `gestao`, além do Django Admin.
-- `dashboard/models.py`, `gestao/models.py`, `pecuaria/models.py`: esquema de
-  dados.
-- `dashboard/views.py`, `gestao/views.py`, `pecuaria/views.py`: páginas e APIs.
+- `goldcrop_project/urls.py`: inclui as rotas `dashboard` e `gestao`, além do
+  Django Admin.
+- `dashboard/models.py` e `gestao/models.py`: esquema de dados ativo.
+- `pecuaria/models.py` e suas migrations permanecem apenas como legado para
+  preservar dados existentes; páginas, APIs e administração foram removidas.
+- `dashboard/views.py` e `gestao/views.py`: páginas e APIs ativas.
 - `static/app.js`: inicialização e integração principal do frontend agrícola.
 - `static/analysis/GoldCropAnalysisEngine.js`: cálculo do IEA da Janela de Ouro.
 - `dashboard/pesticides.py`: avaliação meteorológica fitossanitária no servidor.
@@ -123,8 +124,9 @@ node --test
 ```
 
 Os testes Python cobrem os fluxos de dashboard, cadastro/autenticação,
-fazendas/equipe/notificações, calendário, estoque e pecuária, análise
-fitossanitária e gestão/assistente. Os testes Node cobrem o motor de análise,
+fazendas/equipe/notificações, calendário, estoque, análise fitossanitária e
+gestão/assistente, além de verificar que as rotas antigas não estão expostas.
+Os testes Node cobrem o motor de análise,
 formatação do calendário e relatórios de estoque. Execute o conjunto completo
 antes de publicar alterações.
 
@@ -269,14 +271,12 @@ notificações da fazenda ativa.
 | Estoque | `/estoque/` | Produtos, saldos, movimentos e relatórios imprimíveis |
 | Sensores | `/sensores/` | Tela informativa; telemetria real não está habilitada |
 
-### Gestão e pecuária
+### Gestão
 
 | Página | Rota | Principais dados |
 |---|---|---|
-| Painel pecuário | `/pecuaria/` | Rebanho, produção, alertas, eventos e estoque relacionado |
-| Ficha animal | `/pecuaria/animais/<id>/` | Dados e histórico individual |
 | Financeiro | `/gestao/financeiro/` | Receitas, despesas e compras |
-| Safras | `/gestao/safras/` | Cultura, área, talhões e datas |
+| Safras | `/gestao/safras/` | Safras de café, variedade, área, talhões e datas |
 | Serviços | `/gestao/servicos/` | Serviços contratados/prestados e status |
 | Equipamentos | `/gestao/equipamentos/` | Máquinas e manutenção |
 | Registros | `/gestao/registros/` | Consulta/criação simplificada de eventos |
@@ -393,29 +393,20 @@ motivo, data, talhão opcional, fornecedor, valor e autor.
 - Dashboard resume estoque baixo, zerado, categorias e movimentações. A tela
   inclui impressão/salvamento de relatórios pelo navegador.
 
-### 7.6 Pecuária
+### 7.6 Safras e cafeicultura
 
-Animais têm identificação/brinco único por fazenda, nome, tipo, categoria,
-sexo, raça, datas, peso, origem, pais, status e arquivamento. Categorias
-femininas exigem sexo F e categorias bezerro/touro exigem sexo M. Pais devem
-ser animais da mesma fazenda, não arquivados e do sexo correspondente. A data
-de nascimento não pode ser futura. DELETE de animal arquiva, não apaga.
+Fazendas e talhões novos usam café como cultura principal. Os talhões registram
+área, variedade e idade da lavoura; safras existentes registram cultura,
+variedade, área, datas, status e talhões relacionados. O calendário contempla
+florada, formação dos frutos, maturação, colheita e pós-colheita, além de
+adubação, irrigação e controle fitossanitário.
 
-Registros relacionados:
+Não existe modelo confiável de produção colhida em sacas por talhão; o sistema
+não calcula produtividade nem infere valores a partir de área ou eventos.
 
-- Produção de leite: data, litros, ordenha e animal opcional (lote/geral).
-- Manejo: tipo, data, descrição, produto opcional, quantidade/dosagem e
-  responsável.
-- Reprodução: tipo, data, sêmen/touro, status e parto estimado. Para
-  inseminação, monta ou gestação sem data fornecida, o backend estima parto em
-  283 dias.
-- Alimentação: animal/lote, tipo de alimento, quantidade, unidade, data e
-  produto opcional.
-
-Se manejo ou alimentação usa um produto de estoque, a API verifica saldo e,
-em transação, debita a quantidade e cria uma saída de estoque. O painel usa
-consumo dos últimos 30 dias para estimar consumo diário/autonomia de produtos
-relacionados ao rebanho; estimativa não significa previsão garantida.
+Os modelos e migrations do antigo módulo pecuário foram mantidos para preservar
+dados já existentes, mas suas páginas, rotas, APIs, arquivos estáticos e
+registros no Admin foram removidos.
 
 ### 7.7 Gestão
 
@@ -429,9 +420,15 @@ equipamentos em manutenção.
 
 O endpoint `/gestao/api/assistente/` executa primeiro regras locais. Consultas
 suportadas incluem saldos de estoque, produtos em alerta, totais financeiros
-do mês, contagem de animais e produção de leite, serviços pendentes e
+do mês, variedades, áreas de talhão, safras de café e eventos futuros de
+florada, formação dos frutos, maturação, colheita, pós-colheita, adubação,
+irrigação e controle fitossanitário, além de serviços pendentes e
 equipamentos/manutenção. Mensagem geral que não é reconhecida localmente pode
 ser enviada à OpenRouter.
+
+O assistente não calcula produtividade em sacas: não existe registro confiável
+de produção colhida por talhão. Pode preparar eventos cafeeiros e lançamentos
+dos módulos existentes, que só são gravados após confirmação.
 
 O contexto e os dados da fazenda não acompanham a chamada OpenRouter; somente
 a mensagem atual (limitada a 4000 caracteres), o prompt de sistema e o modelo
@@ -450,7 +447,7 @@ locais suportadas ainda podem responder sem a chave.
 ## 8. Modelos e relações do banco
 
 Todos os registros operacionais principais têm relação com `Fazenda`, direta
-ou por produto/animal. As exclusões em cascata e `SET_NULL` são definidas no
+ou por produto/talhão. As exclusões em cascata e `SET_NULL` são definidas no
 código dos modelos; confira as migrations antes de alterar o banco.
 
 ### `dashboard`
@@ -476,33 +473,28 @@ código dos modelos; confira as migrations antes de alterar o banco.
 | `EventoCalendario` | Fazenda, autor, título, descrição, data/horas, categoria/status/prioridade, talhão, origem e vínculos a aplicação/produto/recomendação. |
 
 Operações definidas em `RecomendacaoJanela.Operacao`: adubação,
-fitossanitária, plantio e mecanizada. `EventoCalendario.Categoria` contempla
-aplicação, plantio, colheita, adubação, irrigação, pulverização, manejo,
-inspeção, manutenção, compra, venda, reunião, visita técnica, tarefa e outro.
+fitossanitária, plantio e mecanizada. `EventoCalendario.Categoria` contempla aplicação, plantio, colheita, florada,
+formação dos frutos, maturação, pós-colheita, adubação, irrigação,
+pulverização, manejo, inspeção, manutenção, compra, venda, reunião, visita
+técnica, tarefa e outro.
 
 ### `gestao`
 
 | Modelo | Campos principais |
 |---|---|
 | `LancamentoFinanceiro` | Fazenda, tipo (receita/despesa/compra), título, categoria, valor positivo, data, observação e autor. |
-| `Safra` | Fazenda, cultura, variedade, ano, área, datas, status, talhões associados e observação. |
+| `Safra` | Fazenda, cultura (café), variedade, ano, área, datas, status, talhões associados e observação. |
 | `ServicoFazenda` | Fazenda, nome, contratado/prestado, pessoa/local/quantidade, valor opcional, data, status e observação. |
 | `EquipamentoAgricola` | Fazenda, nome/tipo/identificação, horímetro, status, datas de manutenção e observação. |
 
-### `pecuaria`
-
-| Modelo | Campos principais |
-|---|---|
-| `Animal` | Fazenda, identificação/brinco, nome, tipo/categoria/sexo, raça, nascimento/peso/origem, pai/mãe, entrada, status e arquivado. |
-| `ProducaoLeite` | Fazenda, animal opcional, data, quantidade, ordenha e observação. |
-| `Manejo` | Fazenda, animal, tipo/data, descrição, produto de estoque opcional, quantidade, dosagem, responsável e observações. |
-| `Reproducao` | Fazenda, animal, tipo/data, touro/sêmen, data estimada de parto, status gestacional e observações. |
-| `Alimentacao` | Fazenda, animal/produto opcionais, tipo, quantidade/unidade, data, observação e autor. |
+O app `pecuaria` ainda consta em `INSTALLED_APPS` exclusivamente para manter o
+histórico de modelos e migrations do banco. Não há rotas ativas, views, telas
+ou modelos registrados no Admin; os dados históricos não são apagados.
 
 ## 9. Catálogo das APIs
 
-As rotas abaixo são montadas em `goldcrop_project/urls.py` por três conjuntos:
-dashboard (prefixo vazio), pecuária (`/pecuaria/`) e gestão (`/gestao/`).
+As rotas abaixo são montadas em `goldcrop_project/urls.py` pelos conjuntos
+dashboard (prefixo vazio) e gestão (`/gestao/`).
 Salvo rotas de autenticação/cadastro, as APIs dependem de sessão autenticada e
 fazenda ativa. JSON inválido retorna erro; respostas de erro seguem em geral
 `{"ok": false, "message": "...", "field_errors": {...}}`.
@@ -517,10 +509,10 @@ fazenda ativa. JSON inválido retorna erro; respostas de erro seguem em geral
 | `POST /logout/` | Encerra sessão. |
 | `GET /api/farms/` | Lista fazendas acessíveis e fazenda selecionada. |
 | `POST /api/farms/` | `farm_id`; seleciona uma fazenda já acessível. |
-| `POST /api/farms/create/` | `name`, `cep`, `state`, `city`, `district`, `address`, `area`, `plot_count`, `culture`, `farm_type`, `irrigation`; cria fazenda, proprietário e talhões. |
+| `POST /api/farms/create/` | `name`, `cep`, `state`, `city`, `district`, `address`, `area`, `plot_count`, `culture` (café), `farm_type`, `irrigation`; cria fazenda, proprietário e talhões. |
 | `POST /api/farms/join/` | `access_code`; associa usuário autenticado à fazenda. |
 | `POST /api/farms/access-code/` | Gera/renova código de acesso da fazenda ativa. |
-| `POST /api/farms/settings/` | `name`, `culture`, `area`; atualiza nome, cultura principal e área. |
+| `POST /api/farms/settings/` | `name`, `culture` (café), `area`; atualiza nome, cultura principal e área. |
 | `GET /api/farms/team/` | Lista membros; código só é incluído para quem tem `team`. |
 | `DELETE /api/farms/team/<user_id>/` | Remove membro, exceto o próprio solicitante e o criador proprietário. |
 | `GET /api/notifications/` | Retorna até 50 notificações da pessoa/fazenda e total não lido. |
@@ -532,8 +524,8 @@ fazenda ativa. JSON inválido retorna erro; respostas de erro seguem em geral
 | Método e rota | Uso / campos relevantes |
 |---|---|
 | `GET /api/state/?talhao_id=<id>` | Estado da fazenda ativa: fazenda/permissões, talhões ativos, previsão associada, aplicações, planejamentos e recomendações. |
-| `POST /api/talhoes/` | `nome`, `area`, `cultura`, `latitude`, `longitude`, `raio`; cria talhão (pode receber coordenadas decimais ou formato compacto aceito pelo parser). |
-| `POST` ou `PUT /api/talhoes/<id>/` | Atualiza nome/área/cultura/coordenadas/raio de talhão da fazenda ativa. |
+| `POST /api/talhoes/` | `nome`, `area`, `cultura` (café), `variedade`, `idade_anos`, `latitude`, `longitude`, `raio`; cria talhão (pode receber coordenadas decimais ou formato compacto aceito pelo parser). |
+| `POST` ou `PUT /api/talhoes/<id>/` | Atualiza nome/área/variedade/idade/coordenadas/raio de talhão da fazenda ativa; cultura permanece café. |
 | `POST` ou `DELETE /api/talhoes/<id>/delete/` | Exclui talhão da fazenda ativa. |
 | `POST /api/weather/ingest/` | Coleta com `fetchedAt`, `location` e dados `current`, `hourly`, `daily`, `soil`; opcional `talhao_id`/`referenceTalhaoId`. |
 | `POST /api/recommendations/ingest/` | `talhao_id`, `recommendations[]`; salva recomendações da coleta daquele talhão. |
@@ -572,27 +564,12 @@ somente GET e assistente que é POST.
 | Rota | Campos de POST / dados |
 |---|---|
 | `/financeiro/` | `tipo` (`RECEITA`, `DESPESA`, `COMPRA`), `titulo`, `valor`, `data` opcional, `categoria`, `observacao`. GET lista até 200 e totais do mês atual. |
-| `/safras/` | `cultura`, `ano_safra`, `area_hectares`, `variedade`, datas opcionais, `status`, lista `talhoes`, `observacao`. |
+| `/safras/` | `cultura` (café), `ano_safra`, `area_hectares`, `variedade`, datas opcionais, `status`, lista `talhoes`, `observacao`. |
 | `/servicos/` | `nome`, `tipo` (`CONTRATADO`/`PRESTADO`), data, pessoa/local/quantidade/valor/status/observação opcionais. |
 | `/equipamentos/` | `nome`, `tipo`, `identificacao`, `horimetro`, `status`, datas de manutenção e observação. |
 | `/registros/` | `titulo`, data, `descricao`, `categoria`, `status`, `talhao_id` opcional; cria evento simples do calendário. |
 | `/relatorios/` | GET retorna resumo mensal financeiro, movimentos recentes, estoque baixo, serviços pendentes e equipamentos em manutenção. |
 | `/assistente/` | `{"message":"..."}`, `{"action":"confirm"}` ou `{"action":"cancel"}`. |
-
-### Pecuária
-
-Todos os endpoints pecuários estão sob `/pecuaria/api/`. GET consulta; POST
-cria; as APIs alteradoras exigem `record` ou `manage` conforme entidade.
-
-| Rota | Campos de POST / filtros GET |
-|---|---|
-| `/dashboard/` | GET painel, gráficos e alertas de rebanho. |
-| `/animais/` | GET aceita `arquivados=1`, `categoria`, `status`, `raca`, `q`; POST inclui identificação, categoria, sexo e demais dados opcionais. |
-| `/animais/<id>/` | GET retorna animal e histórico; PATCH edita; DELETE arquiva. |
-| `/producao/` | GET aceita `inicio`/`fim`; POST `data`, `quantidade`, ordenha, animal opcional e observação. |
-| `/manejo/` | POST `animal_id`, tipo, data, descrição, produto/quantidade, dosagem, responsável e observações. Produto gera saída de estoque. |
-| `/reproducao/` | POST animal, tipo, data, touro/sêmen, data estimada do parto/status/observação. |
-| `/alimentacao/` | POST tipo de alimento, quantidade, unidade, data, animal e produto opcionais, observação. Produto gera saída de estoque. |
 
 ### Contrato comum e status HTTP
 
@@ -622,7 +599,7 @@ cria; as APIs alteradoras exigem `record` ou `manage` conforme entidade.
 ## 11. Migrações, build e administração
 
 - Migrations versionadas estão em `dashboard/migrations/`,
-  `gestao/migrations/` e `pecuaria/migrations/`.
+  `gestao/migrations/` e `pecuaria/migrations/` (histórico legado preservado).
 - Para aplicar no desenvolvimento: `python manage.py migrate`.
 - Para criar mudanças de modelo: `python manage.py makemigrations`, revisar os
   arquivos produzidos e aplicar com `migrate`.

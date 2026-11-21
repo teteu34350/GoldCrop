@@ -138,7 +138,7 @@ class PersistenciaSistemaTests(TestCase):
         self.client.force_login(self.user)
 
     def test_estado_e_talhao_sao_persistidos(self):
-        response = self.client.post(reverse("dashboard:talhao_create_api"), {"nome": "Talhão 01", "area": 5, "cultura": "Café", "latitude": -20.89, "longitude": -46.08}, content_type="application/json")
+        response = self.client.post(reverse("dashboard:talhao_create_api"), {"nome": "Talhão 01", "area": 5, "cultura": "Café", "variedade": "Mundo Novo", "idade_anos": 4, "latitude": -20.89, "longitude": -46.08}, content_type="application/json")
         self.assertEqual(response.status_code, 201)
         state = self.client.get(reverse("dashboard:system_state_api"))
         self.assertEqual(state.status_code, 200)
@@ -146,6 +146,8 @@ class PersistenciaSistemaTests(TestCase):
         self.assertEqual(talhao_state["name"], "Talhão 01")
         self.assertEqual(talhao_state["latitude"], -20.89)
         self.assertEqual(talhao_state["longitude"], -46.08)
+        self.assertEqual(talhao_state["variety"], "Mundo Novo")
+        self.assertEqual(talhao_state["age"], 4)
 
     def test_talhao_converte_coordenadas_compactadas(self):
         response = self.client.post(reverse("dashboard:talhao_create_api"), {"nome": "Talhão GPS", "area": 5, "cultura": "Café", "latitude": "205823", "longitude": "460704"}, content_type="application/json")
@@ -154,17 +156,41 @@ class PersistenciaSistemaTests(TestCase):
         self.assertAlmostEqual(float(talhao.latitude), -20.973056, places=5)
         self.assertAlmostEqual(float(talhao.longitude), -46.117778, places=5)
 
+    def test_talhao_api_rejects_noncoffee_crops(self):
+        response = self.client.post(
+            reverse("dashboard:talhao_create_api"),
+            {"nome": "Talhão milho", "area": 5, "cultura": "Milho", "latitude": -20.89, "longitude": -46.08},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Talhao.objects.filter(nome="Talhão milho").exists())
+
+    def test_farm_settings_reject_noncoffee_culture(self):
+        response = self.client.post(
+            reverse("dashboard:farm_settings_api"),
+            {"name": self.farm.nome, "culture": "Milho", "area": "10"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.farm.refresh_from_db()
+        self.assertEqual(self.farm.culturas, ["Café"])
+
     def test_talhao_pode_ser_atualizado(self):
         talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão 01", area_hectares=5, cultura="Café", latitude=-20.89, longitude=-46.08, raio_metros=80)
         response = self.client.put(
             reverse("dashboard:talhao_update_api", args=[talhao.id]),
-            {"nome": "Talhão 01 Editado", "area": 7.5, "cultura": "Café Especial", "latitude": -20.90, "longitude": -46.09, "raio": 100},
+            {"nome": "Talhão 01 Editado", "area": 7.5, "cultura": "Café", "variedade": "Catuaí", "idade_anos": 6, "latitude": -20.90, "longitude": -46.09, "raio": 100},
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 200)
         talhao.refresh_from_db()
         self.assertEqual(talhao.nome, "Talhão 01 Editado")
         self.assertEqual(float(talhao.area_hectares), 7.5)
+        self.assertEqual(talhao.cultura, "Café")
+        self.assertEqual(talhao.variedade, "Catuaí")
+        self.assertEqual(talhao.idade_anos, 6)
 
     def test_talhao_pode_ser_removido(self):
         talhao = Talhao.objects.create(fazenda=self.farm, nome="Talhão 02", area_hectares=5, cultura="Café", latitude=-20.89, longitude=-46.08, raio_metros=80)
@@ -548,7 +574,36 @@ class MembershipTeamAndNotificationTests(TestCase):
             MembroFazenda.Funcao.PROPRIETARIO,
         )
         self.assertEqual(farm.talhoes.count(), 2)
+        self.assertEqual(farm.culturas, ["Café"])
         self.assertEqual(self.client.get(reverse("dashboard:system_state_api")).json()["farm"]["id"], farm.id)
+
+    def test_farm_create_rejects_noncoffee_culture_and_livestock_type(self):
+        payload = {
+            "name": "Fazenda de milho",
+            "cep": "37000002",
+            "state": "MG",
+            "city": "Varginha",
+            "district": "Zona Rural",
+            "area": "18.5",
+            "plot_count": 1,
+            "culture": "Milho",
+        }
+        noncoffee = self.client.post(
+            reverse("dashboard:farm_create_api"),
+            payload,
+            content_type="application/json",
+        )
+        self.assertEqual(noncoffee.status_code, 400)
+        self.assertFalse(Fazenda.objects.filter(nome="Fazenda de milho").exists())
+
+        payload.update({"name": "Fazenda ILPF", "culture": "Café", "farm_type": "Integrado (ILPF)"})
+        livestock_type = self.client.post(
+            reverse("dashboard:farm_create_api"),
+            payload,
+            content_type="application/json",
+        )
+        self.assertEqual(livestock_type.status_code, 400)
+        self.assertFalse(Fazenda.objects.filter(nome="Fazenda ILPF").exists())
 
     def test_novo_usuario_pode_criar_fazenda_depois_do_cadastro(self):
         response = self.client.post(

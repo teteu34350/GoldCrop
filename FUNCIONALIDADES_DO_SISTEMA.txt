@@ -3,9 +3,9 @@ GOLDCROP — FUNCIONALIDADES DO SISTEMA
 
 RESUMO
 ------
-O GoldCrop é um sistema web para organizar operações agrícolas e pecuárias.
-Reúne informações da fazenda, talhões, previsão do tempo, recomendações,
-aplicações, calendário e estoque em um só lugar.
+O GoldCrop é um sistema web especializado em propriedades produtoras de café.
+Reúne informações da fazenda, cafezais, previsão do tempo, recomendações,
+aplicações, calendário, estoque e gestão em um só lugar.
 
 ACESSO E CONTA
 --------------
@@ -39,6 +39,8 @@ TALHÕES E MAPA
 - Cadastro, edição e exclusão de talhões.
 - Registro de informações como nome, área, cultura, variedade, idade, tipo de
   solo, coordenadas e raio aproximado.
+- A cultura dos novos talhões é café; variedade e idade da lavoura podem ser
+  registradas sem criar campos ou cálculos agronômicos novos.
 - Visualização dos talhões georreferenciados em mapa interativo.
 - Seleção de um talhão para consultar suas próprias condições e operações.
 - Acesso a detalhes, localização, clima, planejamentos e histórico do talhão.
@@ -70,6 +72,8 @@ CALENDÁRIO
 - Criação, edição, atualização de status e exclusão de atividades.
 - Registro de data, horário, prioridade, responsável e observações.
 - Vínculo opcional com talhão, aplicação, produto de estoque ou recomendação.
+- Categorias para florada, formação dos frutos, maturação, colheita e
+  pós-colheita, além de adubação, irrigação e controle fitossanitário.
 
 APLICAÇÕES E HISTÓRICO
 ----------------------
@@ -95,24 +99,15 @@ ESTOQUE
 - Associação de saídas do tipo aplicação ao talhão e ao registro de execução,
   quando os dados correspondentes são informados.
 
-PECUÁRIA
---------
-- Painel com quantidade de animais por categoria, produção de leite, alertas,
-  próximos eventos e resumo de estoque relacionado ao rebanho.
-- Cadastro, edição, pesquisa, filtros e arquivamento de animais, preservando
-  seu histórico.
-- Ficha individual do animal com linha do tempo de produção, manejo,
-  reprodução, alimentação, pesagens e mudanças de categoria.
-- Registro e consulta de produção de leite, com filtros por período e totais
-  agrupados por data e animal.
-- Registro de manejo, incluindo vacinas, tratamentos, pesagens e ocorrências.
-- Registro de eventos reprodutivos, acompanhamento de diagnósticos e previsão
-  de partos quando aplicável.
-- Registro de alimentação e consumo por produto.
-- Integração com o estoque agrícola: o consumo de produto registrado em manejo
-  ou alimentação gera uma saída correspondente no estoque.
-- Estimativa de autonomia de estoque com base no consumo recente e alertas
-  relacionados a estoque baixo, manejo e reprodução.
+SAFRA E CAFEICULTURA
+--------------------
+- Cadastro de safras de café com variedade, área, período, status e talhões
+  associados.
+- Registro da idade e variedade da lavoura em cada talhão.
+- Uso do calendário para acompanhar florada, formação dos frutos, maturação,
+  colheita, pós-colheita, adubação, irrigação e controle fitossanitário.
+- O sistema não possui registro estruturado de produção em sacas e não calcula
+  produtividade; não são apresentados indicadores sem dados confiáveis.
 
 SENSORES
 --------

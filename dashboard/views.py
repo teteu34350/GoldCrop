@@ -1,6 +1,7 @@
 import json
 import re
 import smtplib
+import unicodedata
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -43,6 +44,12 @@ def _error(message, status=400, field_errors=None):
     if field_errors:
         data["field_errors"] = field_errors
     return JsonResponse(data, status=status)
+
+
+def _is_coffee_culture(value):
+    normalized = unicodedata.normalize("NFD", str(value).strip().casefold())
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return bool(re.match(r"^cafe(?:\s|$)", normalized))
 
 
 def _protected_page(request, template):
@@ -250,7 +257,7 @@ def farm_create_api(request):
     city = str(data.get("city", "")).strip()
     district = str(data.get("district", "")).strip()
     address = str(data.get("address", "")).strip()
-    culture = str(data.get("culture", "")).strip()
+    culture = str(data.get("culture", "Café")).strip()
     farm_type = str(data.get("farm_type", Fazenda.TipoCultivo.CONVENCIONAL))
     irrigation = str(data.get("irrigation", Fazenda.Irrigacao.GOTEJAMENTO))
     try:
@@ -262,7 +269,9 @@ def farm_create_api(request):
         return _error("Preencha nome, CEP, estado, cidade e bairro da fazenda.")
     if area <= 0 or plot_count < 1:
         return _error("Informe uma área maior que zero e ao menos um talhão.")
-    if farm_type not in Fazenda.TipoCultivo.values or irrigation not in Fazenda.Irrigacao.values:
+    if not _is_coffee_culture(culture):
+        return _error("O GoldCrop atende propriedades produtoras de café.")
+    if farm_type not in Fazenda.TipoCultivo.values or farm_type == Fazenda.TipoCultivo.ILPF or irrigation not in Fazenda.Irrigacao.values:
         return _error("Selecione um tipo de cultivo e irrigação válidos.")
 
     try:
@@ -277,7 +286,7 @@ def farm_create_api(request):
                 endereco=address,
                 area_hectares=area,
                 quantidade_talhoes=plot_count,
-                culturas=[culture] if culture else [],
+                culturas=["Café"],
                 tipo_cultivo=farm_type,
                 irrigacao=irrigation,
             )
@@ -383,13 +392,15 @@ def farm_settings_api(request):
         return _error("Dados da fazenda inválidos.")
     name = str(data.get("name", "")).strip()
     culture = str(data.get("culture", "")).strip()
+    if not _is_coffee_culture(culture):
+        return _error("A cultura principal da propriedade deve ser café.")
     try:
         area = Decimal(str(data.get("area", "")))
         if not name or len(name) > 150 or area <= 0:
             raise InvalidOperation
         farm.nome = name
         farm.area_hectares = area
-        farm.culturas = [culture] if culture else []
+        farm.culturas = ["Café"]
         farm.full_clean()
         farm.save(update_fields=["nome", "area_hectares", "culturas", "atualizada_em"])
     except (InvalidOperation, TypeError, ValueError, ValidationError, IntegrityError):
@@ -1118,12 +1129,22 @@ def talhao_create_api(request):
         return _error("Dados do talhão ou fazenda inválidos.")
     if not _has_farm_permission(farm, request.user, "manage"):
         return _error("Seu perfil não pode gerenciar os talhões desta fazenda.", 403)
+    if not _is_coffee_culture(data.get("cultura", "")):
+        return _error("Os talhões do GoldCrop devem ser cadastrados como áreas de café.")
+    variety = str(data.get("variedade") or "").strip()
+    if len(variety) > 100:
+        return _error("A variedade deve ter no máximo 100 caracteres.")
     try:
         latitude = _parse_coordinate(data.get("latitude"), 90)
         longitude = _parse_coordinate(data.get("longitude"), 180)
+        age = data.get("idade_anos")
+        age = int(age) if age not in (None, "") else None
+        if age is not None and age < 0:
+            raise ValueError
         talhao = Talhao.objects.create(
             fazenda=farm, nome=str(data.get("nome", "")).strip(), area_hectares=data.get("area") or None,
-            cultura=str(data.get("cultura", "")).strip(), latitude=latitude, longitude=longitude,
+            cultura="Café", variedade=variety,
+            idade_anos=age, latitude=latitude, longitude=longitude,
             raio_metros=int(data.get("raio", 80)),
         )
     except (IntegrityError, InvalidOperation, TypeError, ValueError):
@@ -1144,10 +1165,20 @@ def talhao_update_api(request, talhao_id):
     talhao = farm.talhoes.filter(pk=talhao_id).first()
     if not talhao:
         return _error("Talhão não encontrado.", 404)
+    if "cultura" in data and not _is_coffee_culture(data["cultura"]):
+        return _error("Os talhões do GoldCrop devem ser áreas de café.")
+    variety = str(data.get("variedade", talhao.variedade) or "").strip()
+    if len(variety) > 100:
+        return _error("A variedade deve ter no máximo 100 caracteres.")
     try:
         talhao.nome = str(data.get("nome", talhao.nome)).strip() or talhao.nome
         talhao.area_hectares = data.get("area") if data.get("area") is not None else talhao.area_hectares
-        talhao.cultura = str(data.get("cultura", talhao.cultura)).strip() or talhao.cultura
+        talhao.cultura = "Café"
+        talhao.variedade = variety
+        age = data.get("idade_anos", talhao.idade_anos)
+        talhao.idade_anos = int(age) if age not in (None, "") else None
+        if talhao.idade_anos is not None and talhao.idade_anos < 0:
+            raise ValueError
         talhao.latitude = _parse_coordinate(data.get("latitude"), 90) if data.get("latitude") is not None else talhao.latitude
         talhao.longitude = _parse_coordinate(data.get("longitude"), 180) if data.get("longitude") is not None else talhao.longitude
         talhao.raio_metros = int(data.get("raio", talhao.raio_metros))
