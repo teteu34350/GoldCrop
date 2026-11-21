@@ -81,7 +81,7 @@ Cada cartao apresenta:
 
 Tocar em qualquer cartao seleciona aquele talhao e leva o mapa para sua
 localizacao. O mesmo toque atualiza o resumo compacto e os detalhes completos.
-A selecao nao abre o modal "Janela de Ouro".
+A selecao nao abre o modal "Janela de Adubacao".
 
 
 5. PAINEL DE DETALHES APOS A LISTA
@@ -131,11 +131,11 @@ unidade e data. Tambem apresenta a acao "Planejar aplicacao".
 Em telas de ate 640 px, os dados e o botao deixam de ficar lado a lado e passam
 a ser empilhados.
 
-5.5. Janela de Ouro e IEA
+5.5. Janela de Adubacao e IEA
 
 O bloco colorido mostra:
 
-- Nome do talhao e titulo "Janela de Ouro".
+- Nome do talhao e titulo "Janela de Adubacao".
 - Janela atual ou indicacao de que esta aguardando dados.
 - IEA do talhao, se houver analise.
 - Chuva prevista, umidade do sensor e vento previsto.

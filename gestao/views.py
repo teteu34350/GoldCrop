@@ -1,9 +1,11 @@
 import json
 import os
 import re
+import time
 import unicodedata
 import urllib.error
 import urllib.request
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -15,10 +17,19 @@ from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from dashboard.models import EventoCalendario, MovimentacaoEstoque, Produto, Talhao
+from dashboard.models import (
+    EventoCalendario, MovimentacaoEstoque, Produto, RecomendacaoJanela, Talhao,
+)
 from dashboard.views import _current_farm, _has_farm_permission, _is_coffee_culture
 
-from .models import EquipamentoAgricola, LancamentoFinanceiro, Safra, ServicoFazenda
+from .assistant import (
+    assistant_context, build_relevant_context, classify_feature, get_cached_reply,
+    is_cacheable_query, relevant_assistant_turns, resolve_local_query,
+    save_assistant_turn, set_cached_reply,
+)
+from .models import (
+    AssistenteUso, EquipamentoAgricola, LancamentoFinanceiro, Safra, ServicoFazenda,
+)
 
 
 MODULES = {
@@ -37,6 +48,23 @@ def _error(message, status=400, field_errors=None):
     if field_errors:
         payload['field_errors'] = field_errors
     return JsonResponse(payload, status=status)
+
+
+def _record_assistant_usage(
+    farm, user, feature, resolution, started_at, *, api_call=False,
+    cache_hit=False, input_tokens=None, output_tokens=None,
+):
+    AssistenteUso.objects.create(
+        fazenda=farm,
+        usuario=user,
+        funcionalidade=feature,
+        resolucao=resolution,
+        chamada_api=api_call,
+        cache_utilizado=cache_hit,
+        tokens_entrada=input_tokens,
+        tokens_saida=output_tokens,
+        duracao_ms=max(0, round((time.perf_counter() - started_at) * 1000)),
+    )
 
 
 def _body(request):
@@ -446,6 +474,15 @@ def _money_value(text):
 
 
 def _stock_products(farm, normalized_message):
+    products = list(Produto.objects.filter(fazenda=farm, ativo=True))
+    padded_message = f' {normalized_message} '
+    named_products = [
+        product for product in products
+        if f' {_normalize(product.nome)} ' in padded_message
+    ]
+    if named_products:
+        return named_products
+
     matchers = (
         ('semente',),
         ('adubo', 'fertilizante'),
@@ -456,7 +493,7 @@ def _stock_products(farm, normalized_message):
     for words in matchers:
         if any(word in normalized_message for word in words):
             return [
-                product for product in Produto.objects.filter(fazenda=farm, ativo=True)
+                product for product in products
                 if any(word in _normalize(f'{product.nome} {product.categoria}') for word in words)
             ]
     return []
@@ -616,6 +653,50 @@ def _coffee_assistant_reply(farm, normalized):
     )
     if requested_stage:
         category, terms, label = requested_stage
+        if category == EventoCalendario.Categoria.ADUBACAO and re.search(
+            r'\b(melhor|ideal|favoravel|recomenda|janela|horario|dia|semana|quando|bom)\b',
+            normalized,
+        ):
+            latest_collection_ids = [
+                collection.id for plot in coffee_plots
+                if (collection := plot.coletas_meteorologicas.first()) is not None
+            ]
+            recommendations = RecomendacaoJanela.objects.filter(
+                fazenda=farm,
+                coleta_id__in=latest_collection_ids,
+                tipo_operacao=RecomendacaoJanela.Operacao.ADUBACAO,
+                data__gte=today,
+                data__lte=today + timedelta(days=6),
+                decisao='APPLY',
+                adequacao__gte=75,
+                coleta__coletada_em__gte=timezone.now() - timedelta(hours=24),
+            ).select_related('talhao')
+            best = recommendations.order_by('-adequacao', 'data', 'inicio').first()
+            if best:
+                start = timezone.localtime(best.inicio).strftime('%H:%M')
+                end = timezone.localtime(best.fim).strftime('%H:%M')
+                confidence = (
+                    f', confiança {round(float(best.confianca) * 100)}%'
+                    if best.confianca is not None else ''
+                )
+                plot_name = best.talhao.nome if best.talhao else 'fazenda'
+                return JsonResponse({
+                    'ok': True,
+                    'reply': (
+                        f'Melhor janela de adubação disponível nos próximos sete dias: '
+                        f'{best.data:%d/%m/%Y}, das {start} às {end}, em {plot_name} '
+                        f'(IEA {best.adequacao}%{confidence}). Confira a previsão atualizada '
+                        'na Janela de Adubação antes de realizar a operação.'
+                    ),
+                })
+            return JsonResponse({
+                'ok': True,
+                'reply': (
+                    'Não há recomendação favorável da Janela de Adubação salva '
+                    'nos próximos sete dias. Atualize a previsão na Janela de Adubação para um '
+                    'talhão com localização; não vou estimar uma data sem essa análise.'
+                ),
+            })
         events = EventoCalendario.objects.filter(
             fazenda=farm, categoria=category, data__gte=today,
         ).exclude(status=EventoCalendario.Status.CANCELADA).select_related('talhao').order_by('data')[:5]
@@ -754,16 +835,31 @@ def _local_assistant_reply(request, farm, message):
         }
         return _stage_assistant_action(request, farm, 'financeiro', payload, f'{kind.title()} de {_format_brl(value)} para "{payload["titulo"]}"', message)
 
-    if not is_question and re.search(r'\b(zerar|zere|zera|zerou|acabou|acabaram|esgotar|esgotou|usei|consumi|retirei|baixar|dei baixa)\b', normalized) and re.search(r'\b(estoque|sementes?|adubo|fertilizante|defensivo|diesel|combustivel|pecas?)\b', normalized):
+    add_stock = bool(re.search(
+        r'\b(adicione|adicionar|adiciona|coloque|colocar|lance|lancar|registrar entrada|entrada)\b',
+        normalized,
+    )) and bool(re.search(r'\b(estoque|saldo)\b', normalized))
+    remove_stock = bool(re.search(
+        r'\b(zerar|zere|zera|zerou|acabou|acabaram|esgotar|esgotou|usei|consumi|retirei|baixar|dei baixa)\b',
+        normalized,
+    )) and bool(re.search(
+        r'\b(estoque|sementes?|adubo|fertilizante|defensivo|diesel|combustivel|pecas?)\b',
+        normalized,
+    ))
+    if not is_question and (add_stock or remove_stock):
         if not _has_farm_permission(farm, request.user, 'record'):
             return _error('Você não tem permissão para propor movimentações nesta fazenda.', 403)
         products = _stock_products(farm, normalized)
         if not products:
-            return JsonResponse({'ok': True, 'reply': 'Não encontrei esse produto no estoque desta fazenda. Confira o nome do item.'})
-        if re.search(r'\b(zerar|zere|zera|zerou|acabou|acabaram|esgotar|esgotou)\b', normalized):
+            return JsonResponse({
+                'ok': True,
+                'reply': 'Não encontrei um produto correspondente no estoque desta fazenda. Informe o nome exatamente como está cadastrado.',
+            })
+        if remove_stock and re.search(r'\b(zerar|zere|zera|zerou|acabou|acabaram|esgotar|esgotou)\b', normalized):
             changes = [
                 {
                     'produto_id': product.id,
+                    'tipo': MovimentacaoEstoque.Tipo.SAIDA,
                     'quantidade': str(product.quantidade_atual),
                     'saldo_esperado': str(product.quantidade_atual),
                 }
@@ -775,9 +871,11 @@ def _local_assistant_reply(request, farm, message):
             return _stage_assistant_action(request, farm, 'estoque', {'movimentos': changes}, f'zerar o estoque de {names}', message)
         match = re.search(r'((?:\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{1,2})?)\s*(kg|litros?|l|unidades?|un\.?|ha)(?=\s|$|[.,!?])', normalized)
         if not match:
-            return JsonResponse({'ok': True, 'reply': 'Qual quantidade e unidade devo dar baixa? Exemplo: “Usei 50 kg de sementes”.'})
+            operation = 'adicionar ao estoque' if add_stock else 'dar baixa'
+            return JsonResponse({'ok': True, 'reply': f'Qual quantidade e unidade devo {operation}? Informe, por exemplo, “Adicione 50 kg de fertilizante ao estoque”.'})
         if len(products) != 1:
-            return JsonResponse({'ok': True, 'reply': 'Encontrei mais de um produto. Diga o nome exato para eu preparar a baixa.'})
+            operation = 'entrada' if add_stock else 'baixa'
+            return JsonResponse({'ok': True, 'reply': f'Encontrei mais de um produto. Diga o nome exato para preparar a {operation}.'})
         raw_quantity = match.group(1)
         normalized_quantity = raw_quantity.replace('.', '').replace(',', '.') if ',' in raw_quantity else re.sub(r'\.(?=\d{3}$)', '', raw_quantity)
         quantity = Decimal(normalized_quantity)
@@ -785,14 +883,26 @@ def _local_assistant_reply(request, farm, message):
         product = products[0]
         if unit != _normalize_unit(product.unidade):
             return JsonResponse({'ok': True, 'reply': f'O produto está cadastrado em {product.unidade}. Informe a quantidade nessa unidade.'})
-        if quantity <= 0 or quantity > product.quantidade_atual:
+        if (
+            quantity <= 0
+            or (remove_stock and quantity > product.quantidade_atual)
+            or (
+                add_stock
+                and product.quantidade_atual + quantity > Decimal('9999999999.99')
+            )
+        ):
             return JsonResponse({'ok': True, 'reply': f'Quantidade inválida ou maior que o saldo atual de {product.quantidade_atual} {product.unidade}.'})
         payload = {'movimentos': [{
             'produto_id': product.id,
+            'tipo': MovimentacaoEstoque.Tipo.ENTRADA if add_stock else MovimentacaoEstoque.Tipo.SAIDA,
             'quantidade': str(quantity),
             'saldo_esperado': str(product.quantidade_atual),
         }]}
-        return _stage_assistant_action(request, farm, 'estoque', payload, f'dar baixa de {quantity} {product.unidade} em {product.nome}', message)
+        description = (
+            f'adicionar {quantity} {product.unidade} de {product.nome} ao estoque'
+            if add_stock else f'dar baixa de {quantity} {product.unidade} em {product.nome}'
+        )
+        return _stage_assistant_action(request, farm, 'estoque', payload, description, message)
 
     coffee_activities = (
         (r'\b(florada|florescimento)\b', EventoCalendario.Categoria.FLORADA, 'Florada'),
@@ -889,24 +999,43 @@ def _confirm_assistant_action(request, farm):
                     request.session.pop('gestao_assistente_pendente', None)
                     return _error('Um dos produtos não está mais disponível nesta fazenda.', 409)
                 quantity = Decimal(movement['quantidade'])
+                movement_type = movement.get('tipo', MovimentacaoEstoque.Tipo.SAIDA)
                 expected_balance = Decimal(movement.get('saldo_esperado', str(product.quantidade_atual)))
+                if movement_type not in MovimentacaoEstoque.Tipo.values:
+                    request.session.pop('gestao_assistente_pendente', None)
+                    return _error('Tipo de movimentação inválido. Envie o comando novamente.', 409)
                 if product.quantidade_atual != expected_balance:
                     request.session.pop('gestao_assistente_pendente', None)
                     return _error(f'O saldo de {product.nome} mudou. Envie o comando novamente para revisar a proposta.', 409)
-                if quantity <= 0 or quantity > product.quantidade_atual:
+                if quantity <= 0 or (
+                    movement_type == MovimentacaoEstoque.Tipo.SAIDA
+                    and quantity > product.quantidade_atual
+                ):
                     request.session.pop('gestao_assistente_pendente', None)
                     return _error(f'O saldo de {product.nome} mudou. Envie o comando novamente para revisar a proposta.', 409)
-                products.append((product, quantity))
-            for product, quantity in products:
-                product.quantidade_atual -= quantity
+                if (
+                    movement_type == MovimentacaoEstoque.Tipo.ENTRADA
+                    and product.quantidade_atual + quantity > Decimal('9999999999.99')
+                ):
+                    request.session.pop('gestao_assistente_pendente', None)
+                    return _error(f'A entrada excede o limite de quantidade cadastrável para {product.nome}.', 409)
+                products.append((product, quantity, movement_type))
+            for product, quantity, movement_type in products:
+                if movement_type == MovimentacaoEstoque.Tipo.ENTRADA:
+                    product.quantidade_atual += quantity
+                else:
+                    product.quantidade_atual -= quantity
                 product.save(update_fields=['quantidade_atual', 'atualizado_em'])
                 MovimentacaoEstoque.objects.create(
-                    produto=product, tipo=MovimentacaoEstoque.Tipo.SAIDA,
+                    produto=product, tipo=movement_type,
                     quantidade=quantity, motivo='Assistente IA',
                     data=timezone.localdate(), criado_por=request.user,
                     observacao='Movimentação confirmada pelo usuário no assistente.',
                 )
-        reply = 'Movimentação de estoque registrada no banco do GoldCrop.'
+        reply = 'Entrada no estoque registrada no banco do GoldCrop.' if all(
+            movement_type == MovimentacaoEstoque.Tipo.ENTRADA
+            for _, _, movement_type in products
+        ) else 'Movimentação de estoque registrada no banco do GoldCrop.'
     elif pending.get('kind') == 'atividade':
         talhao = None
         talhao_id = payload.get('talhao_id')
@@ -945,32 +1074,112 @@ def assistente_api(request):
     payload = _body(request)
     if payload is None:
         return _error('Mensagem inválida.')
+    started_at = time.perf_counter()
     action = payload.get('action', 'message')
     if action == 'cancel':
         request.session.pop('gestao_assistente_pendente', None)
+        _record_assistant_usage(
+            farm, request.user, 'write', AssistenteUso.Resolucao.ACAO, started_at,
+        )
         return JsonResponse({'ok': True, 'reply': 'Não fiz nenhuma alteração.'})
     if action == 'confirm':
-        return _confirm_assistant_action(request, farm)
+        pending = request.session.get('gestao_assistente_pendente', {})
+        response = _confirm_assistant_action(request, farm)
+        result = json.loads(response.content.decode('utf-8'))
+        resolution = (
+            AssistenteUso.Resolucao.ACAO
+            if response.status_code < 400 and result.get('saved')
+            else AssistenteUso.Resolucao.ERRO
+        )
+        _record_assistant_usage(
+            farm, request.user, str(pending.get('kind', 'write')), resolution, started_at,
+        )
+        return response
 
     message = str(payload.get('message', '')).strip()
     if not message:
         return _error('Digite uma mensagem.')
+    feature = classify_feature(message)
+    cached = get_cached_reply(request.user.id, farm.id, message)
+    if cached is not None:
+        save_assistant_turn(request, farm, message, cached.get('reply', ''), feature)
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.CACHE,
+            started_at, cache_hit=True,
+        )
+        return JsonResponse(cached)
+
+    conversation = assistant_context(request, farm)
+    local_reply = resolve_local_query(farm, message, conversation)
+    if local_reply is not None:
+        local_payload = {'ok': True, 'reply': local_reply.text}
+        cacheable = is_cacheable_query(message)
+        if cacheable:
+            set_cached_reply(request.user.id, farm.id, message, local_payload)
+        save_assistant_turn(request, farm, message, local_reply.text, local_reply.feature, local_reply.slot)
+        _record_assistant_usage(
+            farm, request.user, local_reply.feature,
+            AssistenteUso.Resolucao.LOCAL, started_at,
+        )
+        return JsonResponse(local_payload)
+
     local_result = _local_assistant_reply(request, farm, message)
     if local_result is not None:
+        local_payload = json.loads(local_result.content.decode('utf-8'))
+        confirmation_required = bool(local_payload.get('confirmation_required'))
+        if local_result.status_code < 400 and not confirmation_required:
+            if is_cacheable_query(message):
+                set_cached_reply(request.user.id, farm.id, message, local_payload)
+            save_assistant_turn(request, farm, message, local_payload.get('reply', ''), feature)
+        _record_assistant_usage(
+            farm, request.user, feature,
+            (
+                AssistenteUso.Resolucao.ACAO if confirmation_required
+                else AssistenteUso.Resolucao.LOCAL
+            ),
+            started_at,
+        )
         return local_result
 
     api_key = os.environ.get('OPENROUTER_API_KEY', '').strip()
     if not api_key:
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO, started_at,
+        )
         return _error('OpenRouter não configurado. Defina OPENROUTER_API_KEY no ambiente do servidor.', 503)
     model = os.environ.get('OPENROUTER_MODEL', 'openrouter/free').strip()
+    relevant_data = build_relevant_context(farm, message, conversation['turns'])
+    user_content = f'Pergunta atual: {message[:1500]}'
+    relevant_turns = relevant_assistant_turns(message, conversation['turns'])
+    if relevant_turns:
+        compact_turns = [
+            {'user': turn.get('user', '')[:200], 'assistant': turn.get('assistant', '')[:240]}
+            for turn in relevant_turns
+        ]
+        user_content += '\nContexto recente: ' + json.dumps(compact_turns, ensure_ascii=False, separators=(',', ':'))
+    if relevant_data:
+        user_content += (
+            '\nDados consultados no GoldCrop (JSON; use somente o que for relevante): '
+            + json.dumps(relevant_data, ensure_ascii=False, separators=(',', ':'))[:5000]
+        )
     body = json.dumps({
         'model': model,
         'messages': [
-            {'role': 'system', 'content': 'Você é o assistente do GoldCrop, plataforma especializada em cafeicultura. Responda em português brasileiro, de forma prática e concisa. Não afirme que consultou dados da fazenda, não invente cálculos agronômicos nem alterações no banco; para dados específicos, oriente a consulta aos módulos de talhões, safras, calendário, estoque e gestão.'},
-            {'role': 'user', 'content': message[:4000]},
+            {
+                'role': 'system',
+                'content': (
+                    'Você é o assistente do GoldCrop, especializado em cafeicultura. Responda em português '
+                    'brasileiro, de forma prática e concisa. O contexto JSON contém apenas dados autorizados '
+                    'e selecionados do GoldCrop. Baseie afirmações sobre a fazenda nesses dados; se faltarem '
+                    'informações, diga exatamente o que falta. Não invente valores, produtividade, relações '
+                    'entre talhões/safras e finanças nem recomendações agronômicas. Nunca alegue que gravou '
+                    'alterações no sistema.'
+                ),
+            },
+            {'role': 'user', 'content': user_content[:7000]},
         ],
         'temperature': 0.3,
-        'max_tokens': 500,
+        'max_tokens': 400,
     }).encode('utf-8')
     external_request = urllib.request.Request(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -987,12 +1196,28 @@ def assistente_api(request):
             result = json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as error:
         detail = error.read().decode('utf-8', errors='replace')[:500]
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO,
+            started_at, api_call=True,
+        )
         return _error(f'OpenRouter retornou HTTP {error.code}: {detail}', 502)
     except urllib.error.URLError as error:
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO,
+            started_at, api_call=True,
+        )
         return _error(f'Não foi possível conectar ao OpenRouter: {error.reason}', 502)
     except json.JSONDecodeError:
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO,
+            started_at, api_call=True,
+        )
         return _error('OpenRouter retornou uma resposta inválida.', 502)
     except TimeoutError:
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO,
+            started_at, api_call=True,
+        )
         return _error('A consulta ao OpenRouter excedeu o tempo limite.', 504)
 
     try:
@@ -1002,5 +1227,22 @@ def assistente_api(request):
     if isinstance(answer, list):
         answer = ' '.join(part.get('text', '') for part in answer if isinstance(part, dict))
     if not isinstance(answer, str) or not answer.strip():
+        _record_assistant_usage(
+            farm, request.user, feature, AssistenteUso.Resolucao.ERRO,
+            started_at, api_call=True,
+        )
         return _error('OpenRouter não retornou uma resposta de texto.', 502)
-    return JsonResponse({'ok': True, 'reply': answer.strip()})
+    usage = result.get('usage') if isinstance(result, dict) else {}
+    usage = usage if isinstance(usage, dict) else {}
+    prompt_tokens = usage.get('prompt_tokens')
+    completion_tokens = usage.get('completion_tokens')
+    _record_assistant_usage(
+        farm, request.user, feature, AssistenteUso.Resolucao.OPENROUTER,
+        started_at,
+        api_call=True,
+        input_tokens=prompt_tokens if isinstance(prompt_tokens, int) and prompt_tokens >= 0 else None,
+        output_tokens=completion_tokens if isinstance(completion_tokens, int) and completion_tokens >= 0 else None,
+    )
+    answer = answer.strip()
+    save_assistant_turn(request, farm, message, answer, feature)
+    return JsonResponse({'ok': True, 'reply': answer})

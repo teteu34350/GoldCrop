@@ -59,7 +59,7 @@ API e arquivos
   `templates/janela_fitossanitaria.html`
 - Renderizacao do calendario, resumo diario, janelas e horarios:
   `static/pesticide-calendar.js`
-- Estilos compartilhados com a Janela de Ouro e responsividade fitossanitaria:
+- Estilos compartilhados com a Janela de Adubacao e responsividade fitossanitaria:
   `static/gold-window.css`
 - Integracao meteorologica compartilhada: `static/app.js`
 - Analise automatica e criterios: `dashboard/pesticides.py`

@@ -130,7 +130,7 @@ Faixa do IEA   Classificacao
 21 a 40        Desfavoravel
 41 a 60        Atencao
 61 a 80        Favoravel
-81 a 100       Janela de Ouro
+81 a 100       Janela de Adubacao
 
 Os nomes e faixas sao a classificacao da nota, nao uma garantia de resultado
 agronomico. A decisao final considera tambem confianca e riscos.

@@ -454,7 +454,7 @@
     if (query.get('atividade') !== 'janela-de-ouro') return;
     const raw = sessionStorage.getItem('goldcrop.pendingCalendarActivity');
     if (!raw) {
-      showError('Não foi possível recuperar os dados da recomendação. Abra novamente a Janela de Ouro e tente outra vez.');
+      showError('Não foi possível recuperar os dados da recomendação. Abra novamente a Janela de Adubação e tente outra vez.');
       return;
     }
     let recommendation;
@@ -463,7 +463,7 @@
     } catch (error) {
       console.error('Os dados temporários da recomendação estão inválidos.', error);
       sessionStorage.removeItem('goldcrop.pendingCalendarActivity');
-      showError('Os dados da recomendação estão inválidos. Abra novamente a Janela de Ouro.');
+      showError('Os dados da recomendação estão inválidos. Abra novamente a Janela de Adubação.');
       return;
     }
     if (!recommendation?.date || !recommendation?.plot_id) {

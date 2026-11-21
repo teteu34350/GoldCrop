@@ -147,7 +147,7 @@ Mapa:
   o mapa no ponto e abre um popup com informacoes rapidas;
 - o painel abaixo do mapa exibe os mesmos detalhes do antigo modal: cadastro,
   sensor/telemetria, coordenadas, planejamento, IEA/janela, previsao e historico;
-  clicar na lista ou nos marcadores nao abre o modal "Janela de Ouro";
+  clicar na lista ou nos marcadores nao abre o modal "Janela de Adubacao";
 - talhao sem coordenadas continua na lista, mas nao pode ser exibido no mapa;
 - se nao houver coordenadas, aparece uma mensagem pedindo para cadastra-las.
 
@@ -178,7 +178,7 @@ Ao abrir um talhao, o modal apresenta:
 - area, cultura, idade, variedade e solo;
 - identificacao do sensor e estado de telemetria (sem leitura confirmada);
 - latitude, longitude e raio;
-- proxima aplicacao e "Janela de Ouro";
+- proxima aplicacao e "Janela de Adubacao";
 - previsao de chuva, temperatura e vento, com umidade do sensor bloqueada;
 - historico recente;
 - botoes para editar, excluir, planejar ou registrar aplicacao.

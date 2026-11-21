@@ -51,7 +51,7 @@ CLIMA E RECOMENDAÇÕES
 ---------------------
 - Consulta de previsão meteorológica para as coordenadas do talhão selecionado.
 - Análise automatizada de períodos favoráveis para adubação (aplicação de
-  fertilizantes) na Janela de Ouro, com indicadores, riscos e nível de confiança.
+  fertilizantes) na Janela de Adubação, com indicadores, riscos e nível de confiança.
 - Triagem fitossanitária por horário, considerando vento, rajadas, temperatura,
   umidade, chuva e probabilidade de chuva.
 - Exibição das condições por hora e por dia, com atualização da previsão.

@@ -250,8 +250,8 @@ class PesticideCalendarApiTests(TestCase):
         response = self.client.get(reverse("dashboard:pesticide_window"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Janela Fitossanitária")
-        self.assertContains(response, "Janela de Ouro")
+        self.assertContains(response, "Janela de Pulverização")
+        self.assertContains(response, "Janela de Adubação")
         self.assertContains(response, 'id="calendarTalhaoSelect"')
         self.assertContains(response, 'id="pesticideCalendarGrid"')
         self.assertContains(response, 'id="pesticidePrev"')

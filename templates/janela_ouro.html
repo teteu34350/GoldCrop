@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block breadcrumb %}Janela de Ouro{% endblock %}
+{% block breadcrumb %}Janela de Adubação{% endblock %}
 
 {% block extra_head %}
   <link rel="stylesheet" href="{% static 'gold-window.css' %}?v=3" />
@@ -13,7 +13,7 @@
     <header class="page-header">
       <div>
         <p class="calendar-eyebrow">Decisão agrícola · análise inteligente</p>
-        <h1 class="page-title">Janela de Ouro</h1>
+        <h1 class="page-title">Janela de Adubação</h1>
         <p class="page-sub">Encontre o melhor momento para adubar sua lavoura, com base nas condições do talhão e na previsão do tempo.</p>
       </div>
       <div class="calendar-window-actions">
@@ -67,7 +67,7 @@
       <aside class="card day-panel gold-window-detail" id="dayPanel" aria-label="Análise da janela de adubação selecionada">
         <div class="day-panel-empty" id="dayPanelEmpty">
           <span class="gold-window-empty-mark" aria-hidden="true">✦</span>
-          <strong>Descubra a Janela de Ouro para adubação</strong>
+          <strong>Descubra a melhor janela para adubação</strong>
           <p>Selecione um dia para consultar a recomendação de adubação e as condições previstas para o talhão.</p>
         </div>
         <div class="day-panel-content" id="dayPanelContent" style="display:none"></div>

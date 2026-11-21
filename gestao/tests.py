@@ -3,21 +3,26 @@ from django.test import TestCase
 # Create your tests here.
 import json
 import os
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 from django.urls import reverse
 
-from dashboard.models import EventoCalendario, Fazenda, MovimentacaoEstoque, Produto, Talhao
-from .models import EquipamentoAgricola, LancamentoFinanceiro, ServicoFazenda
+from dashboard.models import (
+    ColetaMeteorologica, EventoCalendario, ExecucaoAplicacao, Fazenda,
+    MovimentacaoEstoque, Produto, RecomendacaoJanela, Talhao,
+)
+from .models import AssistenteUso, EquipamentoAgricola, LancamentoFinanceiro, ServicoFazenda
 
 
 class GestaoWorkflowTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username='owner@example.com', password='Senha12345')
         self.farm = Fazenda.objects.create(
             produtor=self.user,
@@ -100,6 +105,49 @@ class GestaoWorkflowTests(TestCase):
         self.assertEqual(movement.tipo, MovimentacaoEstoque.Tipo.SAIDA)
         self.assertEqual(movement.quantidade, Decimal('320'))
 
+    def test_ai_stock_entry_requires_confirmation_and_updates_inventory_ledger(self):
+        fertilizer = Produto.objects.create(
+            fazenda=self.farm,
+            nome='Fertilizante NPK 20-05-20',
+            categoria='Fertilizantes',
+            unidade='kg',
+            quantidade_atual=Decimal('100'),
+        )
+        proposal = self.post_json('gestao:assistente_api', {
+            'message': 'Adicione 500 Kg de Fertilizante NPK 20-05-20 no estoque',
+        })
+
+        self.assertEqual(proposal.status_code, 200)
+        self.assertTrue(proposal.json()['confirmation_required'])
+        fertilizer.refresh_from_db()
+        self.assertEqual(fertilizer.quantidade_atual, Decimal('100'))
+        self.assertEqual(MovimentacaoEstoque.objects.count(), 0)
+
+        confirmed = self.post_json('gestao:assistente_api', {'action': 'confirm'})
+
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertTrue(confirmed.json()['saved'])
+        fertilizer.refresh_from_db()
+        self.assertEqual(fertilizer.quantidade_atual, Decimal('600'))
+        movement = MovimentacaoEstoque.objects.get()
+        self.assertEqual(movement.produto, fertilizer)
+        self.assertEqual(movement.tipo, MovimentacaoEstoque.Tipo.ENTRADA)
+        self.assertEqual(movement.quantidade, Decimal('500'))
+
+    def test_ai_stock_entry_asks_for_a_registered_product_name(self):
+        response = self.post_json('gestao:assistente_api', {
+            'message': 'Adicione 500 Kg de trabalho no estoque',
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json().get('confirmation_required', False))
+        self.assertIn(
+            'informe o nome exatamente como está cadastrado',
+            response.json()['reply'].casefold(),
+        )
+        self.assertNotIn('acesse o módulo', response.json()['reply'].lower())
+        self.assertEqual(MovimentacaoEstoque.objects.count(), 0)
+
     def test_ai_coffee_variety_and_area_queries_use_active_farm_records(self):
         Talhao.objects.create(
             fazenda=self.farm, nome='Talhão 01', cultura='Café',
@@ -115,6 +163,9 @@ class GestaoWorkflowTests(TestCase):
             area_hectares=5, quantidade_talhoes=1, culturas=['Café'],
             tipo_cultivo='Convencional', irrigacao='Gotejamento',
         )
+        session = self.client.session
+        session['current_farm_id'] = self.farm.id
+        session.save()
         Talhao.objects.create(
             fazenda=other_farm, nome='Talhão alheio', cultura='Café',
             variedade='Bourbon', area_hectares=Decimal('50'),
@@ -147,7 +198,7 @@ class GestaoWorkflowTests(TestCase):
             })
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('não possui registros estruturados de produção', response.json()['reply'])
+        self.assertIn('não há registros estruturados de produção', response.json()['reply'].casefold())
         openrouter.assert_not_called()
 
     def test_ai_coffee_calendar_query_lists_upcoming_flowering(self):
@@ -167,6 +218,108 @@ class GestaoWorkflowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(flowering.titulo, response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_application_history_is_filtered_by_plot_and_farm(self):
+        talhao = Talhao.objects.create(
+            fazenda=self.farm, nome='Talhão 01', cultura='Café',
+        )
+        ExecucaoAplicacao.objects.create(
+            fazenda=self.farm,
+            talhao=talhao,
+            produto='Fertilizante foliar',
+            tipo_insumo='Fertilizante',
+            data_aplicacao=timezone.localdate() - timedelta(days=2),
+            status=ExecucaoAplicacao.Status.REALIZADA,
+        )
+        other_farm = Fazenda.objects.create(
+            produtor=self.user, nome='Outra Fazenda', cep='37000001',
+            estado='MG', cidade='Varginha', bairro='Zona Rural',
+            area_hectares=5, quantidade_talhoes=1, culturas=['Café'],
+            tipo_cultivo='Convencional', irrigacao='Gotejamento',
+        )
+        ExecucaoAplicacao.objects.create(
+            fazenda=other_farm,
+            produto='Aplicação privada',
+            data_aplicacao=timezone.localdate(),
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Qual o histórico de aplicações no Talhão 01?',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Fertilizante foliar', response.json()['reply'])
+        self.assertNotIn('Aplicação privada', response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_adubation_query_uses_the_latest_gold_window_recommendation(self):
+        talhao = Talhao.objects.create(
+            fazenda=self.farm, nome='Talhão 01', cultura='Café',
+        )
+        today = timezone.localdate()
+        now = timezone.now()
+        old_collection = ColetaMeteorologica.objects.create(
+            fazenda=self.farm, talhao=talhao,
+            coletada_em=now - timedelta(hours=2),
+            latitude=Decimal('-20.89'), longitude=Decimal('-46.08'),
+        )
+        latest_collection = ColetaMeteorologica.objects.create(
+            fazenda=self.farm, talhao=talhao,
+            coletada_em=now,
+            latitude=Decimal('-20.89'), longitude=Decimal('-46.08'),
+        )
+        old_date = today + timedelta(days=1)
+        best_date = today + timedelta(days=2)
+        for collection, recommendation_date, score in (
+            (old_collection, old_date, 99),
+            (latest_collection, best_date, 82),
+        ):
+            start = timezone.make_aware(datetime.combine(recommendation_date, time(7)))
+            RecomendacaoJanela.objects.create(
+                fazenda=self.farm,
+                talhao=talhao,
+                coleta=collection,
+                data=recommendation_date,
+                inicio=start,
+                fim=start.replace(hour=10),
+                adequacao=score,
+                classificacao='favorable',
+                confianca=Decimal('0.9'),
+                decisao='APPLY',
+            )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Qual é o melhor dia dessa semana para fazer a adubação?',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(best_date.strftime('%d/%m/%Y'), response.json()['reply'])
+        self.assertIn('07:00 às 10:00', response.json()['reply'])
+        self.assertIn('Talhão 01', response.json()['reply'])
+        self.assertIn('IEA 82%', response.json()['reply'])
+        self.assertNotIn(old_date.strftime('%d/%m/%Y'), response.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_adubation_query_reports_when_gold_window_has_no_recommendation(self):
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Qual o melhor dia da semana para adubar?',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            'não há recomendação favorável da janela de adubação',
+            response.json()['reply'].casefold(),
+        )
         openrouter.assert_not_called()
 
     def test_ai_inventory_questions_distinguish_balances_from_low_stock(self):
@@ -226,9 +379,11 @@ class GestaoWorkflowTests(TestCase):
             })
 
         self.assertEqual(pending.status_code, 200)
-        self.assertIn('1 serviço pendente registrado', pending.json()['reply'])
+        self.assertIn('Colheita', pending.json()['reply'])
+        self.assertIn('Pendente', pending.json()['reply'])
         self.assertEqual(maintenance.status_code, 200)
-        self.assertIn('1 equipamento marcado', maintenance.json()['reply'])
+        self.assertIn('Trator', maintenance.json()['reply'])
+        self.assertIn('manutenção', maintenance.json()['reply'].casefold())
         openrouter.assert_not_called()
 
     def test_ai_monthly_expense_query_uses_local_records_only(self):
@@ -245,6 +400,11 @@ class GestaoWorkflowTests(TestCase):
         )
         LancamentoFinanceiro.objects.create(
             fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Despesa do mês passado', categoria='Outros', valor=Decimal('999'),
+            data=today.replace(day=1) - timedelta(days=1),
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
             titulo='Lançamento futuro', categoria='Outros', valor=Decimal('999'),
             data=today + timedelta(days=2),
         )
@@ -255,11 +415,195 @@ class GestaoWorkflowTests(TestCase):
             response = self.post_json('gestao:assistente_api', {
                 'message': 'Me diga quanto gastei este mês',
             })
+            no_period = self.post_json('gestao:assistente_api', {
+                'message': 'Quanto gastei?',
+            })
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('R$ 130,00', response.json()['reply'])
         self.assertNotIn('999', response.json()['reply'])
+        self.assertIn('R$ 130,00', no_period.json()['reply'])
+        self.assertNotIn('999', no_period.json()['reply'])
         openrouter.assert_not_called()
+
+    def test_ai_finance_category_queries_and_followups_use_the_previous_period(self):
+        today = timezone.localdate()
+        month_start = today.replace(day=1)
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.COMPRA,
+            titulo='Adubo para lavoura', categoria='Fertilizantes',
+            valor=Decimal('350'), data=today,
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Defensivos', categoria='Defensivos',
+            valor=Decimal('125'), data=today,
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.COMPRA,
+            titulo='Adubo antigo', categoria='Fertilizantes',
+            valor=Decimal('800'), data=month_start - timedelta(days=1),
+        )
+
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            fertilizer = self.post_json('gestao:assistente_api', {
+                'message': 'Quanto gastei com fertilizantes este mês?',
+            })
+            fertilizer_without_period = self.post_json('gestao:assistente_api', {
+                'message': 'Quanto gastei com fertilizantes?',
+            })
+            defensives = self.post_json('gestao:assistente_api', {
+                'message': 'E com defensivos?',
+            })
+            comparison = self.post_json('gestao:assistente_api', {
+                'message': 'Qual foi o maior gasto?',
+            })
+
+        self.assertIn('R$ 350,00', fertilizer.json()['reply'])
+        self.assertIn('R$ 350,00', fertilizer_without_period.json()['reply'])
+        self.assertNotIn('R$ 1.150,00', fertilizer_without_period.json()['reply'])
+        self.assertIn('R$ 125,00', defensives.json()['reply'])
+        self.assertIn('fertilizantes', comparison.json()['reply'])
+        self.assertIn('R$ 350,00', comparison.json()['reply'])
+        openrouter.assert_not_called()
+
+    def test_ai_local_query_cache_is_farm_scoped_and_invalidated_on_plot_changes(self):
+        first = self.post_json('gestao:assistente_api', {
+            'message': 'Quais talhões estão cadastrados?',
+        })
+        self.assertIn('Não encontrei talhões ativos', first.json()['reply'])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            Talhao.objects.create(
+                fazenda=self.farm, nome='Talhão Novo', cultura='Café',
+                variedade='Mundo Novo',
+            )
+        refreshed = self.post_json('gestao:assistente_api', {
+            'message': 'Quais talhões estão cadastrados?',
+        })
+        cached = self.post_json('gestao:assistente_api', {
+            'message': 'Quais talhões estão cadastrados?',
+        })
+
+        self.assertIn('Talhão Novo', refreshed.json()['reply'])
+        self.assertEqual(refreshed.json()['reply'], cached.json()['reply'])
+        self.assertEqual(
+            AssistenteUso.objects.filter(resolucao=AssistenteUso.Resolucao.LOCAL).count(),
+            2,
+        )
+        self.assertEqual(
+            AssistenteUso.objects.filter(resolucao=AssistenteUso.Resolucao.CACHE).count(),
+            1,
+        )
+
+    def test_ai_does_not_cache_stock_balances(self):
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}), patch(
+            'gestao.views.urllib.request.urlopen',
+        ) as openrouter:
+            first = self.post_json('gestao:assistente_api', {
+                'message': 'Me diga como está meu estoque',
+            })
+            self.seed_product.quantidade_atual = Decimal('280')
+            self.seed_product.save(update_fields=['quantidade_atual'])
+            second = self.post_json('gestao:assistente_api', {
+                'message': 'Me diga como está meu estoque',
+            })
+
+        self.assertIn('320 kg', first.json()['reply'])
+        self.assertIn('280 kg', second.json()['reply'])
+        self.assertEqual(
+            AssistenteUso.objects.filter(resolucao=AssistenteUso.Resolucao.CACHE).count(),
+            0,
+        )
+        openrouter.assert_not_called()
+
+    def test_ai_complex_question_sends_only_relevant_farm_data_to_openrouter(self):
+        Talhao.objects.create(
+            fazenda=self.farm, nome='Talhão 01', cultura='Café',
+            area_hectares=Decimal('5'),
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=self.farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Fertilizante aplicado', categoria='Fertilizantes',
+            valor=Decimal('240'), data=timezone.localdate(),
+        )
+        other_farm = Fazenda.objects.create(
+            produtor=self.user, nome='Fazenda Não Selecionada', cep='37000001',
+            estado='MG', cidade='Varginha', bairro='Zona Rural',
+            area_hectares=5, quantidade_talhoes=1, culturas=['Café'],
+            tipo_cultivo='Convencional', irrigacao='Gotejamento',
+        )
+        LancamentoFinanceiro.objects.create(
+            fazenda=other_farm, tipo=LancamentoFinanceiro.Tipo.DESPESA,
+            titulo='Fertilizante particular', categoria='Fertilizantes',
+            valor=Decimal('999'), data=timezone.localdate(),
+        )
+        session = self.client.session
+        session['current_farm_id'] = self.farm.id
+        session.save()
+        with patch.dict(os.environ, {'OPENROUTER_API_KEY': ''}):
+            stock = self.post_json('gestao:assistente_api', {
+                'message': 'Me diga como está meu estoque',
+            })
+        self.assertIn('Semente de milho', stock.json()['reply'])
+        response_body = json.dumps({
+            'choices': [{'message': {'content': 'Os dados registrados mostram R$ 240.'}}],
+            'usage': {'prompt_tokens': 123, 'completion_tokens': 14},
+        }).encode()
+        with patch('gestao.views.urllib.request.urlopen') as openrouter, patch.dict(
+            os.environ, {'OPENROUTER_API_KEY': 'test-only-key'},
+        ):
+            openrouter.return_value.__enter__.return_value.read.return_value = response_body
+            response = self.post_json('gestao:assistente_api', {
+                'message': 'Relacione meus gastos com fertilizantes e a área dos talhões para análise.',
+            })
+
+        self.assertEqual(response.status_code, 200)
+        request_payload = json.loads(openrouter.call_args.args[0].data.decode())
+        user_content = request_payload['messages'][-1]['content']
+        self.assertIn('"finance"', user_content)
+        self.assertIn('"plots"', user_content)
+        self.assertIn('"expenses_and_purchases":"240"', user_content)
+        self.assertNotIn('Fazenda Não Selecionada', user_content)
+        self.assertNotIn('Fertilizante particular', user_content)
+        self.assertNotIn('Semente de milho', user_content)
+        usage = AssistenteUso.objects.get(resolucao=AssistenteUso.Resolucao.OPENROUTER)
+        self.assertEqual(usage.tokens_entrada, 123)
+        self.assertEqual(usage.tokens_saida, 14)
+
+    def test_ai_conversation_context_is_not_reused_for_another_farm(self):
+        other_farm = Fazenda.objects.create(
+            produtor=self.user, nome='Outra Fazenda', cep='37000001',
+            estado='MG', cidade='Varginha', bairro='Zona Rural',
+            area_hectares=5, quantidade_talhoes=1, culturas=['Café'],
+            tipo_cultivo='Convencional', irrigacao='Gotejamento',
+        )
+        session = self.client.session
+        session['current_farm_id'] = self.farm.id
+        session.save()
+        response_body = json.dumps({
+            'choices': [{'message': {'content': 'Resposta geral'}}],
+        }).encode()
+        with patch('gestao.views.urllib.request.urlopen') as openrouter, patch.dict(
+            os.environ, {'OPENROUTER_API_KEY': 'test-only-key'},
+        ):
+            openrouter.return_value.__enter__.return_value.read.return_value = response_body
+            first = self.post_json('gestao:assistente_api', {
+                'message': 'Qual sua sugestão para organização da lavoura? Minha anotação secreta.',
+            })
+            session = self.client.session
+            session['current_farm_id'] = other_farm.id
+            session.save()
+            self.post_json('gestao:assistente_api', {
+                'message': 'O que você recomenda para organização geral da lavoura?',
+            })
+
+        self.assertEqual(first.status_code, 200)
+        request_payload = json.loads(openrouter.call_args_list[-1].args[0].data.decode())
+        self.assertNotIn('Minha anotação secreta', json.dumps(request_payload))
+        self.assertNotIn('Fazenda Teste', json.dumps(request_payload))
 
     def test_ai_rejects_stock_confirmation_if_balance_changed(self):
         proposal = self.post_json('gestao:assistente_api', {
@@ -323,7 +667,10 @@ class GestaoWorkflowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['reply'], 'Resposta geral')
         request_payload = json.loads(mock_response.call_args.args[0].data.decode())
-        self.assertEqual(request_payload['messages'][-1]['content'], 'Como organizar o plantio?')
+        self.assertEqual(
+            request_payload['messages'][-1]['content'],
+            'Pergunta atual: Como organizar o plantio?',
+        )
         self.assertNotIn('Fazenda Teste', json.dumps(request_payload))
         self.assertNotIn('Semente de milho', json.dumps(request_payload))
 

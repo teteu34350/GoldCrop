@@ -144,3 +144,41 @@ class EquipamentoAgricola(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+class AssistenteUso(models.Model):
+    class Resolucao(models.TextChoices):
+        LOCAL = 'LOCAL', 'Consulta local'
+        CACHE = 'CACHE', 'Cache'
+        OPENROUTER = 'OPENROUTER', 'OpenRouter'
+        ACAO = 'ACAO', 'Ação preparada'
+        ERRO = 'ERRO', 'Erro'
+
+    fazenda = models.ForeignKey(
+        Fazenda, on_delete=models.CASCADE, related_name='uso_assistente',
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='uso_assistente',
+    )
+    funcionalidade = models.CharField(max_length=32, default='general')
+    resolucao = models.CharField(max_length=12, choices=Resolucao.choices)
+    chamada_api = models.BooleanField(default=False)
+    cache_utilizado = models.BooleanField(default=False)
+    tokens_entrada = models.PositiveIntegerField(null=True, blank=True)
+    tokens_saida = models.PositiveIntegerField(null=True, blank=True)
+    duracao_ms = models.PositiveIntegerField(default=0)
+    criada_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criada_em', '-id']
+        indexes = [
+            models.Index(fields=['fazenda', 'criada_em']),
+            models.Index(fields=['resolucao', 'criada_em']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_resolucao_display()} — {self.funcionalidade} — {self.criada_em:%d/%m/%Y %H:%M}'

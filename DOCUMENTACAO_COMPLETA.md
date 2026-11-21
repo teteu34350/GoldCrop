@@ -82,7 +82,7 @@ Arquivos principais:
   preservar dados existentes; páginas, APIs e administração foram removidas.
 - `dashboard/views.py` e `gestao/views.py`: páginas e APIs ativas.
 - `static/app.js`: inicialização e integração principal do frontend agrícola.
-- `static/analysis/GoldCropAnalysisEngine.js`: cálculo do IEA da Janela de Ouro.
+- `static/analysis/GoldCropAnalysisEngine.js`: cálculo do IEA da Janela de Adubação.
 - `dashboard/pesticides.py`: avaliação meteorológica fitossanitária no servidor.
 
 ## 3. Instalação e execução local (Windows)
@@ -263,8 +263,8 @@ notificações da fazenda ativa.
 | Página | Rota | Principais dados |
 |---|---|---|
 | Talhões | `/talhoes/` | Lista/mapa, cadastro, edição e detalhes de talhões |
-| Janela de Ouro | `/janela-de-ouro/` | IEA e janelas favoráveis para operação agrícola/adubação |
-| Janela fitossanitária | `/janela-fitossanitaria/` | Triagem horária/dia, alertas, intervalos e condições |
+| Janela de Adubação | `/janela-de-ouro/` | IEA e janelas favoráveis para adubar |
+| Janela de Pulverização | `/janela-fitossanitaria/` | Triagem horária/dia, alertas, intervalos e condições |
 | Calendário | `/calendario/` | Eventos e atividades da fazenda |
 | Aplicações | `/aplicacoes/` | Planejamento e registro de aplicações |
 | Histórico | `/historico/` | Consulta de registros de aplicação |
@@ -308,7 +308,7 @@ continuar ligados ao ID do próprio talhão. Excluir talhão é uma exclusão re
 relações configuradas como `SET_NULL` podem manter histórico sem a ligação ao
 talhão.
 
-### 7.2 Clima e Janela de Ouro
+### 7.2 Clima e Janela de Adubação
 
 O navegador consulta Open-Meteo usando as coordenadas do talhão selecionado e
 `timezone=auto`; não usa a localização do visitante. O frontend normaliza os
@@ -325,13 +325,13 @@ de dados e não deve ser confundida com o IEA. A decisão pode ser insuficiênci
 ou bloqueio por risco mesmo para um IEA alto.
 
 Faixas exibidas: 0–20 muito desfavorável, 21–40 desfavorável, 41–60 atenção,
-61–80 favorável e 81–100 Janela de Ouro. O motor avalia janelas de quatro
+61–80 favorável e 81–100 Janela de Adubação. O motor avalia janelas de quatro
 horas com inícios a cada hora e horizonte máximo de sete dias. A recomendação
 precisa de confiança mínima; riscos altos de lixiviação, escorrimento ou deriva
 podem impedir APPLY. Veja [LOGICA_IEA.txt](./LOGICA_IEA.txt) para a descrição
 detalhada de cada curva, penalidade e critério.
 
-### 7.3 Janela fitossanitária
+### 7.3 Janela de Pulverização
 
 `dashboard/pesticides.py` avalia cada hora futura, agrupa horas consecutivas
 com a mesma classificação e exige pelo menos duas horas para apresentar uma
@@ -418,31 +418,58 @@ equipamentos em manutenção.
 
 ### 7.8 Assistente
 
-O endpoint `/gestao/api/assistente/` executa primeiro regras locais. Consultas
-suportadas incluem saldos de estoque, produtos em alerta, totais financeiros
-do mês, variedades, áreas de talhão, safras de café e eventos futuros de
-florada, formação dos frutos, maturação, colheita, pós-colheita, adubação,
-irrigação e controle fitossanitário, além de serviços pendentes e
-equipamentos/manutenção. Mensagem geral que não é reconhecida localmente pode
-ser enviada à OpenRouter.
+O endpoint `/gestao/api/assistente/` verifica autenticação, fazenda selecionada
+e permissão de visualização antes de consultar. O interpretador local reconhece
+intenção, módulo, categoria e períodos usuais (hoje, ontem, semana, mês, ano,
+últimos dias e datas informadas). Consultas locais incluem fazenda e talhões,
+variedades/áreas/idade, safras, aplicações, calendário, janelas meteorológicas,
+estoque/histórico, finanças por categoria/período, relatórios, serviços e
+equipamentos. Essas respostas não consomem tokens.
 
-O assistente não calcula produtividade em sacas: não existe registro confiável
-de produção colhida por talhão. Pode preparar eventos cafeeiros e lançamentos
-dos módulos existentes, que só são gravados após confirmação.
+As consultas permitidas para contexto generativo ficam em `gestao/assistant.py`
+na lista `QUERY_TOOLS`. Cada ferramenta aplica filtro pela fazenda ativa,
+seleciona somente campos necessários e limita os resultados. Não há SQL
+fornecido pelo modelo nem acesso livre ao ORM. O backend executa as ferramentas
+relevantes antes de chamar OpenRouter, reduz os resultados a JSON compacto e
+envia o contexto somente quando a pergunta pede dados da fazenda ou uma análise
+cruzada. A mensagem é limitada a 1.500 caracteres, o contexto de dados a 5.000
+caracteres e a resposta do modelo a 400 tokens. Perguntas genéricas não recebem
+dados da fazenda.
 
-O contexto e os dados da fazenda não acompanham a chamada OpenRouter; somente
-a mensagem atual (limitada a 4000 caracteres), o prompt de sistema e o modelo
-são enviados. Respostas locais consultam a fazenda ativa no banco.
+O contexto conversacional fica na sessão, associado ao usuário e à fazenda
+ativa. São mantidos no máximo quatro turnos resumidos; somente os dois mais
+recentes relacionados aos módulos da pergunta atual podem acompanhar uma
+pergunta generativa. Turnos de estoque, por exemplo, não são enviados junto com
+uma pergunta apenas financeira. Trocar usuário ou fazenda descarta o contexto
+anterior. Mensagens e respostas não são gravadas no banco de métricas.
 
-O assistente pode preparar lançamento financeiro, saída de estoque ou
-atividade. A proposta fica em sessão, identificada pelo usuário e pela fazenda,
-expira após 10 minutos e só é gravada após ação `confirm`. A ação `cancel`
-descarta a proposta. Para saída de estoque, saldo é bloqueado/novamente
-conferido na confirmação. O navegador também oferece ditado por voz quando o
-browser disponibiliza SpeechRecognition; isso é uma função do browser.
+Respostas locais estáveis podem ser armazenadas por até 120 segundos. A chave
+inclui usuário, fazenda, mensagem normalizada/filtros e uma geração da fazenda.
+Sinais de gravação/exclusão dos modelos consultados invalidam essa geração após
+o commit. Saldos de estoque, consultas financeiras, operações de escrita e
+consultas meteorológicas atuais ou relatórios que agregam saldos e valores não
+usam esse cache. O cache padrão do Django é local ao processo; deployments com
+múltiplos workers precisam configurar um backend compartilhado para compartilhar
+cache entre processos.
 
-Sem `OPENROUTER_API_KEY`, perguntas genéricas retornam HTTP 503; operações
-locais suportadas ainda podem responder sem a chave.
+O modelo financeiro não tem vínculo estruturado com talhão ou safra e não há
+campo confiável de produção colhida por talhão. Por isso, o assistente explica
+essas limitações em vez de calcular gastos por hectare, atribuir despesas a
+uma safra ou inventar produtividade em sacas.
+
+Operações de escrita podem preparar lançamento financeiro, entrada/saída de
+estoque ou atividade cafeeira. A proposta fica na sessão, vinculada ao usuário
+e à fazenda, expira em 10 minutos e só é gravada após ação `confirm`; `cancel`
+descarta a proposta. Saldos e permissões são verificados novamente na
+confirmação.
+
+O modelo `AssistenteUso`, consultável por administradores no Django Admin,
+registra a funcionalidade, resolução local/cache/OpenRouter/erro, duração,
+chamada ao provedor e tokens de entrada/saída quando o provedor os informa.
+Não armazena o texto das perguntas. Sem `OPENROUTER_API_KEY`, consultas locais
+continuam disponíveis e perguntas que realmente precisam da API retornam HTTP
+503. O navegador também oferece ditado por voz quando o browser disponibiliza
+SpeechRecognition.
 
 ## 8. Modelos e relações do banco
 
@@ -486,6 +513,7 @@ técnica, tarefa e outro.
 | `Safra` | Fazenda, cultura (café), variedade, ano, área, datas, status, talhões associados e observação. |
 | `ServicoFazenda` | Fazenda, nome, contratado/prestado, pessoa/local/quantidade, valor opcional, data, status e observação. |
 | `EquipamentoAgricola` | Fazenda, nome/tipo/identificação, horímetro, status, datas de manutenção e observação. |
+| `AssistenteUso` | Fazenda/usuário, funcionalidade, resolução local/cache/OpenRouter/erro, tokens informados pelo provedor, duração e indicadores de cache/API; não armazena mensagens. |
 
 O app `pecuaria` ainda consta em `INSTALLED_APPS` exclusivamente para manter o
 histórico de modelos e migrations do banco. Não há rotas ativas, views, telas
@@ -657,7 +685,7 @@ migrações não geradas ou configurações `check --deploy`.
 - Algumas safras/serviços/equipamentos/registros são cadastros e listagens
   básicos; não se deve pressupor recursos de edição/exclusão não expostos nas
   rotas.
-- A Janela de Ouro utiliza critérios e configurações descritos em
+- A Janela de Adubação utiliza critérios e configurações descritos em
   `LOGICA_IEA.txt`; não é um cálculo de necessidade hídrica geral.
 - A triagem fitossanitária e os limites gerais do GoldCrop não substituem bula,
   avaliação presencial nem orientação profissional.
@@ -671,7 +699,7 @@ migrações não geradas ou configurações `check --deploy`.
 - [FUNCIONALIDADES_DO_SISTEMA.txt](./FUNCIONALIDADES_DO_SISTEMA.txt): resumo
   funcional para usuários.
 - [LOGICA_IEA.txt](./LOGICA_IEA.txt): fatores, pesos, confiança, riscos e
-  decisão da Janela de Ouro.
+  decisão da Janela de Adubação.
 - [JANELA_FITOSSANITARIA.txt](./JANELA_FITOSSANITARIA.txt): origem dos dados e
   critérios da triagem meteorológica.
 - [LOGICA_TALHOES.txt](./LOGICA_TALHOES.txt): cadastro, mapa, seleção e
