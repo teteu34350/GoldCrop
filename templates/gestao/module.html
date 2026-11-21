@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block extra_head %}<link rel="stylesheet" href="{% static 'gestao.css' %}?v=2" />{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'gestao.css' %}?v=3" />{% endblock %}
 
 {% block content %}
 <section class="page active" id="page-gestao" data-gestao-module="{{ module }}">
   <div class="page-content gestao-page">
-    <div class="page-header">
+    <div class="page-header{% if module == 'assistente' %} assistant-page-header{% endif %}">
       <div>
         <h1 class="page-title">{{ module_title }}</h1>
         <p class="page-sub">{{ module_description }}</p>
@@ -32,6 +32,12 @@
         <label for="assistantEditInput">Corrija a solicitação antes de confirmar</label>
         <div class="assistant-edit-row"><input class="form-input" id="assistantEditInput" maxlength="4000" /><button class="btn-primary" type="submit">Atualizar proposta</button></div>
       </form>
+      <div class="assistant-suggestions" aria-label="Sugestões rápidas">
+        <button type="button" data-assistant-prompt="Quanto tenho de sementes?">Consultar sementes</button>
+        <button type="button" data-assistant-prompt="Quanto gastei este mês?">Consultar despesas</button>
+        <button type="button" data-assistant-prompt="Tive uma despesa de R$ 350 com diesel">Preparar despesa</button>
+      </div>
+      <p class="assistant-recording" id="assistantRecording" role="status" hidden><span></span><span id="assistantRecordingText">Ouvindo… fale naturalmente.</span></p>
       <form class="assistant-composer" id="assistantForm">
         {% csrf_token %}
         <label class="sr-only" for="assistantInput">Mensagem para o assistente</label>
@@ -41,12 +47,6 @@
         </div>
         <button class="assistant-send" type="submit" aria-label="Enviar mensagem"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 4 16 8-16 8 3-8z"/><path d="M7 12h13"/></svg><span>Enviar</span></button>
       </form>
-      <p class="assistant-recording" id="assistantRecording" role="status" hidden><span></span><span id="assistantRecordingText">Ouvindo… fale naturalmente.</span></p>
-      <div class="assistant-suggestions">
-        <button type="button" data-assistant-prompt="Quanto tenho de sementes?">Consultar sementes</button>
-        <button type="button" data-assistant-prompt="Quanto gastei este mês?">Consultar despesas</button>
-        <button type="button" data-assistant-prompt="Tive uma despesa de R$ 350 com diesel">Preparar despesa</button>
-      </div>
     </section>
 
     {% elif module == 'financeiro' %}

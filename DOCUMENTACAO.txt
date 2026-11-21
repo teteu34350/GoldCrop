@@ -1,6 +1,15 @@
 ﻿GOLDCROP - DOCUMENTAÇÃO ATUALIZADA DO SISTEMA
 =============================================
 
+DOCUMENTACAO TECNICA COMPLETA
+-----------------------------
+
+Consulte DOCUMENTACAO_COMPLETA.md para a referência principal e detalhada,
+incluindo instalação, variáveis de ambiente, arquitetura, modelos, páginas,
+APIs, regras, permissões, implantação e diagnóstico. Este arquivo mantém um
+resumo funcional legado; quando houver diferença, confira o código e a
+documentação completa.
+
 1. VISÃO GERAL
 --------------
 

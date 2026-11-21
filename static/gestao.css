@@ -63,3 +63,42 @@
   .assistant-edit-row { flex-direction: column; }
   .assistant-suggestions { padding-left: 1rem; padding-right: 1rem; }
 }
+
+/* Assistente: conversa direta, sem o aspecto de painel dentro de painel. */
+#page-gestao[data-gestao-module="assistente"] .gestao-page { max-width: 1080px; }
+#page-gestao[data-gestao-module="assistente"] .assistant-page-header { min-height: 42px; align-items: center; margin-bottom: .5rem; }
+#page-gestao[data-gestao-module="assistente"] .assistant-page-header .page-title { font-size: 1.12rem; line-height: 1.2; }
+#page-gestao[data-gestao-module="assistente"] .assistant-page-header .page-sub { display: none; }
+#page-gestao[data-gestao-module="assistente"] .assistant-card { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto auto; gap: 0; min-height: calc(100vh - 180px); margin: 0 auto; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+#page-gestao[data-gestao-module="assistente"] .assistant-heading { padding: .35rem 0 .8rem; border-bottom: 0; }
+#page-gestao[data-gestao-module="assistente"] .assistant-heading h2 { font-size: 1rem; }
+#page-gestao[data-gestao-module="assistente"] .assistant-mark { width: 34px; height: 34px; border-radius: 10px; font-size: 1rem; }
+#page-gestao[data-gestao-module="assistente"] .assistant-privacy { margin: 0 0 .5rem; padding: 0; border: 0; background: transparent; font-size: .73rem; }
+#page-gestao[data-gestao-module="assistente"] .assistant-messages { min-height: 0; max-height: none; padding: .9rem 0 1rem; border: 0; border-radius: 0; background: transparent; }
+#page-gestao[data-gestao-module="assistente"] .assistant-message { max-width: min(80%, 650px); box-shadow: none; }
+#page-gestao[data-gestao-module="assistente"] .assistant-message-bot { border: 0; background: #f1f5f1; }
+#page-gestao[data-gestao-module="assistente"] .assistant-confirmation { width: min(100%, 480px); border-color: #dce8de; background: #f9fcf9; }
+#page-gestao[data-gestao-module="assistente"] .assistant-suggestions { gap: .5rem; overflow-x: auto; overscroll-behavior-inline: contain; padding: .55rem 0 .65rem; scrollbar-width: none; }
+#page-gestao[data-gestao-module="assistente"] .assistant-suggestions::-webkit-scrollbar { display: none; }
+#page-gestao[data-gestao-module="assistente"] .assistant-suggestions button { min-height: 34px; padding: .38rem .68rem; white-space: nowrap; background: #fff; }
+#page-gestao[data-gestao-module="assistente"] .assistant-recording { margin: 0 0 .35rem; }
+#page-gestao[data-gestao-module="assistente"] .assistant-composer { position: relative; bottom: auto; gap: .5rem; padding: .7rem 0 calc(.2rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border-light, #edf0ed); background: var(--bg-primary, #fff); }
+#page-gestao[data-gestao-module="assistente"] .assistant-input-wrap .form-input { min-height: 48px; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgb(28 57 39 / 5%); }
+#page-gestao[data-gestao-module="assistente"] .assistant-send { min-width: 48px; min-height: 48px; border-radius: 14px; }
+
+@media (max-width: 820px) {
+  #page-gestao[data-gestao-module="assistente"] .gestao-page { display: grid; height: calc(100dvh - 64px - 64px - env(safe-area-inset-bottom)); padding-top: .6rem; padding-bottom: 0; grid-template-rows: auto minmax(0, 1fr); }
+  #page-gestao[data-gestao-module="assistente"] .assistant-page-header { margin-bottom: .2rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-card { min-height: 0; height: 100%; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-heading { padding-top: .15rem; padding-bottom: .45rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-privacy { margin-bottom: .25rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-messages { padding-top: .6rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-composer { z-index: 2; }
+}
+
+@media (max-width: 420px) {
+  #page-gestao[data-gestao-module="assistente"] .assistant-message { max-width: 88%; font-size: .86rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-confirmation { width: 100%; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-suggestions { margin-right: -.85rem; padding-right: .85rem; }
+  #page-gestao[data-gestao-module="assistente"] .assistant-composer { padding-bottom: calc(.35rem + env(safe-area-inset-bottom)); }
+}
