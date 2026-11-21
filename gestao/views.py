@@ -17,6 +17,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from dashboard.models import EventoCalendario, MovimentacaoEstoque, Produto, Talhao
 from dashboard.views import _current_farm, _has_farm_permission
+from pecuaria.models import Animal
 
 from .models import EquipamentoAgricola, LancamentoFinanceiro, Safra, ServicoFazenda
 
@@ -472,8 +473,18 @@ def _stage_assistant_action(request, farm, kind, payload, description):
 
 def _local_assistant_reply(request, farm, message):
     normalized = _normalize(message)
-    is_question = '?' in message or re.match(r'^(quanto|qual|quais|como|mostre|liste|consulte)\b', normalized)
+    is_question = '?' in message or re.match(r'^(quant[oa]s?|qual|quais|como|mostre|liste|consulte)\b', normalized)
     month_start = timezone.localdate().replace(day=1)
+
+    if is_question and re.search(r'\b(animal|animais|rebanho|gado)\b', normalized):
+        count = Animal.objects.filter(fazenda=farm, status='ATIVO', arquivado=False).count()
+        noun = 'animal' if count == 1 else 'animais'
+        adjective = 'ativo' if count == 1 else 'ativos'
+        participle = 'cadastrado' if count == 1 else 'cadastrados'
+        return JsonResponse({
+            'ok': True,
+            'reply': f'A fazenda atual tem {count} {noun} {adjective} {participle} no GoldCrop.',
+        })
 
     if is_question and re.search(r'\b(quanto|total|soma|saldo)\b', normalized):
         if re.search(r'\b(gastei|gasto|despesa|despesas|compras?)\b', normalized):
